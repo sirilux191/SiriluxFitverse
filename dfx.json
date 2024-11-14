@@ -1,0 +1,122 @@
+{
+  "canisters": {
+    "internet_identity": {
+      "type": "custom",
+      "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
+      "wasm": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_dev.wasm.gz",
+      "remote": {
+        "id": {
+          "ic": "rdmx6-jaaaa-aaaaa-aaadq-cai"
+        }
+      },
+      "frontend": {}
+    },
+    "icrc1_ledger_canister": {
+      "type": "custom",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/ff10ea1dba07c0f66c66536a46a97146cf260e90/rs/rosetta-api/icrc1/ledger/ledger.did",
+      "wasm": "https://download.dfinity.systems/ic/ff10ea1dba07c0f66c66536a46a97146cf260e90/canisters/ic-icrc1-ledger.wasm.gz"
+    },
+    "vetkd_system_api": {
+      "candid": "vetkd_system_api.did",
+      "type": "custom",
+      "wasm": "vetkd_system_api.wasm"
+    },
+
+    "Identity_Manager": {
+      "main": "src/SiriluxHealthCare_backend/IdentityManager/IdentityManager.mo",
+      "type": "motoko"
+    },
+    "User": {
+      "main": "src/SiriluxHealthCare_backend/User/UserService.mo",
+      "type": "motoko"
+    },
+    "UserShardManager": {
+      "main": "src/SiriluxHealthCare_backend/User/UserShardManager.mo",
+      "type": "motoko"
+    },
+    "UserShard": {
+      "main": "src/SiriluxHealthCare_backend/User/UserShard.mo",
+      "type": "motoko"
+    },
+
+    "Professional": {
+      "main": "src/SiriluxHealthCare_backend/Professional/ProfessionalService.mo",
+      "type": "motoko"
+    },
+    "ProfessionalShardManager": {
+      "main": "src/SiriluxHealthCare_backend/Professional/ProfessionalShardManager.mo",
+      "type": "motoko"
+    },
+    "ProfessionalShard": {
+      "main": "src/SiriluxHealthCare_backend/Professional/ProfessionalShard.mo",
+      "type": "motoko"
+    },
+    "Facility": {
+      "main": "src/SiriluxHealthCare_backend/Facility/FacilityService.mo",
+      "type": "motoko"
+    },
+    "FacilityShardManager": {
+      "main": "src/SiriluxHealthCare_backend/Facility/FacilityShardManager.mo",
+      "type": "motoko"
+    },
+    "FacilityShard": {
+      "main": "src/SiriluxHealthCare_backend/Facility/FacilityShard.mo",
+      "type": "motoko"
+    },
+    "DataAsset": {
+      "main": "src/SiriluxHealthCare_backend/DataAsset/DataAssetService.mo",
+      "type": "motoko"
+    },
+    "DataAssetShardManager": {
+      "main": "src/SiriluxHealthCare_backend/DataAsset/DataAssetShardManager.mo",
+      "type": "motoko"
+    },
+    "DataAssetShard": {
+      "main": "src/SiriluxHealthCare_backend/DataAsset/DataAssetShard.mo",
+      "type": "motoko"
+    },
+    "Shared_Activity": {
+      "main": "src/SiriluxHealthCare_backend/SharedActivitySystem/SharedActivityService.mo",
+      "type": "motoko"
+    },
+    "SharedActivityShardManager": {
+      "main": "src/SiriluxHealthCare_backend/SharedActivitySystem/SharedActivityShardManager.mo",
+      "type": "motoko"
+    },
+    "SharedActivityShard": {
+      "main": "src/SiriluxHealthCare_backend/SharedActivitySystem/SharedActivityShard.mo",
+      "type": "motoko"
+    },
+    "XPRewardSystem": {
+      "main": "src/SiriluxHealthCare_backend/XPSystem/XPRewardSystem.mo",
+      "type": "motoko"
+    },
+
+    "WellnessAvatarNFT": {
+      "main": "src/SiriluxHealthCare_backend/Gamification/WellnessAvatarNFT.mo",
+      "type": "motoko"
+    },
+    "GamificationSystem": {
+      "main": "src/SiriluxHealthCare_backend/Gamification/GamificationSystem.mo",
+      "type": "motoko"
+    },
+    "VisitManager": {
+      "main": "src/SiriluxHealthCare_backend/Gamification/VisitManager.mo",
+      "type": "motoko"
+    },
+    "SiriluxHealthCare_frontend": {
+      "dependencies": [],
+      "source": ["src/SiriluxHealthCare_frontend/dist"],
+      "type": "assets",
+      "workspace": "SiriluxHealthCare_frontend"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": "mops sources"
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}

@@ -1,0 +1,32 @@
+{
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
+  },
+  "name": "SiriluxHealthCare",
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "prebuild": "npm run prebuild --workspaces --if-present",
+    "pretest": "npm run prebuild --workspaces --if-present",
+    "start": "npm start --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "format": "prettier --write \"**/*.+(js|jsx|json|css|md)\""
+  },
+  "type": "module",
+  "workspaces": [
+    "src/SiriluxHealthCare_frontend"
+  ],
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "vite-plugin-wasm-esm": "^1.0.1"
+  },
+  "dependencies": {
+    "aadhaar-validator": "^1.1.0",
+    "date-fns": "^3.6.0",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.2",
+    "react-hook-form": "^7.53.0",
+    "recharts": "^2.12.7",
+    "zod": "^3.23.8"
+  }
+}
