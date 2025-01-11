@@ -105,7 +105,31 @@
       "type": "motoko"
     },
     "SiriluxHealthCare_frontend": {
-      "dependencies": [],
+      "dependencies": [
+        "internet_identity",
+        "icrc1_ledger_canister",
+        "vetkd_system_api",
+        "Identity_Manager",
+        "User",
+        "UserShardManager",
+        "UserShard",
+        "Professional",
+        "ProfessionalShardManager",
+        "ProfessionalShard",
+        "Facility",
+        "FacilityShardManager",
+        "FacilityShard",
+        "DataAsset",
+        "DataAssetShardManager",
+        "DataAssetShard",
+        "Shared_Activity",
+        "SharedActivityShardManager",
+        "SharedActivityShard",
+        "XPRewardSystem",
+        "WellnessAvatarNFT",
+        "GamificationSystem",
+        "VisitManager"
+      ],
       "source": ["src/SiriluxHealthCare_frontend/dist"],
       "type": "assets",
       "workspace": "SiriluxHealthCare_frontend"

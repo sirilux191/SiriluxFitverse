@@ -1,5 +1,4 @@
 import Array "mo:base/Array";
-import Nat "mo:base/Nat";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
 import BTree "mo:stableheapbtreemap/BTree";

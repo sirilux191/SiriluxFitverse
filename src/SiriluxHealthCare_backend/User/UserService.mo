@@ -147,21 +147,21 @@ actor class UserService() {
 
     public shared ({ caller }) func updateUserShardWasmModule(wasmModule : [Nat8]) : async Result.Result<(), Text> {
 
-        // if (isAdmin(caller)) {
-        // Call the updateWasmModule function of the FacilityShardManager
-        let result = await ShardManager.updateWasmModule(wasmModule);
+        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
+            // Call the updateWasmModule function of the FacilityShardManager
+            let result = await ShardManager.updateWasmModule(caller, wasmModule);
 
-        switch (result) {
-            case (#ok(())) {
-                #ok(());
+            switch (result) {
+                case (#ok(())) {
+                    #ok(());
+                };
+                case (#err(e)) {
+                    #err("Failed to update WASM module: " # e);
+                };
             };
-            case (#err(e)) {
-                #err("Failed to update WASM module: " # e);
-            };
+        } else {
+            #err("You don't have permission to perform this action");
         };
-        // } else {
-        //     #err("You don't have permission to perform this action");
-        // };
 
     };
 

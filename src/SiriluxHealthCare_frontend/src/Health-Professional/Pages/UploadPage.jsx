@@ -38,6 +38,7 @@ export default function UploadContent() {
     frequency: "",
     prescribingDoctor: "",
   });
+  const [userIDtoUpload, setUserIDtoUpload] = useState("");
   const [description, setDescription] = useState("");
   const [keywords, setKeywords] = useState("");
   const [category, setCategory] = useState("");
@@ -55,55 +56,56 @@ export default function UploadContent() {
     e.preventDefault();
     setLoading(true);
     // Step 1: Upload/link an empty file to get a unique ID
-    const emptyDataAsset = {
-      title: "Empty File",
-      description: "Placeholder for encryption",
-      data: [],
-      metadata: {
-        category: "",
-        tags: [],
-        format: "empty",
-      },
-    };
+    // const emptyDataAsset = {
+    //   title: "Empty File",
+    //   description: "Placeholder for encryption",
+    //   data: [],
+    //   metadata: {
+    //     category: "",
+    //     tags: [],
+    //     format: "empty",
+    //   },
+    // };
 
-    const result = await actors.dataAsset.uploadDataAsset(emptyDataAsset);
-    let uniqueID = "";
+    // let uniqueID = "";
 
-    Object.keys(result).forEach((key) => {
-      if (key === "err") {
-        alert(result[key]);
-        setLoading(false);
-        return;
-      }
-      if (key === "ok") {
-        uniqueID = result[key];
-      }
-    });
+    // Object.keys(result).forEach((key) => {
+    //   if (key === "err") {
+    //     alert(result[key]);
+    //     setLoading(false);
+    //     return;
+    //   }
+    //   if (key === "ok") {
+    //     uniqueID = result[key];
+    //   }
+    // });
 
-    if (!uniqueID) {
-      setLoading(false);
-      return;
-    }
+    // if (!uniqueID) {
+    //   setLoading(false);
+    //   return;
+    // }
 
     // Step 2: Fetch the encrypted key using encrypted_symmetric_key_for_dataAsset
     const seed = window.crypto.getRandomValues(new Uint8Array(32));
     const tsk = new vetkd.TransportSecretKey(seed);
-    const encryptedKeyResult =
-      await lyfelynkMVP_backend.encrypted_symmetric_key_for_dataAsset(
-        uniqueID,
-        Object.values(tsk.public_key()),
-      );
 
     let encryptedKey = "";
+    let uniqueID = "";
+    const keyAndAssetIDresult =
+      await actors.dataAsset.getEncryptedSymmetricKeyForAssetForUserDataUpload(
+        userIDtoUpload,
+        Object.values(tsk.public_key())
+      );
 
-    Object.keys(encryptedKeyResult).forEach((key) => {
+    Object.keys(keyAndAssetIDresult).forEach((key) => {
       if (key === "err") {
-        alert(encryptedKeyResult[key]);
+        alert(result[key]);
+
         setLoading(false);
         return;
       }
       if (key === "ok") {
-        encryptedKey = encryptedKeyResult[key];
+        [uniqueID, encryptedKey] = keyAndAssetIDresult;
       }
     });
 
@@ -113,7 +115,7 @@ export default function UploadContent() {
     }
 
     const pkBytesHex =
-      await lyfelynkMVP_backend.symmetric_key_verification_key();
+      await actors.dataAsset.getSymmetricKeyVerificationKey(uniqueID);
     console.log(pkBytesHex);
     console.log(encryptedKey);
     const aesGCMKey = tsk.decrypt_and_hash(
@@ -121,7 +123,7 @@ export default function UploadContent() {
       hex_decode(pkBytesHex),
       new TextEncoder().encode(uniqueID),
       32,
-      new TextEncoder().encode("aes-256-gcm"),
+      new TextEncoder().encode("aes-256-gcm")
     );
     console.log(aesGCMKey);
     // Step 3: Encrypt the user's file using the AES-GCM key
@@ -160,9 +162,10 @@ export default function UploadContent() {
       };
 
       // Step 4: Update the data asset with the encrypted file
-      const updateResult = await lyfelynkMVP_backend.updateDataAsset(
-        uniqueID.split("-")[1],
+      const updateResult = await actors.dataAsset.uploadAndSignUserDataAsset(
         dataAsset,
+        userIDtoUpload,
+        encryptedKey
       );
 
       Object.keys(updateResult).forEach((key) => {
@@ -191,12 +194,12 @@ export default function UploadContent() {
       rawKey,
       "AES-GCM",
       false,
-      ["encrypt"],
+      ["encrypt"]
     );
     const ciphertext_buffer = await window.crypto.subtle.encrypt(
       { name: "AES-GCM", iv: iv },
       aes_key,
-      data,
+      data
     );
     const ciphertext = new Uint8Array(ciphertext_buffer);
     const iv_and_ciphertext = new Uint8Array(iv.length + ciphertext.length);
@@ -208,7 +211,7 @@ export default function UploadContent() {
   //   bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, "0"), "");
   const hex_decode = (hexString) =>
     Uint8Array.from(
-      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)),
+      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
     );
 
   if (loading) {
@@ -224,10 +227,16 @@ export default function UploadContent() {
         <div className="mt-6 w-full max-w-4xl">
           <Tabs defaultValue="Document">
             <TabsList className="w-full">
-              <TabsTrigger className="w-1/2" value="Document">
+              <TabsTrigger
+                className="w-1/2"
+                value="Document"
+              >
                 Document
               </TabsTrigger>
-              <TabsTrigger className="w-1/2" value="Form">
+              <TabsTrigger
+                className="w-1/2"
+                value="Form"
+              >
                 Form
               </TabsTrigger>
             </TabsList>
@@ -240,14 +249,20 @@ export default function UploadContent() {
                 Fill the form out carefully and make sure the information is
                 true to your knowledge.
               </p>
-              <form className="space-y-6" onSubmit={handleSubmit}>
+              <form
+                className="space-y-6"
+                onSubmit={handleSubmit}
+              >
                 <div>
                   <h2 className="text-xl font-semibold">
                     Health Checkup Details
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div className="flex flex-col space-y-1.5">
-                      <label className="font-medium" htmlFor="date-of-checkup">
+                      <label
+                        className="font-medium"
+                        htmlFor="date-of-checkup"
+                      >
                         Date of Checkup
                       </label>
                       <DatePicker
@@ -257,7 +272,10 @@ export default function UploadContent() {
                       />
                     </div>
                     <div className="flex flex-col space-y-1.5">
-                      <label className="font-medium" htmlFor="type-of-checkup">
+                      <label
+                        className="font-medium"
+                        htmlFor="type-of-checkup"
+                      >
                         Type of Checkup
                       </label>
                       <Select
@@ -336,7 +354,10 @@ export default function UploadContent() {
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div className="flex flex-col space-y-1.5">
-                      <label className="font-medium" htmlFor="medication-name">
+                      <label
+                        className="font-medium"
+                        htmlFor="medication-name"
+                      >
                         Medication Name(s)
                       </label>
                       <Input
@@ -347,7 +368,10 @@ export default function UploadContent() {
                       />
                     </div>
                     <div className="flex flex-col space-y-1.5">
-                      <label className="font-medium" htmlFor="dosage">
+                      <label
+                        className="font-medium"
+                        htmlFor="dosage"
+                      >
                         Dosage
                       </label>
                       <Input
@@ -358,7 +382,10 @@ export default function UploadContent() {
                       />
                     </div>
                     <div className="flex flex-col space-y-1.5">
-                      <label className="font-medium" htmlFor="frequency">
+                      <label
+                        className="font-medium"
+                        htmlFor="frequency"
+                      >
                         Frequency
                       </label>
                       <Input
@@ -391,6 +418,7 @@ export default function UploadContent() {
                         <TableHead>Title</TableHead>
                         <TableHead>Description</TableHead>
                         <TableHead>Keywords</TableHead>
+                        <TableHead>User ID </TableHead>
                         <TableHead>Category</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -412,6 +440,18 @@ export default function UploadContent() {
                               className="py-3"
                               value={keywords}
                               onChange={(e) => setKeywords(e.target.value)}
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="border rounded-sm">
+                            <Textarea
+                              type="text"
+                              className="py-3"
+                              value={userIDtoUpload}
+                              onChange={(e) =>
+                                setUserIDtoUpload(e.target.value)
+                              }
                             />
                           </div>
                         </TableCell>

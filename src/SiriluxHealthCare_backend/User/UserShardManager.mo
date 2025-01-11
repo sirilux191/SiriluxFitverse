@@ -11,8 +11,8 @@ import BTree "mo:stableheapbtreemap/BTree";
 import Source "mo:uuid/async/SourceV4";
 import UUID "mo:uuid/UUID";
 
-import Types "../Types";
 import CanisterIDs "../Types/CanisterIDs";
+import CanisterTypes "../Types/CanisterTypes";
 import Interface "../utility/ic-management-interface";
 import UserShard "UserShard";
 
@@ -31,7 +31,7 @@ actor class UserShardManager() {
     private let IC = "aaaaa-aa";
     private let ic : Interface.Self = actor (IC);
 
-    private var adminPrincipal = Types.admin;
+    let identityManager = CanisterTypes.identityManager;
 
     private var permittedPrincipal : [Principal] = [Principal.fromText(CanisterIDs.userServiceCanisterID)];
 
@@ -102,18 +102,18 @@ actor class UserShardManager() {
     };
 
     // Function to register a user
-    public shared ({ caller }) func registerUser(caller : Principal, userID : Text) : async Result.Result<(), Text> {
+    public shared ({ caller }) func registerUser(userPrincipal : Principal, userID : Text) : async Result.Result<(), Text> {
         if (not isPermitted(caller)) {
-            return #err("You are not permitted to remove users");
+            return #err("You are not permitted to register users");
         };
 
-        switch (BTree.get(userShardMap, Principal.compare, caller)) {
+        switch (BTree.get(userShardMap, Principal.compare, userPrincipal)) {
             case (?_) {
                 #err("User already registered");
             };
             case null {
-                ignore BTree.insert(userShardMap, Principal.compare, caller, userID); // Insert Principal to UserID Key Value Pair
-                ignore BTree.insert(reverseUserShardMap, Text.compare, userID, caller); // Insert UserID to Principal Key Value Pair
+                ignore BTree.insert(userShardMap, Principal.compare, userPrincipal, userID); // Insert Principal to UserID Key Value Pair
+                ignore BTree.insert(reverseUserShardMap, Text.compare, userID, userPrincipal); // Insert UserID to Principal Key Value Pair
                 totalUserCount += 1;
                 #ok(());
             };
@@ -238,8 +238,12 @@ actor class UserShardManager() {
     };
 
     // Function to update the WASM module
-    public shared ({ caller }) func updateWasmModule(wasmModule : [Nat8]) : async Result.Result<(), Text> {
-        if (not isAdmin(caller)) {
+    public shared ({ caller }) func updateWasmModule(adminCaller : Principal, wasmModule : [Nat8]) : async Result.Result<(), Text> {
+
+        if (not isPermitted(caller)) {
+            return #err("You are not permitted to call this function");
+        };
+        if (not (await isAdmin(adminCaller))) {
             return #err("You are not Admin, only admin can perform this action");
         };
 
@@ -253,9 +257,9 @@ actor class UserShardManager() {
 
     public shared ({ caller }) func updateExistingShards() : async Result.Result<(), Text> {
 
-        // if (not isAdmin(caller)) {
-        //     return #err("You are not Admin, only admin can perform this action");
-        // };
+        if (not (await isAdmin(caller))) {
+            return #err("You are not Admin, only admin can perform this action");
+        };
 
         if (Array.size(userShardWasmModule) == 0) {
             return #err("Wasm module not set. Please update the Wasm module first.");
@@ -302,8 +306,8 @@ actor class UserShardManager() {
         return false;
     };
 
-    private func isAdmin(caller : Principal) : Bool {
-        if (Principal.fromText(adminPrincipal) == caller) {
+    public shared func isAdmin(caller : Principal) : async Bool {
+        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
             true;
         } else {
             false;
@@ -312,7 +316,7 @@ actor class UserShardManager() {
 
     public shared ({ caller }) func addPermittedPrincipal(principalToAdd : Text) : async Result.Result<Text, Text> {
 
-        if (not isAdmin(caller)) {
+        if (not (await isAdmin(caller))) {
             return #err("You are not Admin, only admin can perform this action");
         };
 
@@ -323,7 +327,7 @@ actor class UserShardManager() {
     };
 
     public shared ({ caller }) func removePermittedPrincipal(principalToRemove : Text) : async Result.Result<Text, Text> {
-        if (not isAdmin(caller)) {
+        if (not (await isAdmin(caller))) {
             return #err("You are not Admin, only admin can perform this action");
         };
 
@@ -344,7 +348,7 @@ actor class UserShardManager() {
 
     // Function to add a permitted principal to all shards
     public shared ({ caller }) func addPermittedPrincipalToAllShards(principalToAdd : Text) : async Result.Result<Text, Text> {
-        if (not isAdmin(caller)) {
+        if (not (await isAdmin(caller))) {
             return #err("You are not Admin, only admin can perform this action");
         };
 
@@ -361,7 +365,7 @@ actor class UserShardManager() {
 
     // Function to remove a permitted principal from all shards
     public shared ({ caller }) func removePermittedPrincipalFromAllShards(principalToRemove : Text) : async Result.Result<Text, Text> {
-        if (not isAdmin(caller)) {
+        if (not (await isAdmin(caller))) {
             return #err("You are not Admin, only admin can perform this action");
         };
 

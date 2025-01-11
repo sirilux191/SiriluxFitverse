@@ -24,7 +24,10 @@ export function ShareDataFunc({ assetID }) {
   const handleShare = async () => {
     try {
       setSharing(true);
-      const result = await actors.dataAsset.shareDataAsset(userId, assetID);
+      console.log(assetID);
+      const result = await actors.dataAsset.shareDataAsset(assetID, userId, {
+        Shared: null,
+      });
       if (result.ok) {
         toast({
           title: "Access Granted!",
@@ -47,7 +50,10 @@ export function ShareDataFunc({ assetID }) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={setOpen}
+    >
       <DialogTrigger asChild>
         <Button
           variant="outline"
@@ -67,7 +73,10 @@ export function ShareDataFunc({ assetID }) {
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="userId" className="text-right">
+            <Label
+              htmlFor="userId"
+              className="text-right"
+            >
               User ID
             </Label>
             <Input
@@ -79,7 +88,10 @@ export function ShareDataFunc({ assetID }) {
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={handleShare} disabled={sharing}>
+          <Button
+            onClick={handleShare}
+            disabled={sharing}
+          >
             Send
           </Button>
         </DialogFooter>

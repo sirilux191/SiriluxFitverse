@@ -8,20 +8,27 @@ import Result "mo:base/Result";
 import Text "mo:base/Text";
 import BTree "mo:stableheapbtreemap/BTree";
 
+import IdentityManager "../IdentityManager/IdentityManager";
+import CanisterIDs "../Types/CanisterIDs";
 import Interface "../utility/ic-management-interface";
 import SharedActivityShard "SharedActivityShard";
 
 actor class SharedActivityShardManager() {
+
     private stable var totalActivityCount : Nat = 0;
     private stable var shardCount : Nat = 0;
     private let ACTIVITIES_PER_SHARD : Nat = 200_000;
-    private stable let shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
-    private stable var sharedActivityShardWasmModule : [Nat8] = [];
 
+    private stable let shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
     private stable var userShardMap : BTree.BTree<Text, [Text]> = BTree.init<Text, [Text]>(null);
+
+    private stable var sharedActivityShardWasmModule : [Nat8] = [];
 
     private let IC = "aaaaa-aa";
     private let ic : Interface.Self = actor (IC);
+
+    private var permittedPrincipal : [Principal] = [Principal.fromText(CanisterIDs.userServiceCanisterID)];
+    private let identityManager : IdentityManager.IdentityManager = actor (CanisterIDs.identityManagerCanisterID);
 
     public func getShard(activityID : Text) : async Result.Result<SharedActivityShard.SharedActivityShard, Text> {
         let shardID = getShardID(activityID);
@@ -62,12 +69,12 @@ actor class SharedActivityShardManager() {
         };
 
         try {
-            let cycles = 10_000_000_000_000;
+            let cycles = 1_000_000_000_000;
             Cycles.add<system>(cycles);
             let newCanister = await ic.create_canister({ settings = null });
             let canisterPrincipal = newCanister.canister_id;
 
-            let installResult = await ic.install_code({
+            let _installResult = await ic.install_code({
                 arg = [];
                 wasm_module = sharedActivityShardWasmModule;
                 mode = #install;
@@ -81,10 +88,69 @@ actor class SharedActivityShardManager() {
         };
     };
 
-    // public func getNextActivityID() : async Text {
-    //     totalActivityCount += 1;
-    //     Nat.toText(totalActivityCount);
-    // };
+    private func upgradeCodeOnShard(canisterPrincipal : Principal) : async Result.Result<(), Text> {
+        try {
+            await ic.install_code({
+                arg = [];
+                wasm_module = sharedActivityShardWasmModule;
+                mode = #upgrade;
+                canister_id = canisterPrincipal;
+            });
+            #ok(());
+        } catch (e) {
+            #err("Failed to upgrade code on shard: " # Error.message(e));
+        };
+    };
+
+    // Function to update the WASM module
+    public shared ({ caller }) func updateWasmModule(adminCaller : Principal, wasmModule : [Nat8]) : async Result.Result<(), Text> {
+
+        // if (not isPermitted(caller)) {
+        //     return #err("You are not permitted to call this function");
+        // };
+        if (not (await isAdmin(adminCaller))) {
+            return #err("You are not Admin, only admin can perform this action");
+        };
+
+        if (Array.size(wasmModule) < 8) {
+            return #err("Invalid WASM module: too small");
+        };
+
+        sharedActivityShardWasmModule := wasmModule;
+        #ok(());
+    };
+
+    public shared ({ caller }) func updateExistingShards() : async Result.Result<(), Text> {
+
+        if (not (await isAdmin(caller))) {
+            return #err("You are not Admin, only admin can perform this action");
+        };
+
+        if (Array.size(sharedActivityShardWasmModule) == 0) {
+            return #err("Wasm module not set. Please update the Wasm module first.");
+        };
+
+        var updatedCount = 0;
+        var errorCount = 0;
+
+        for ((shardID, principal) in BTree.entries(shards)) {
+            let installResult = await upgradeCodeOnShard(principal);
+            switch (installResult) {
+                case (#ok(())) {
+                    updatedCount += 1;
+                };
+                case (#err(_)) {
+                    errorCount += 1;
+                };
+            };
+        };
+
+        if (errorCount > 0) {
+            #err("Updated " # Nat.toText(updatedCount) # " shards, but encountered errors in " # Nat.toText(errorCount) # " shards");
+        } else {
+            #ok(());
+        };
+    };
 
     public func updateUserShardMap(userID : Text, activityID : Text) : async Result.Result<(), Text> {
         let shardID = getShardID(activityID);
@@ -142,4 +208,21 @@ actor class SharedActivityShardManager() {
     };
 
     // Other necessary functions...
+
+    public shared func isAdmin(caller : Principal) : async Bool {
+        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
+            true;
+        } else {
+            false;
+        };
+    };
+
+    private func isPermitted(principal : Principal) : Bool {
+        for (permittedPrincipal in permittedPrincipal.vals()) {
+            if (principal == permittedPrincipal) {
+                return true;
+            };
+        };
+        return false;
+    };
 };

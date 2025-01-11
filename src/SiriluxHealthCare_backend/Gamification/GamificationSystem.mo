@@ -18,6 +18,7 @@ import ICRC7 "mo:icrc7-mo";
 
 import IdentityManager "../IdentityManager/IdentityManager";
 import Types "../Types";
+import CanisterIDs "../Types/CanisterIDs";
 import VisitManager "./VisitManager";
 import WellnessAvatarNFT "./WellnessAvatarNFT";
 
@@ -40,8 +41,8 @@ actor class GamificationSystem() {
     };
     type Value = ICRC7.Value;
 
-    private let wellnessAvatarNFT : WellnessAvatarNFT.WellnessAvatarNFT = actor (Types.wellnessAvatarNFTCanisterID);
-    private let visitManager : VisitManager.VisitManager = actor (Types.visitManagerCanisterID);
+    private let wellnessAvatarNFT : WellnessAvatarNFT.WellnessAvatarNFT = actor (CanisterIDs.wellnessAvatarNFTCanisterID);
+    private let visitManager : VisitManager.VisitManager = actor (CanisterIDs.visitManagerCanisterID);
 
     private stable var userTokensEntries : [(Text, Nat)] = [];
     private var userTokens : TrieMap.TrieMap<Text, Nat> = TrieMap.fromEntries(userTokensEntries.vals(), Text.equal, Text.hash);
@@ -55,7 +56,7 @@ actor class GamificationSystem() {
     private stable var userPrincipalMapEntries : [(Text, Principal)] = [];
     private var userPrincipalMap : TrieMap.TrieMap<Text, Principal> = TrieMap.fromEntries(userPrincipalMapEntries.vals(), Text.equal, Text.hash);
 
-    private let identityManager : IdentityManager.IdentityManager = actor (Types.identityManagerCanisterID);
+    private let identityManager : IdentityManager.IdentityManager = actor (CanisterIDs.identityManagerCanisterID);
 
     private type AvatarAttributes = {
         energy : Nat;

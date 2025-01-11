@@ -8,7 +8,7 @@ import FacilityApproval from "./FacilityApproval";
 import ShardManagement from "./ShardManagement";
 import NFTManagement from "./NFTManagement";
 import ActorContext from "../ActorContext";
-
+import { toast } from "@/components/ui/use-toast";
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("professionals");
   const { actors } = useContext(ActorContext);
@@ -23,16 +23,23 @@ const AdminDashboard = () => {
   const adminRegister = async () => {
     try {
       // Replace this with the actual method to register an admin
-      const result = await actors.admin.registerAdmin();
+      const result = await actors.identityManager.registerAdmin();
       if (result.ok) {
-        console.log("Admin registered successfully");
-        // You might want to show a success message to the user here
+        toast({
+          title: "Admin Registered Successfully",
+          description: result.ok,
+        });
       } else {
-        console.error("Error registering admin:", result.err);
-        // You might want to show an error message to the user here
+        toast({
+          title: "Error Registering Admin",
+          description: result.err,
+        });
       }
     } catch (error) {
-      console.error("Error registering admin:", error);
+      toast({
+        title: "Error Registering Admin",
+        description: error,
+      });
       // You might want to show an error message to the user here
     }
   };
@@ -71,7 +78,10 @@ const AdminDashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <Tabs
+              value={activeTab}
+              onValueChange={setActiveTab}
+            >
               <TabsContent value="professionals">
                 <ProfessionalApproval />
               </TabsContent>

@@ -1,14 +1,11 @@
 // VisitManager.mo
 
 import Array "mo:base/Array";
-import Hash "mo:base/Hash";
-import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
-import TrieMap "mo:base/TrieMap";
 import env "mo:env";
 import BTree "mo:stableheapbtreemap/BTree";
 
@@ -56,14 +53,11 @@ actor class VisitManager() {
 
     private stable var facilityVisits : BTree.BTree<Text, [Nat]> = BTree.init<Text, [Nat]>(null);
 
-    private stable var professionalsEntries : [(Text, ProfessionalInfo)] = [];
-    private var professionals : TrieMap.TrieMap<Text, ProfessionalInfo> = TrieMap.fromEntries(professionalsEntries.vals(), Text.equal, Text.hash);
+    private stable var professionals : BTree.BTree<Text, ProfessionalInfo> = BTree.init<Text, ProfessionalInfo>(null);
 
-    private stable var facilitiesEntries : [(Text, FacilityInfo)] = [];
-    private var facilities : TrieMap.TrieMap<Text, FacilityInfo> = TrieMap.fromEntries(facilitiesEntries.vals(), Text.equal, Text.hash);
+    private stable var facilities : BTree.BTree<Text, FacilityInfo> = BTree.init<Text, FacilityInfo>(null);
 
-    private stable var avatarVisitCountEntries : [(Nat, Nat)] = [];
-    private var avatarVisitCount : TrieMap.TrieMap<Nat, Nat> = TrieMap.fromEntries(avatarVisitCountEntries.vals(), Nat.equal, Hash.hash);
+    private stable var avatarVisitCount : BTree.BTree<Nat, Nat> = BTree.init<Nat, Nat>(null);
 
     private stable var nextVisitId : Nat = 1;
 
@@ -84,7 +78,7 @@ actor class VisitManager() {
                                 specialization = specialization;
                                 availableSlots = availableSlots;
                             };
-                            professionals.put(id, profInfo);
+                            ignore BTree.insert(professionals, Text.compare, id, profInfo);
                             #ok(());
                         };
                         case (#err(e)) { #err(e) };
@@ -112,7 +106,7 @@ actor class VisitManager() {
                                 facilityType = facilityType;
                                 availableSlots = availableSlots;
                             };
-                            facilities.put(id, facInfo);
+                            ignore BTree.insert(facilities, Text.compare, id, facInfo);
                             #ok(());
                         };
                         case (#err(e)) { #err(e) };
@@ -127,12 +121,12 @@ actor class VisitManager() {
 
     // Function to get all available professionals
     public query func getAllProfessionals() : async [ProfessionalInfo] {
-        Iter.toArray(professionals.vals());
+        BTree.toValueArray(professionals);
     };
 
     // Function to get all available facilities
     public query func getAllFacilities() : async [FacilityInfo] {
-        Iter.toArray(facilities.vals());
+        BTree.toValueArray(facilities);
     };
 
     private func hasOverlappingVisit(id : Text, timestamp : Time.Time, duration : Nat) : Bool {
@@ -155,8 +149,8 @@ actor class VisitManager() {
         let userIdResult = await getUserId(caller);
         switch (userIdResult) {
             case (#ok(userId)) {
-                let isProfessional = professionals.get(idToVisit);
-                let isFacility = facilities.get(idToVisit);
+                let isProfessional = BTree.get(professionals, Text.compare, idToVisit);
+                let isFacility = BTree.get(facilities, Text.compare, idToVisit);
 
                 switch (isProfessional, isFacility) {
                     case (?_profInfo, null) {
@@ -322,11 +316,11 @@ actor class VisitManager() {
                                 );
 
                                 if (newStatus == #Completed) {
-                                    let currentCount = switch (avatarVisitCount.get(visit.avatarId)) {
+                                    let currentCount = switch (BTree.get(avatarVisitCount, Nat.compare, visit.avatarId)) {
                                         case (?count) count;
                                         case null 0;
                                     };
-                                    avatarVisitCount.put(visit.avatarId, currentCount + 1);
+                                    ignore BTree.insert(avatarVisitCount, Nat.compare, visit.avatarId, currentCount + 1);
                                 };
 
                                 #ok(());
@@ -369,7 +363,7 @@ actor class VisitManager() {
 
     // Function to get information for a specific professional
     public query func getProfessionalInfo(professionalId : Text) : async Result.Result<ProfessionalInfo, Text> {
-        switch (professionals.get(professionalId)) {
+        switch (BTree.get(professionals, Text.compare, professionalId)) {
             case (?profInfo) { #ok(profInfo) };
             case null { #err("Professional not found") };
         };
@@ -379,7 +373,7 @@ actor class VisitManager() {
         let idResult = await identityManager.getIdentity(caller);
         switch (idResult) {
             case (#ok((id, _))) {
-                switch (professionals.get(id)) {
+                switch (BTree.get(professionals, Text.compare, id)) {
                     case (?profInfo) { #ok(profInfo) };
                     case null { #err("Professional not found") };
                 };
@@ -390,7 +384,7 @@ actor class VisitManager() {
 
     // Function to get information for a specific facility
     public query func getFacilityInfo(facilityId : Text) : async Result.Result<FacilityInfo, Text> {
-        switch (facilities.get(facilityId)) {
+        switch (BTree.get(facilities, Text.compare, facilityId)) {
             case (?facInfo) { #ok(facInfo) };
             case null { #err("Facility not found") };
         };
@@ -400,7 +394,7 @@ actor class VisitManager() {
         let idResult = await identityManager.getIdentity(caller);
         switch (idResult) {
             case (#ok((id, _))) {
-                switch (facilities.get(id)) {
+                switch (BTree.get(facilities, Text.compare, id)) {
                     case (?facInfo) { #ok(facInfo) };
                     case null { #err("Facility not found") };
                 };
@@ -443,7 +437,7 @@ actor class VisitManager() {
                     let idResult = await identityManager.getIdentity(caller);
                     switch (idResult) {
                         case (#ok((id, _))) {
-                            switch (professionals.get(id)) {
+                            switch (BTree.get(professionals, Text.compare, id)) {
                                 case (?profInfo) {
                                     let updatedProfInfo : ProfessionalInfo = {
                                         id = profInfo.id;
@@ -451,7 +445,7 @@ actor class VisitManager() {
                                         specialization = profInfo.specialization;
                                         availableSlots = availableSlots;
                                     };
-                                    professionals.put(id, updatedProfInfo);
+                                    ignore BTree.insert(professionals, Text.compare, id, updatedProfInfo);
                                     #ok(());
                                 };
                                 case null { #err("Professional not found") };
@@ -476,7 +470,7 @@ actor class VisitManager() {
                     let idResult = await identityManager.getIdentity(caller);
                     switch (idResult) {
                         case (#ok((id, _))) {
-                            switch (facilities.get(id)) {
+                            switch (BTree.get(facilities, Text.compare, id)) {
                                 case (?facInfo) {
                                     let updatedFacInfo : FacilityInfo = {
                                         id = facInfo.id;
@@ -484,7 +478,7 @@ actor class VisitManager() {
                                         facilityType = facInfo.facilityType;
                                         availableSlots = availableSlots;
                                     };
-                                    facilities.put(id, updatedFacInfo);
+                                    ignore BTree.insert(facilities, Text.compare, id, updatedFacInfo);
                                     #ok(());
                                 };
                                 case null { #err("Facility not found") };
@@ -502,8 +496,8 @@ actor class VisitManager() {
 
     // Function to get available slots for a specific professional or facility
     public query func getAvailableSlots(idToVisit : Text) : async Result.Result<[(Time.Time, Time.Time)], Text> {
-        let isProfessional = professionals.get(idToVisit);
-        let isFacility = facilities.get(idToVisit);
+        let isProfessional = BTree.get(professionals, Text.compare, idToVisit);
+        let isFacility = BTree.get(facilities, Text.compare, idToVisit);
 
         switch (isProfessional, isFacility) {
             case (?profInfo, null) {
@@ -523,7 +517,7 @@ actor class VisitManager() {
 
     // Function to get visit count for an avatar
     public query func getAvatarVisitCount(avatarId : Nat) : async Nat {
-        switch (avatarVisitCount.get(avatarId)) {
+        switch (BTree.get(avatarVisitCount, Nat.compare, avatarId)) {
             case (?count) count;
             case null 0;
         };
@@ -534,7 +528,7 @@ actor class VisitManager() {
         Array.map<Nat, (Nat, Nat)>(
             avatarIds,
             func(avatarId) {
-                let count = switch (avatarVisitCount.get(avatarId)) {
+                let count = switch (BTree.get(avatarVisitCount, Nat.compare, avatarId)) {
                     case (?c) c;
                     case null 0;
                 };

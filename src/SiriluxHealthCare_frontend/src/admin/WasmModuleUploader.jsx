@@ -47,7 +47,7 @@ function WasmModuleUploader({ shardType }) {
         case "professional":
           result =
             await actors.professional.updateProfessionalShardWasmModule(
-              byteArray,
+              byteArray
             );
           break;
         case "facility":
@@ -62,7 +62,11 @@ function WasmModuleUploader({ shardType }) {
           result = await actors.marketplace.updateWasmModule(byteArray);
           break;
         case "sharedActivity":
-          result = await actors.sharedActivity.updateWasmModule(byteArray);
+          console.log(actors.sharedActivity);
+          result =
+            await actors.sharedActivity.updateSharedActivityShardWasmModule(
+              byteArray
+            );
           break;
         default:
           setMessage("Unknown shard type");
@@ -100,7 +104,10 @@ function WasmModuleUploader({ shardType }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="p-6">
-        <form onSubmit={handleUpdateWasmModule} className="space-y-6">
+        <form
+          onSubmit={handleUpdateWasmModule}
+          className="space-y-6"
+        >
           <div className="flex flex-col space-y-4">
             <div
               className="flex items-center justify-center w-full h-32 p-4 border-2 border-gray-300 border-dashed rounded-md cursor-pointer hover:border-gray-400 focus:outline-none"
@@ -123,7 +130,10 @@ function WasmModuleUploader({ shardType }) {
                 onChange={handleWasmFileChange}
               />
             </div>
-            <Button type="submit" className="w-full">
+            <Button
+              type="submit"
+              className="w-full"
+            >
               Upload
             </Button>
           </div>

@@ -4,6 +4,10 @@ import Result "mo:base/Result";
 import Text "mo:base/Text";
 import TrieMap "mo:base/TrieMap";
 actor class IdentityManager() {
+
+    private stable var admin : Text = ("");
+    private stable var isAdminRegistered = false;
+
     private stable var identityMapEntries : [(Principal, (Text, Text))] = [];
     private var identityMap = TrieMap.fromEntries<Principal, (Text, Text)>(identityMapEntries.vals(), Principal.equal, Principal.hash);
 
@@ -67,5 +71,20 @@ actor class IdentityManager() {
 
             };
         };
+    };
+
+    public shared ({ caller }) func registerAdmin() : async Result.Result<Text, Text> {
+
+        if (isAdminRegistered) {
+            return #err("Admin is already Registered");
+        };
+
+        admin := Principal.toText(caller);
+        isAdminRegistered := true;
+        return #ok("Admin Registered Successfully");
+    };
+
+    public func returnAdmin() : async Text {
+        return admin;
     };
 };

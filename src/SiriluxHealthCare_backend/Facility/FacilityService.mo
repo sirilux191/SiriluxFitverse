@@ -7,7 +7,7 @@ import Result "mo:base/Result";
 import Text "mo:base/Text";
 import Map "mo:map/Map";
 
-import IdentityManager "../IdentityManager/IdentityManager";
+import Types "../Types";
 import CanisterTypes "../Types/CanisterTypes";
 import ManagerCanisterTypes "../Types/ManagerCanisterTypes";
 import Hex "../utility/Hex";

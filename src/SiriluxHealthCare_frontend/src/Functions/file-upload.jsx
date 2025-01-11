@@ -20,6 +20,14 @@ import lighthouse from "@lighthouse-web3/sdk";
 import LoadingScreen from "../LoadingScreen";
 import ActorContext from "../ActorContext";
 import * as vetkd from "ic-vetkd-utils";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const FileUpload = () => {
   const { actors } = useContext(ActorContext);
@@ -75,13 +83,13 @@ const FileUpload = () => {
     const fileSizeMB = file.size / (1024 * 1024);
     if (!supportedFormats.includes(fileType)) {
       setErrorMessage(
-        "Unsupported file format. Please select a file with one of the supported formats: PDF, CSV, XML, JPG, JPEG, PNG.",
+        "Unsupported file format. Please select a file with one of the supported formats: PDF, CSV, XML, JPG, JPEG, PNG."
       );
       return false;
     }
     if (fileSizeMB > 1.9) {
       setErrorMessage(
-        "File size is larger than 2 MB. Please select a smaller file.",
+        "File size is larger than 2 MB. Please select a smaller file."
       );
       return false;
     }
@@ -131,11 +139,11 @@ const FileUpload = () => {
         fileList,
         process.env.LIGHTHOUSEAPI,
         null,
-        progressCallback,
+        progressCallback
       );
       console.log("File Status:", output);
       console.log(
-        "Visit at https://gateway.lighthouse.storage/ipfs/" + output.data.Hash,
+        "Visit at https://gateway.lighthouse.storage/ipfs/" + output.data.Hash
       );
       return output.data.Hash;
     } catch (error) {
@@ -190,7 +198,7 @@ const FileUpload = () => {
       const encryptedKeyResult =
         await actors.dataAsset.getEncryptedSymmetricKeyForAsset(
           uniqueID,
-          Object.values(tsk.public_key()),
+          Object.values(tsk.public_key())
         );
 
       let encryptedKey = "";
@@ -231,7 +239,7 @@ const FileUpload = () => {
         hex_decode(symmetricVerificiationKey),
         new TextEncoder().encode(uniqueID),
         32,
-        new TextEncoder().encode("aes-256-gcm"),
+        new TextEncoder().encode("aes-256-gcm")
       );
       console.log(aesGCMKey);
 
@@ -264,7 +272,7 @@ const FileUpload = () => {
       // Step 5: Update the data asset with the Lighthouse hash
       const updateResult = await actors.dataAsset.updateDataAsset(
         uniqueID,
-        dataAsset,
+        dataAsset
       );
 
       Object.keys(updateResult).forEach((key) => {
@@ -293,12 +301,12 @@ const FileUpload = () => {
       rawKey,
       "AES-GCM",
       false,
-      ["encrypt"],
+      ["encrypt"]
     );
     const ciphertext_buffer = await window.crypto.subtle.encrypt(
       { name: "AES-GCM", iv: iv },
       aes_key,
-      data,
+      data
     );
     const ciphertext = new Uint8Array(ciphertext_buffer);
     const iv_and_ciphertext = new Uint8Array(iv.length + ciphertext.length);
@@ -310,7 +318,7 @@ const FileUpload = () => {
   //   bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, "0"), "");
   const hex_decode = (hexString) =>
     Uint8Array.from(
-      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)),
+      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
     );
 
   const handleRemoveFile = () => {
@@ -342,7 +350,7 @@ const FileUpload = () => {
             "Content-Type": "multipart/form-data",
           },
           responseType: "blob",
-        },
+        }
       );
 
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -427,62 +435,91 @@ const FileUpload = () => {
         <div>
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Keywords</TableHead>
-                <TableHead>Category</TableHead>
+              <TableRow className="dark:border-gray-700">
+                <TableHead className="dark:text-gray-200">Title</TableHead>
+                <TableHead className="dark:text-gray-200">
+                  Description
+                </TableHead>
+                <TableHead className="dark:text-gray-200">Keywords</TableHead>
+                <TableHead className="dark:text-gray-200">Category</TableHead>
+                <TableHead className="dark:text-gray-200">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow>
-                <TableCell>{file.file.name}</TableCell>
-                <TableCell>
-                  <div className="border rounded-sm">
-                    <Textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                    />
-                  </div>
+              <TableRow className="dark:border-gray-700">
+                <TableCell className="dark:text-gray-300">
+                  {file.file.name}
                 </TableCell>
                 <TableCell>
-                  <div className="border rounded-sm">
-                    <Textarea
-                      type="text"
-                      className="py-3"
-                      value={keywords}
-                      onChange={(e) => setKeywords(e.target.value)}
-                    />
-                  </div>
+                  <Input
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="w-full bg-transparent dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
+                    placeholder="Enter description"
+                  />
                 </TableCell>
                 <TableCell>
-                  <div className="border rounded-sm">
-                    <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      className="py-3"
-                    >
-                      <option value="">Select Category</option>
-                      <option value="GeneticData">Genetic Data</option>
-                      <option value="MedicalImageData">
+                  <Input
+                    value={keywords}
+                    onChange={(e) => setKeywords(e.target.value)}
+                    className="w-full bg-transparent dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
+                    placeholder="Enter keywords"
+                  />
+                </TableCell>
+                <TableCell>
+                  <Select
+                    value={category}
+                    onValueChange={setCategory}
+                  >
+                    <SelectTrigger className="w-full dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent className="dark:bg-gray-800">
+                      <SelectItem
+                        value="Bills"
+                        className="dark:text-gray-200 dark:hover:bg-gray-700"
+                      >
+                        Bills
+                      </SelectItem>
+                      <SelectItem
+                        value="GeneticData"
+                        className="dark:text-gray-200 dark:hover:bg-gray-700"
+                      >
+                        Genetic Data
+                      </SelectItem>
+                      <SelectItem
+                        value="MedicalImageData"
+                        className="dark:text-gray-200 dark:hover:bg-gray-700"
+                      >
                         Medical Image Data
-                      </option>
-                      <option value="Reports">Reports</option>
-                      <option value="Bills">Bills</option>
-                      <option value="MedicalStatData">
-                        Medical Statics Data
-                      </option>
-                    </select>
-                  </div>
+                      </SelectItem>
+                      <SelectItem
+                        value="MedicalStatData"
+                        className="dark:text-gray-200 dark:hover:bg-gray-700"
+                      >
+                        Medical Statistics Data
+                      </SelectItem>
+                      <SelectItem
+                        value="Reports"
+                        className="dark:text-gray-200 dark:hover:bg-gray-700"
+                      >
+                        Reports
+                      </SelectItem>
+                      <SelectItem
+                        value="TrainingModels"
+                        className="dark:text-gray-200 dark:hover:bg-gray-700"
+                      >
+                        Training Models
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </TableCell>
-
                 <TableCell>
                   <button
                     onClick={handleRemoveFile}
-                    className="p-2 bg-muted rounded-lg"
+                    className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
                   >
-                    {" "}
-                    <CircleX />{" "}
+                    <CircleX className="text-gray-500 dark:text-gray-400" />
                   </button>
                 </TableCell>
               </TableRow>
@@ -493,7 +530,10 @@ const FileUpload = () => {
 
       {file && (
         <>
-          <Button onClick={handleUpload} className="my-2 mr-2">
+          <Button
+            onClick={handleUpload}
+            className="my-2 mr-2"
+          >
             Upload
           </Button>
           <CloudFunctionCallButton
@@ -503,7 +543,10 @@ const FileUpload = () => {
       )}
 
       {csvData && (
-        <Button onClick={convertCsvToPdf} className="my-2 mr-2">
+        <Button
+          onClick={convertCsvToPdf}
+          className="my-2 mr-2"
+        >
           Download Analyzed File
         </Button>
       )}
@@ -528,7 +571,10 @@ const FileUpload = () => {
 };
 
 const CloudFunctionCallButton = ({ handleCallCloudFunction }) => (
-  <Button variant="outline" onClick={handleCallCloudFunction}>
+  <Button
+    variant="outline"
+    onClick={handleCallCloudFunction}
+  >
     Run Analytics
   </Button>
 );

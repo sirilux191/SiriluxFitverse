@@ -69,7 +69,7 @@ const columns = [
   {
     id: "share",
     header: "",
-    cell: ({ row }) => <ShareDataFunc assetID={row.original.timestamp} />,
+    cell: ({ row }) => <ShareDataFunc assetID={row.original.assetid} />,
   },
   {
     id: "sell",
@@ -143,18 +143,21 @@ export function ShareSellTable() {
         <Input
           placeholder="Filter names..."
           value={
-            (table.getColumn("name") &&
-              table.getColumn("name").getFilterValue()) ||
+            (table.getColumn("title") &&
+              table.getColumn("title").getFilterValue()) ||
             ""
           }
           onChange={(event) =>
-            table.getColumn("name")?.setFilterValue(event.target.value)
+            table.getColumn("title")?.setFilterValue(event.target.value)
           }
           className="w-full mr-2"
         />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto">
+            <Button
+              variant="outline"
+              className="ml-auto"
+            >
               Columns <ChevronDown className="ml-2 h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -191,7 +194,7 @@ export function ShareSellTable() {
                         ? null
                         : flexRender(
                             header.column.columnDef.header,
-                            header.getContext(),
+                            header.getContext()
                           )}
                     </TableHead>
                   );
@@ -210,7 +213,7 @@ export function ShareSellTable() {
                     <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
-                        cell.getContext(),
+                        cell.getContext()
                       )}
                     </TableCell>
                   ))}

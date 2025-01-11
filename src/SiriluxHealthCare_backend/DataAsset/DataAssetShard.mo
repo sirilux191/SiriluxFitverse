@@ -198,21 +198,19 @@ actor class DataAssetShard() {
 
     // Helper function to check if a user has access to a specific asset
     public func hasAccess(userPrincipal : Principal, assetID : Text) : async Bool {
-        switch (BTree.get(dataAccessTP, Text.compare, assetID)) {
-            case null { false };
-            case (?principals) {
-                var found = false;
-                // Check if userPrincipal has access to assetID
-                label l for (p in (principals.vals())) {
-                    // Changed label loop to for loop
-                    if (p == userPrincipal) {
-                        found := true;
-                        break l; // Use the correct label and value
-                    };
+        let accessList = BTree.get(dataAccessTP, Text.compare, assetID);
+        switch (accessList) {
+            case (?principalList) {
+                let found = Array.find<Principal>(principalList, func(p) { p == userPrincipal });
+                if (found == null) {
+                    return false;
                 };
-                found; // Ensure this returns the correct value
+            };
+            case (null) {
+                return false;
             };
         };
+        return true;
     };
 
     public func getSymmetricKeyVerificationKey() : async Text {
@@ -226,7 +224,7 @@ actor class DataAssetShard() {
 
     };
 
-    public shared ({ caller }) func encrypted_symmetric_key_for_asset(requestor : Principal, assetID : Text, encryption_public_key : Blob) : async Result.Result<Text, Text> {
+    public shared func encrypted_symmetric_key_for_asset(requestor : Principal, assetID : Text, encryption_public_key : Blob) : async Result.Result<Text, Text> {
         // if (not isPermitted(caller)) {
         //     return #err("You are not permitted to perform this operation");
         // };

@@ -10,16 +10,16 @@ import Types "../Types";
 import CanisterIDs "../Types/CanisterIDs";
 
 actor class UserShard() {
+
     // BTree to store user data
     private var userMap : BTree.BTree<Text, Types.HealthIDUser> = BTree.init<Text, Types.HealthIDUser>(null);
-    // private var adminPrincipal = Types.admin;
 
     private var permittedPrincipal : [Principal] = [Principal.fromText(CanisterIDs.userShardManagerCanisterID), Principal.fromText(CanisterIDs.userServiceCanisterID)];
 
     // Function to insert a user
     public shared ({ caller }) func insertUser(userID : Text, user : Types.HealthIDUser) : async Result.Result<(), Text> {
         if (not isPermitted(caller)) {
-            return #err("You are not permitted");
+            return #err("You are not permitted to call this function");
         };
         if (BTree.has(userMap, Text.compare, userID)) {
             return #err("User with ID " # userID # " already exists");
@@ -43,7 +43,7 @@ actor class UserShard() {
     // Function to get a user by ID
     public shared ({ caller }) func getUser(userID : Text) : async Result.Result<Types.HealthIDUser, Text> {
         if (not isPermitted(caller)) {
-            return #err("You are not permitted");
+            return #err("You are not permitted to call this function");
         };
         switch (BTree.get(userMap, Text.compare, userID)) {
             case (?value) { return #ok(value) };
@@ -54,7 +54,7 @@ actor class UserShard() {
     // Function to update a user
     public shared ({ caller }) func updateUser(userID : Text, user : Types.HealthIDUser) : async Result.Result<(), Text> {
         if (not isPermitted(caller)) {
-            return #err("You are not permitted");
+            return #err("You are not permitted to call this function");
         };
         switch (BTree.get(userMap, Text.compare, userID)) {
             case (?_) {
@@ -72,7 +72,7 @@ actor class UserShard() {
     // Function to delete a user
     public shared ({ caller }) func deleteUser(userID : Text) : async Result.Result<(), Text> {
         if (not isPermitted(caller)) {
-            return #err("You are not permitted");
+            return #err("You are not permitted to call this function");
         };
         switch (BTree.delete(userMap, Text.compare, userID)) {
             case (?_) { return #ok(()) };
@@ -99,18 +99,10 @@ actor class UserShard() {
         return false;
     };
 
-    // private func isAdmin(caller : Principal) : Bool {
-    //     if (Principal.fromText(adminPrincipal) == caller) {
-    //         true;
-    //     } else {
-    //         false;
-    //     };
-    // };
-
     public shared ({ caller }) func addPermittedPrincipal(principalToAdd : Text) : async Result.Result<Text, Text> {
 
         if (not isPermitted(caller)) {
-            return #err("You are not Admin, only admin can perform this action");
+            return #err("You are not permitted to call this function");
         };
 
         let permittedPrincipalBuffer = Buffer.fromArray<Principal>(permittedPrincipal);
@@ -121,7 +113,7 @@ actor class UserShard() {
 
     public shared ({ caller }) func removePermittedPrincipal(principalToRemove : Text) : async Result.Result<Text, Text> {
         if (not isPermitted(caller)) {
-            return #err("You are not Admin, only admin can perform this action");
+            return #err("You are not permitted to call this function");
         };
 
         let permittedPrincipalBuffer = Buffer.fromArray<Principal>(permittedPrincipal);

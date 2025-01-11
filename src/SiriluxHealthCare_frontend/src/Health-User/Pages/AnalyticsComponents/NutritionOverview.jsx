@@ -29,7 +29,7 @@ export default function NutritionOverview({
         <Progress
           value={proteinPercentage}
           className="h-2 bg-gray-200"
-          indicatorClassName="bg-green-500"
+          indicatorclassname="bg-green-500"
         />
       </div>
       <div className="space-y-2">
@@ -42,7 +42,7 @@ export default function NutritionOverview({
         <Progress
           value={carbPercentage}
           className="h-2 bg-gray-200"
-          indicatorClassName="bg-blue-500"
+          indicatorclassname="bg-blue-500"
         />
       </div>
       <div className="space-y-2">
@@ -55,7 +55,7 @@ export default function NutritionOverview({
         <Progress
           value={fatPercentage}
           className="h-2 bg-gray-200"
-          indicatorClassName="bg-yellow-500"
+          indicatorclassname="bg-yellow-500"
         />
       </div>
     </div>

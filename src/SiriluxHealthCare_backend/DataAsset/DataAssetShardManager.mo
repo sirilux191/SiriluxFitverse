@@ -120,9 +120,9 @@ actor class DataAssetShardManager() {
         };
     };
 
-    public shared ({ caller }) func updateWasmModule(wasmModule : [Nat8]) : async Result.Result<(), Text> {
-        if (not isAdmin(caller)) {
-            return #err("You are not permitted to update the WASM module");
+    public shared ({ caller }) func updateWasmModule(adminCaller : Principal, wasmModule : [Nat8]) : async Result.Result<(), Text> {
+        if (not (await isAdmin(adminCaller))) {
+            return #err("You are not Admin, only admin can perform this action");
         };
         if (Array.size(wasmModule) < 8) {
             return #err("Invalid WASM module: too small");
@@ -133,9 +133,9 @@ actor class DataAssetShardManager() {
     };
 
     public shared ({ caller }) func updateExistingShards() : async Result.Result<(), Text> {
-        if (not isAdmin(caller)) {
-            return #err("You are not permitted to update shards");
-        };
+        // if (not (await isAdmin(caller))) {
+        //     return #err("You are not Admin, only admin can perform this action");
+        // };
         if (Array.size(dataAssetShardWasmModule) == 0) {
             return #err("Wasm module not set. Please update the Wasm module first.");
         };
@@ -198,8 +198,12 @@ actor class DataAssetShardManager() {
         };
     };
 
-    private func isAdmin(principal : Principal) : Bool {
-        Array.find<Principal>(permittedPrincipals, func(p) { p == principal }) != null;
+    public shared func isAdmin(caller : Principal) : async Bool {
+        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
+            true;
+        } else {
+            false;
+        };
     };
 
     public query func getTotalAssetCount() : async Nat {
@@ -240,16 +244,16 @@ actor class DataAssetShardManager() {
     };
 
     public shared ({ caller }) func addPermittedPrincipal(principal : Principal) : async Result.Result<(), Text> {
-        if (not isAdmin(caller)) {
-            return #err("You are not permitted to add permitted principals");
+        if (not (await isAdmin(caller))) {
+            return #err("You are not Admin, only admin can perform this action");
         };
         permittedPrincipals := Array.append(permittedPrincipals, [principal]);
         #ok(());
     };
 
     public shared ({ caller }) func removePermittedPrincipal(principal : Principal) : async Result.Result<(), Text> {
-        if (not isAdmin(caller)) {
-            return #err("You are not permitted to remove permitted principals");
+        if (not (await isAdmin(caller))) {
+            return #err("You are not Admin, only admin can perform this action");
         };
         permittedPrincipals := Array.filter(permittedPrincipals, func(p : Principal) : Bool { p != principal });
         #ok(());

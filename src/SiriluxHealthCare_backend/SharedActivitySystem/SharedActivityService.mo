@@ -1,6 +1,5 @@
 import Array "mo:base/Array";
 import Int "mo:base/Int";
-import Nat "mo:base/Nat";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
@@ -8,11 +7,12 @@ import Time "mo:base/Time";
 
 import IdentityManager "../IdentityManager/IdentityManager";
 import Types "../Types";
+import CanisterIDs "../Types/CanisterIDs";
 import SharedActivityShardManager "SharedActivityShardManager";
 
 actor class SharedActivityService() {
-    private let shardManager : SharedActivityShardManager.SharedActivityShardManager = actor ("ajuq4-ruaaa-aaaaa-qaaga-cai"); // Replace with actual canister ID
-    private let identityManager : IdentityManager.IdentityManager = actor ("by6od-j4aaa-aaaaa-qaadq-cai"); // Replace with actual canister ID
+    private let shardManager : SharedActivityShardManager.SharedActivityShardManager = actor (CanisterIDs.sharedActivityShardManagerCanisterID); // Replace with actual canister ID
+    private let identityManager : IdentityManager.IdentityManager = actor (CanisterIDs.identityManagerCanisterID); // Replace with actual canister ID
 
     public shared func recordSharedActivity(caller : Principal, assetID : Text, recipientID : Text, sharedType : Types.SharedType) : async Result.Result<(), Text> {
         let senderIDResult = await identityManager.getIdentity(caller);
@@ -80,12 +80,11 @@ actor class SharedActivityService() {
         let userIDResult = await identityManager.getIdentity(caller);
         switch (userIDResult) {
             case (#ok((userID, _))) {
-                var allActivities : [Types.sharedActivityInfo] = [];
-                var currentShard = 1;
-                label l loop {
-                    let shardResult = await shardManager.getShard(Nat.toText(currentShard));
-                    switch (shardResult) {
-                        case (#ok(shard)) {
+                let userShardsResult = await shardManager.getUserShards(userID);
+                switch (userShardsResult) {
+                    case (#ok(userShards)) {
+                        var allActivities : [Types.sharedActivityInfo] = [];
+                        for (shard in userShards.vals()) {
                             let activitiesResult = await shard.getUserReceivedActivities(userID);
                             switch (activitiesResult) {
                                 case (#ok(activities)) {
@@ -93,18 +92,16 @@ actor class SharedActivityService() {
                                 };
                                 case (#err(_)) {}; // Skip if error
                             };
-                            currentShard += 1;
                         };
-                        case (#err(_)) { break l };
+                        #ok(allActivities);
                     };
+                    case (#err(e)) { #err("Error getting user shards: " # e) };
                 };
-                #ok(allActivities);
             };
             case (#err(e)) { #err("Error getting user ID: " # e) };
         };
     };
 
-    // Other necessary functions...
     public shared func getSharedActivity(activityID : Text) : async Result.Result<Types.sharedActivityInfo, Text> {
         let shardResult = await shardManager.getShard(activityID);
         switch (shardResult) {
@@ -112,6 +109,24 @@ actor class SharedActivityService() {
                 await shard.getActivity(activityID);
             };
             case (#err(e)) { #err("Error getting shard: " # e) };
+        };
+    };
+
+    public shared ({ caller }) func updateSharedActivityShardWasmModule(wasmModule : [Nat8]) : async Result.Result<Text, Text> {
+        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
+            // Call the updateWasmModule function of the FacilityShardManager
+            let result = await shardManager.updateWasmModule(caller, wasmModule);
+
+            switch (result) {
+                case (#ok(())) {
+                    #ok("()");
+                };
+                case (#err(e)) {
+                    #err("Failed to update WASM module: " # e);
+                };
+            };
+        } else {
+            #err("You don't have permission to perform this action");
         };
     };
 };
