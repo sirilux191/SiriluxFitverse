@@ -34,15 +34,15 @@ export function DataReceivedTable() {
   // Function to get icon based on category
   const getIconByCategory = (category) => {
     const iconSize = 48;
-    const iconStyles = "p-4 rounded-2xl";
+    const iconStyles = "p-3 rounded-xl";
 
     switch (category) {
       case "Bills":
         return (
-          <div className={`${iconStyles} bg-pink-500/20`}>
+          <div className={`${iconStyles} bg-orange-100 dark:bg-orange-900/30`}>
             <FileText
               size={iconSize}
-              className="text-pink-500"
+              className="text-orange-500"
             />
           </div>
         );
@@ -220,54 +220,34 @@ export function DataReceivedTable() {
       </div>
 
       {/* Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredRecords.map((record) => (
           <Card
             key={record.id}
-            className="group bg-[#0B1120] border border-gray-800 rounded-xl overflow-hidden hover:border-gray-700 transition-all duration-300 w-full"
+            className="relative bg-gray-900 border border-gray-800 rounded-lg overflow-hidden"
           >
-            <div className="p-6 flex flex-col">
-              <div className="flex flex-col items-center space-y-4">
-                <div className="w-20 h-20 flex items-center justify-center">
+            <div className="p-4">
+              <div className="flex flex-col items-center">
+                <div className="text-blue-500 mb-4 flex justify-center">
                   {getIconByCategory(record.category)}
                 </div>
-
-                <div className="text-center space-y-2">
-                  <h3 className="text-white text-xl font-semibold text-center w-full px-2">
-                    {record.id.slice(0, 20)}
-                    {record.id.length > 20 ? "..." : ""}
-                  </h3>
-                  <p className="text-gray-400 text-sm">{record.description}</p>
-                </div>
-
-                <div className="flex flex-col items-center space-y-3 w-full mt-2">
-                  <div className="text-gray-400 text-sm">{record.date}</div>
-
-                  <span
-                    className={`px-4 py-1.5 rounded-full text-sm ${
-                      record.category === "Bills"
-                        ? "bg-orange-900/30 text-orange-400"
-                        : record.category === "GeneticData"
-                          ? "bg-purple-900/30 text-purple-400"
-                          : record.category === "MedicalImageData"
-                            ? "bg-blue-900/30 text-blue-400"
-                            : record.category === "MedicalStatData"
-                              ? "bg-green-900/30 text-green-400"
-                              : record.category === "Reports"
-                                ? "bg-pink-900/30 text-pink-400"
-                                : record.category === "TrainingModels"
-                                  ? "bg-cyan-900/30 text-cyan-400"
-                                  : "bg-gray-800 text-gray-300"
-                    }`}
-                  >
-                    {record.category}
-                  </span>
-
+                <h3 className="text-white font-medium mb-2 line-clamp-1 text-center">
+                  {record.title}
+                </h3>
+                <div className="mt-auto space-y-3 w-full">
+                  <div className="flex flex-wrap justify-center gap-2 text-xs">
+                    <span className="bg-gray-800 text-gray-300 px-2 py-1 rounded-full">
+                      {record.date}
+                    </span>
+                    <span className="bg-gray-800 text-blue-400 px-2 py-1 rounded-full">
+                      {record.format}
+                    </span>
+                  </div>
                   <button
                     onClick={() => setExpandedCard(record.id)}
-                    className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2.5 rounded-lg transition-colors text-sm font-medium"
+                    className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg transition-colors text-sm"
                   >
-                    View Details
+                    More Details
                   </button>
                 </div>
               </div>

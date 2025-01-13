@@ -108,10 +108,10 @@ actor class GamificationSystem() {
         avatarAttributes.put(tokenId, defaultAttributes(avatarType));
         avatarHP.put(tokenId, MAX_HP);
         let result = await wellnessAvatarNFT.icrcX_mint(caller, request);
-        let transferResult = await wellnessAvatarNFT.icrc7_transfer(caller, [{ from_subaccount = null; to = { owner = Principal.fromText(mintNFTPrincipal); subaccount = null }; token_id = tokenId; memo = memo; created_at_time = null }]);
+        let transferResult = await wellnessAvatarNFT.icrc7_transfer(Principal.fromText(mintNFTPrincipal), [{ from_subaccount = null; to = { owner = Principal.fromText(mintNFTPrincipal); subaccount = null }; token_id = tokenId; memo = memo; created_at_time = null }]);
         switch (transferResult[0]) {
-            case (? #Ok(_)) { #ok(result) };
-            case (? #Err(err)) { return #err(err) };
+            case (?#Ok(_)) { #ok(result) };
+            case (?#Err(err)) { return #err(err) };
             case (null) { return (#ok(result)) };
         };
 
@@ -224,8 +224,11 @@ actor class GamificationSystem() {
         };
     };
 
-    public shared ({ caller }) func initiateVisit(idToVisit : Text, duration : Nat, avatarId : Nat) : async Result.Result<Nat, Text> {
-        let result = await visitManager.initiateVisit(caller, idToVisit, Int.abs(Time.now()), duration, avatarId);
+    public shared ({ caller }) func initiateVisit(idToVisit : Text, avatarId : Nat) : async Result.Result<Nat, Text> {
+        //avatarid check
+        //
+
+        let result = await visitManager.initiateVisit(caller, idToVisit, Int.abs(Time.now()), duration, #Offline, avatarId);
         switch (result) {
             case (#ok(visitId)) {
                 // Update avatar HP here
@@ -274,16 +277,14 @@ actor class GamificationSystem() {
     };
 
     public shared ({ caller }) func transferNFT(tokenId : Nat, newOwner : Text) : async [?ICRC7.TransferResult] {
-
-        let transferArgs : ICRC7.TransferArg = {
+        let transferArgs = [{
             from_subaccount = null;
             to = { owner = Principal.fromText(newOwner); subaccount = null };
-            token_id = tokenId; // Assuming you have a tokenId variable
+            token_id = tokenId;
             memo = null;
             created_at_time = null;
-        };
-        await wellnessAvatarNFT.icrc7_transfer(caller, [transferArgs]);
-
+        }];
+        await wellnessAvatarNFT.icrc7_transfer(caller, transferArgs);
     };
 
     // HP System functions

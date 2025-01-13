@@ -1,82 +1,89 @@
 import React, { useState, useEffect, useContext } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
-import ActorContext from "../../ActorContext";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
+import { toast } from "@/components/ui/use-toast";
 import {
-  Clock,
-  Calendar,
-  User,
-  Briefcase,
-  Building,
-  Trash2,
-  Plus,
-  X,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-} from "lucide-react";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import ActorContext from "../../ActorContext";
+import { CalendarIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
+import TimeSlotPicker from "@/components/TimeSlotPicker";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 const GamificationTab = () => {
   const { actors } = useContext(ActorContext);
-  const { toast } = useToast();
-  const [avatars, setAvatars] = useState([]);
-  const [pendingVisits, setPendingVisits] = useState([]);
   const [professionalInfo, setProfessionalInfo] = useState({
+    id: "",
     name: "",
     specialization: "",
-    availableSlots: [],
+    description: "",
   });
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
+  const [availabilitySlot, setAvailabilitySlot] = useState({
+    start: "",
+    capacity: "1",
+  });
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [multipleSlots, setMultipleSlots] = useState([
+    { date: null, time: "", start: "", capacity: "1" },
+  ]);
+  const [selectedSlots, setSelectedSlots] = useState([]);
+  const [slotRange, setSlotRange] = useState({
+    startDate: null,
+    endDate: null,
+    startTime: "",
+    endTime: "",
+    capacity: "1",
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const DATES_PER_PAGE = 5;
 
   useEffect(() => {
-    fetchAvatars();
-    fetchPendingVisits();
     fetchProfessionalInfo();
+    fetchAvailableSlots();
   }, []);
-
-  const fetchAvatars = async () => {
-    try {
-      const result = await actors.gamificationSystem.getUserAvatarsSelf();
-      setAvatars(result);
-    } catch (error) {
-      console.error("Error fetching avatars:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch avatars",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const fetchPendingVisits = async () => {
-    try {
-      const result = await actors.visitManager.getPendingVisits();
-      setPendingVisits(result.ok || []);
-    } catch (error) {
-      console.error("Error fetching pending visits:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch pending visits",
-        variant: "destructive",
-      });
-    }
-  };
 
   const fetchProfessionalInfo = async () => {
     try {
+      const identityResult = await actors.identityManager.getIdentityBySelf();
+      if (!identityResult.ok) {
+        throw new Error("Failed to get identity");
+      }
+
+      const professionalId = identityResult.ok[0];
       const result = await actors.visitManager.getProfessionalInfoSelf();
+
+      console.log("Service Info Result:", result);
+
       if (result.ok) {
-        setProfessionalInfo(result.ok);
+        setProfessionalInfo({
+          id: professionalId,
+          name: result.ok.name || "",
+          specialization: result.ok.specialization || "",
+          description: result.ok.description || "",
+        });
       } else {
-        throw new Error(result.err);
+        setProfessionalInfo({
+          id: professionalId,
+          name: "",
+          specialization: "",
+          description: "",
+        });
       }
     } catch (error) {
       console.error("Error fetching professional info:", error);
@@ -88,52 +95,53 @@ const GamificationTab = () => {
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setProfessionalInfo((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleAddSlot = () => {
-    if (startDate && endDate) {
-      const newSlot = [
-        BigInt(startDate.getTime()) * BigInt(1000000),
-        BigInt(endDate.getTime()) * BigInt(1000000),
-      ];
-      setProfessionalInfo((prev) => ({
-        ...prev,
-        availableSlots: [...prev.availableSlots, newSlot],
-      }));
-      setStartDate(null);
-      setEndDate(null);
-    } else {
+  const fetchAvailableSlots = async () => {
+    try {
+      const result = await actors.visitManager.getAvailableSlotsSelf();
+      console.log("Available Slots Result:", result);
+      if (result.ok) {
+        setAvailableSlots(result.ok);
+      } else {
+        throw new Error(result.err);
+      }
+    } catch (error) {
+      console.error("Error fetching available slots:", error);
       toast({
         title: "Error",
-        description: "Please select both start and end dates.",
+        description: "Failed to fetch available slots",
         variant: "destructive",
       });
     }
   };
 
-  const handleRemoveSlot = (index) => {
-    setProfessionalInfo((prev) => ({
-      ...prev,
-      availableSlots: prev.availableSlots.filter((_, i) => i !== index),
-    }));
-  };
-
-  const handleUpdateProfessionalInfo = async (event) => {
-    event.preventDefault();
+  const handleUpdateInfo = async (e) => {
+    e.preventDefault();
     try {
-      const result = await actors.visitManager.updateProfessionalInfo(
-        professionalInfo.name,
-        professionalInfo.specialization,
-        professionalInfo.availableSlots,
-      );
-      if (result && result.ok !== undefined) {
+      const identityResult = await actors.identityManager.getIdentityBySelf();
+      if (!identityResult.ok) {
+        throw new Error("Failed to get identity");
+      }
+
+      const professionalId = identityResult.ok[0];
+
+      const updateData = {
+        id: professionalId,
+        name: professionalInfo.name,
+        specialization: professionalInfo.specialization,
+        description: professionalInfo.description,
+      };
+
+      console.log("Updating with data:", updateData);
+
+      const result =
+        await actors.visitManager.updateProfessionalInfo(updateData);
+
+      if (result.ok) {
         toast({
           title: "Success",
           description: "Professional information updated successfully",
         });
+        await fetchProfessionalInfo();
       } else {
         throw new Error(result.err);
       }
@@ -147,216 +155,698 @@ const GamificationTab = () => {
     }
   };
 
-  const formatTime = (nanoseconds) => {
-    const milliseconds = Number(nanoseconds) / 1000000;
-    const date = new Date(milliseconds);
-    return date.toLocaleString();
-  };
+  const generateSlotsFromRange = () => {
+    const slots = [];
+    const currentDate = new Date(slotRange.startDate);
+    const endDate = new Date(slotRange.endDate);
 
-  const handleVisit = async (visitId, action) => {
-    try {
-      let result;
-      const visit = pendingVisits.find((v) => v.visitId === visitId);
-      const avatarId = visit ? visit.avatarId : null;
+    while (currentDate <= endDate) {
+      const [startHour, startMinute] = slotRange.startTime.split(":");
+      const [endHour, endMinute] = slotRange.endTime.split(":");
 
-      if (action === "complete") {
-        if (avatarId === null) {
-          throw new Error("No avatar available to complete the visit");
-        }
-        result = await actors.gamificationSystem.completeVisit(
-          visitId,
-          avatarId,
-        );
-      } else if (action === "reject") {
-        result = await actors.gamificationSystem.rejectVisit(visitId);
+      let currentTime = new Date(currentDate);
+      currentTime.setHours(parseInt(startHour), parseInt(startMinute));
+
+      const endTime = new Date(currentDate);
+      endTime.setHours(parseInt(endHour), parseInt(endMinute));
+
+      while (currentTime < endTime) {
+        slots.push({
+          entityId: professionalInfo.id || "",
+          start: currentTime.getTime() * 1000000,
+          capacity: parseInt(slotRange.capacity, 10),
+        });
+        currentTime = new Date(currentTime.getTime() + 30 * 60000); // Add 30 minutes
       }
 
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return slots;
+  };
+
+  const handleAddMultipleSlots = async (e) => {
+    e.preventDefault();
+    try {
+      const slots = generateSlotsFromRange();
+      const result =
+        await actors.visitManager.addMultipleAvailabilitySlots(slots);
       if (result.ok) {
         toast({
           title: "Success",
-          description: `Visit ${action === "complete" ? "completed" : "rejected"} successfully`,
+          description: "Multiple availability slots added successfully",
         });
-        fetchPendingVisits();
+        fetchAvailableSlots();
+        setSlotRange({
+          startDate: null,
+          endDate: null,
+          startTime: "",
+          endTime: "",
+          capacity: "1",
+        });
       } else {
         throw new Error(result.err);
       }
     } catch (error) {
-      console.error(`Error ${action}ing visit:`, error);
+      console.error("Error adding slots:", error);
       toast({
         title: "Error",
-        description: `Failed to ${action} visit`,
+        description: "Failed to add availability slots",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSlotChange = (index, field, value) => {
+    setMultipleSlots((prevSlots) => {
+      const newSlots = [...prevSlots];
+      const slot = { ...newSlots[index] };
+
+      switch (field) {
+        case "date":
+          slot.date = value;
+          // Update start if we have both date and time
+          if (slot.time) {
+            const dateObj = new Date(value);
+            const [hours, minutes] = slot.time.split(":");
+            dateObj.setHours(parseInt(hours, 10), parseInt(minutes, 10));
+            slot.start = dateObj.toISOString();
+          }
+          break;
+
+        case "time":
+          slot.time = value;
+          // Update start if we have both date and time
+          if (slot.date) {
+            const dateObj = new Date(slot.date);
+            const [hours, minutes] = value.split(":");
+            dateObj.setHours(parseInt(hours, 10), parseInt(minutes, 10));
+            slot.start = dateObj.toISOString();
+          }
+          break;
+
+        default:
+          slot[field] = value;
+      }
+
+      newSlots[index] = slot;
+      return newSlots;
+    });
+  };
+
+  const addSlotField = () => {
+    setMultipleSlots([
+      ...multipleSlots,
+      { date: null, time: "", start: "", capacity: "1" },
+    ]);
+  };
+
+  const removeSlotField = (index) => {
+    if (multipleSlots.length > 1) {
+      const newSlots = multipleSlots.filter((_, i) => i !== index);
+      setMultipleSlots(newSlots);
+    }
+  };
+
+  const handleRemoveMultipleSlots = async () => {
+    try {
+      const result = await actors.visitManager.removeMultipleAvailabilitySlots(
+        professionalInfo.id,
+        selectedSlots
+      );
+      if (result.ok) {
+        toast({
+          title: "Success",
+          description: "Selected slots removed successfully",
+        });
+        setSelectedSlots([]);
+        fetchAvailableSlots();
+      } else {
+        throw new Error(result.err);
+      }
+    } catch (error) {
+      console.error("Error removing slots:", error);
+      toast({
+        title: "Error",
+        description: "Failed to remove selected slots",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const groupSlotsByDate = (slots) => {
+    const groups = {};
+    slots.forEach((slot) => {
+      const date = new Date(Number(slot.start) / 1000000);
+      const dateKey = date.toISOString().split("T")[0];
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+      groups[dateKey].push(slot);
+    });
+    return groups;
+  };
+
+  const formatTimeRange = (slots) => {
+    if (slots.length === 0) return "";
+    if (slots.length === 1) {
+      const time = new Date(Number(slots[0].start) / 1000000);
+      return time.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+
+    // Check if slots are continuous
+    const times = slots.map((slot) => new Date(Number(slot.start) / 1000000));
+    times.sort((a, b) => a - b);
+
+    const isContiguous = times.every((time, i) => {
+      if (i === 0) return true;
+      const diff = time.getTime() - times[i - 1].getTime();
+      return diff === 30 * 60 * 1000; // 30 minutes in milliseconds
+    });
+
+    if (isContiguous) {
+      return `${times[0].toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - ${times[times.length - 1].toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    } else {
+      return times
+        .map((time) =>
+          time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        )
+        .join(", ");
+    }
+  };
+
+  const paginateSlots = (groupedSlots) => {
+    const sortedDates = Object.entries(groupedSlots).sort(([dateA], [dateB]) =>
+      dateA.localeCompare(dateB)
+    );
+
+    const totalPages = Math.ceil(sortedDates.length / DATES_PER_PAGE);
+    const startIndex = (currentPage - 1) * DATES_PER_PAGE;
+    const paginatedDates = sortedDates.slice(
+      startIndex,
+      startIndex + DATES_PER_PAGE
+    );
+
+    return {
+      paginatedDates,
+      totalPages,
+      totalDates: sortedDates.length,
+    };
+  };
+
+  const handleAddIndividualSlots = async (e) => {
+    e.preventDefault();
+    try {
+      const formattedSlots = multipleSlots
+        .filter((slot) => slot.date && slot.time) // Only include complete slots
+        .map((slot) => {
+          const dateTime = new Date(slot.date);
+          const [hours, minutes] = slot.time.split(":");
+          dateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10));
+
+          return {
+            entityId: professionalInfo.id || "",
+            start: BigInt(dateTime.getTime() * 1000000),
+            capacity: parseInt(slot.capacity, 10) || 1,
+          };
+        });
+
+      if (formattedSlots.length === 0) {
+        toast({
+          title: "Error",
+          description: "Please add at least one complete slot",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const result =
+        await actors.visitManager.addMultipleAvailabilitySlots(formattedSlots);
+      if (result.ok) {
+        toast({
+          title: "Success",
+          description: "Multiple availability slots added successfully",
+        });
+        fetchAvailableSlots();
+        setMultipleSlots([{ date: null, time: "", start: "", capacity: "1" }]);
+      } else {
+        throw new Error(result.err);
+      }
+    } catch (error) {
+      console.error("Error adding slots:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add availability slots",
         variant: "destructive",
       });
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-6">
-      <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="profile">Professional Profile</TabsTrigger>
-          <TabsTrigger value="visits">Pending Visits</TabsTrigger>
+    <div className="container mx-auto py-6">
+      <Tabs defaultValue="information">
+        <TabsList className="w-full">
+          <TabsTrigger
+            value="information"
+            className="w-1/2"
+          >
+            Your Information
+          </TabsTrigger>
+          <TabsTrigger
+            value="visits"
+            className="w-1/2"
+          >
+            Visits
+          </TabsTrigger>
         </TabsList>
-        <TabsContent value="profile">
-          <Card>
-            <CardHeader>
-              <CardTitle>Update Professional Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form
-                className="space-y-4"
-                onSubmit={handleUpdateProfessionalInfo}
-              >
-                <div>
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    value={professionalInfo.name}
-                    onChange={handleInputChange}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="specialization">Specialization</Label>
-                  <Input
-                    id="specialization"
-                    name="specialization"
-                    value={professionalInfo.specialization}
-                    onChange={handleInputChange}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label>Available Slots</Label>
-                  <div className="mt-2 space-y-2">
-                    {professionalInfo.availableSlots.length > 0 ? (
-                      professionalInfo.availableSlots.map((slot, index) => (
+
+        <TabsContent value="information">
+          <div className="grid gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Professional Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form
+                  onSubmit={handleUpdateInfo}
+                  className="space-y-4"
+                >
+                  <div>
+                    <Label htmlFor="id">Professional ID</Label>
+                    <Input
+                      id="id"
+                      value={professionalInfo.id}
+                      disabled
+                      className="bg-muted cursor-not-allowed"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="name">Name</Label>
+                    <Input
+                      id="name"
+                      value={professionalInfo.name}
+                      onChange={(e) =>
+                        setProfessionalInfo((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
+                      }
+                      placeholder="Enter your full name"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="specialization">Specialization</Label>
+                    <Input
+                      id="specialization"
+                      value={professionalInfo.specialization}
+                      onChange={(e) =>
+                        setProfessionalInfo((prev) => ({
+                          ...prev,
+                          specialization: e.target.value,
+                        }))
+                      }
+                      placeholder="Enter your medical specialization"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="description">Description</Label>
+                    <Input
+                      id="description"
+                      value={professionalInfo.description}
+                      onChange={(e) =>
+                        setProfessionalInfo((prev) => ({
+                          ...prev,
+                          description: e.target.value,
+                        }))
+                      }
+                      placeholder="Enter a brief description of your practice"
+                      required
+                    />
+                  </div>
+                  <Button type="submit">Update Information</Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Add Availability Slots</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Tabs
+                  defaultValue="range"
+                  className="space-y-4"
+                >
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="range">Date Range</TabsTrigger>
+                    <TabsTrigger value="multiple">Multiple Slots</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="range">
+                    <form
+                      onSubmit={handleAddMultipleSlots}
+                      className="space-y-4"
+                    >
+                      <div className="space-y-4">
+                        <TimeSlotPicker
+                          mode="range"
+                          startDate={slotRange.startDate}
+                          endDate={slotRange.endDate}
+                          onDateRangeChange={(range) =>
+                            setSlotRange((prev) => ({
+                              ...prev,
+                              startDate: range?.from || null,
+                              endDate: range?.to || null,
+                            }))
+                          }
+                          startTime={slotRange.startTime}
+                          endTime={slotRange.endTime}
+                          onTimeRangeChange={({ start, end }) =>
+                            setSlotRange((prev) => ({
+                              ...prev,
+                              startTime: start,
+                              endTime: end,
+                            }))
+                          }
+                        />
+                        <div>
+                          <Label>Capacity per slot</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={slotRange.capacity}
+                            onChange={(e) =>
+                              setSlotRange((prev) => ({
+                                ...prev,
+                                capacity: e.target.value,
+                              }))
+                            }
+                            className="w-24"
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        type="submit"
+                        className="w-full"
+                      >
+                        Add Range Slots
+                      </Button>
+                    </form>
+                  </TabsContent>
+
+                  <TabsContent value="multiple">
+                    <form
+                      onSubmit={handleAddIndividualSlots}
+                      className="space-y-4"
+                    >
+                      {multipleSlots.map((slot, index) => (
                         <div
                           key={index}
-                          className="flex items-center justify-between"
+                          className="flex gap-4 items-start border p-4 rounded-lg"
                         >
-                          <Badge variant="secondary" className="text-sm">
-                            {`${formatTime(slot[0])} - ${formatTime(slot[1])}`}
-                          </Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveSlot(index)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="space-y-2 flex-1">
+                            <Label>Date and Time</Label>
+                            <TimeSlotPicker
+                              mode="single"
+                              selectedDate={
+                                slot.date ? new Date(slot.date) : null
+                              }
+                              onDateChange={(date) => {
+                                if (date) {
+                                  handleSlotChange(
+                                    index,
+                                    "date",
+                                    date.toISOString().split("T")[0]
+                                  );
+                                }
+                              }}
+                              selectedTime={slot.time}
+                              onTimeChange={(time) =>
+                                handleSlotChange(index, "time", time)
+                              }
+                            />
+                            {/* Debug info - remove in production */}
+                            <div className="text-xs text-muted-foreground">
+                              Selected: {slot.date} {slot.time}
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`capacity-${index}`}>
+                              Capacity
+                            </Label>
+                            <Input
+                              id={`capacity-${index}`}
+                              type="number"
+                              min="1"
+                              value={slot.capacity}
+                              onChange={(e) =>
+                                handleSlotChange(
+                                  index,
+                                  "capacity",
+                                  e.target.value
+                                )
+                              }
+                              className="w-24"
+                            />
+                          </div>
+                          {multipleSlots.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="mt-8"
+                              onClick={() => removeSlotField(index)}
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
-                      ))
-                    ) : (
-                      <div className="text-center text-gray-500">
-                        <Calendar className="mx-auto h-12 w-12 text-gray-400" />
-                        <p>No available slots. Add some below.</p>
+                      ))}
+
+                      <div className="flex gap-4">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={addSlotField}
+                          className="flex items-center gap-2"
+                        >
+                          <PlusIcon className="h-4 w-4" />
+                          Add Another Slot
+                        </Button>
+                        <Button
+                          type="submit"
+                          className="flex-1"
+                          disabled={
+                            !multipleSlots.some(
+                              (slot) => slot.date && slot.time
+                            )
+                          }
+                        >
+                          Save All Slots
+                        </Button>
                       </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mt-2">
-                    <DatePicker
-                      selected={startDate}
-                      onChange={(date) => setStartDate(date)}
-                      showTimeSelect
-                      dateFormat="Pp"
-                      placeholderText="Start Date"
-                      className="w-full sm:w-auto px-3 py-2 border rounded-md"
-                    />
-                    <DatePicker
-                      selected={endDate}
-                      onChange={(date) => setEndDate(date)}
-                      showTimeSelect
-                      dateFormat="Pp"
-                      placeholderText="End Date"
-                      className="w-full sm:w-auto px-3 py-2 border rounded-md"
-                    />
-                    <Button
-                      type="button"
-                      onClick={handleAddSlot}
-                      className="w-full sm:w-auto"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Slot
-                    </Button>
-                  </div>
+                    </form>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle>Available Slots</CardTitle>
+                {selectedSlots.length > 0 && (
+                  <Button
+                    variant="destructive"
+                    onClick={handleRemoveMultipleSlots}
+                    className="flex items-center gap-2"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                    Remove Selected ({selectedSlots.length})
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  {(() => {
+                    const groupedSlots = groupSlotsByDate(availableSlots);
+                    const { paginatedDates, totalPages, totalDates } =
+                      paginateSlots(groupedSlots);
+
+                    if (totalDates === 0) {
+                      return (
+                        <p className="text-muted-foreground text-center py-4">
+                          No available slots found
+                        </p>
+                      );
+                    }
+
+                    return (
+                      <>
+                        {paginatedDates.map(([date, slots]) => (
+                          <div
+                            key={date}
+                            className="space-y-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={slots.every((slot) =>
+                                  selectedSlots.includes(slot.start)
+                                )}
+                                onCheckedChange={(checked) => {
+                                  setSelectedSlots((old) => {
+                                    const slotStarts = slots.map(
+                                      (s) => s.start
+                                    );
+                                    if (checked) {
+                                      return [
+                                        ...new Set([...old, ...slotStarts]),
+                                      ];
+                                    } else {
+                                      return old.filter(
+                                        (s) => !slotStarts.includes(s)
+                                      );
+                                    }
+                                  });
+                                }}
+                              />
+                              <h3 className="font-medium">
+                                {new Date(date).toLocaleDateString(undefined, {
+                                  weekday: "long",
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                })}
+                              </h3>
+                            </div>
+                            <div className="ml-6 space-y-2">
+                              {Object.entries(
+                                slots.reduce((groups, slot) => {
+                                  const time = new Date(
+                                    Number(slot.start) / 1000000
+                                  );
+                                  const hour = time.getHours();
+                                  if (!groups[hour]) groups[hour] = [];
+                                  groups[hour].push(slot);
+                                  return groups;
+                                }, {})
+                              )
+                                .sort(
+                                  ([hourA], [hourB]) =>
+                                    Number(hourA) - Number(hourB)
+                                )
+                                .map(([hour, hourSlots]) => (
+                                  <div
+                                    key={hour}
+                                    className="flex items-center justify-between p-2 border rounded"
+                                  >
+                                    <div className="flex items-center gap-4">
+                                      <Checkbox
+                                        checked={hourSlots.every((slot) =>
+                                          selectedSlots.includes(slot.start)
+                                        )}
+                                        onCheckedChange={(checked) => {
+                                          setSelectedSlots((old) => {
+                                            const slotStarts = hourSlots.map(
+                                              (s) => s.start
+                                            );
+                                            if (checked) {
+                                              return [
+                                                ...new Set([
+                                                  ...old,
+                                                  ...slotStarts,
+                                                ]),
+                                              ];
+                                            } else {
+                                              return old.filter(
+                                                (s) => !slotStarts.includes(s)
+                                              );
+                                            }
+                                          });
+                                        }}
+                                      />
+                                      <div>
+                                        <p>{formatTimeRange(hourSlots)}</p>
+                                        <p className="text-sm text-muted-foreground">
+                                          Capacity: {hourSlots[0].capacity}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        const slotStarts = hourSlots.map(
+                                          (s) => s.start
+                                        );
+                                        handleRemoveMultipleSlots(slotStarts);
+                                      }}
+                                    >
+                                      <TrashIcon className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        ))}
+
+                        {totalPages > 1 && (
+                          <Pagination className="mt-4">
+                            <PaginationContent>
+                              <PaginationItem>
+                                <PaginationPrevious
+                                  onClick={() =>
+                                    setCurrentPage((p) => Math.max(1, p - 1))
+                                  }
+                                  disabled={currentPage === 1}
+                                />
+                              </PaginationItem>
+
+                              {[...Array(totalPages)].map((_, i) => (
+                                <PaginationItem key={i + 1}>
+                                  <PaginationLink
+                                    onClick={() => setCurrentPage(i + 1)}
+                                    isActive={currentPage === i + 1}
+                                  >
+                                    {i + 1}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              ))}
+
+                              <PaginationItem>
+                                <PaginationNext
+                                  onClick={() =>
+                                    setCurrentPage((p) =>
+                                      Math.min(totalPages, p + 1)
+                                    )
+                                  }
+                                  disabled={currentPage === totalPages}
+                                />
+                              </PaginationItem>
+                            </PaginationContent>
+                          </Pagination>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
-                <Button type="submit" className="w-full">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Update Information
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
+
         <TabsContent value="visits">
+          {/* Visits content will be implemented separately */}
           <Card>
             <CardHeader>
-              <CardTitle>Pending Visits</CardTitle>
+              <CardTitle>Your Visits</CardTitle>
             </CardHeader>
             <CardContent>
-              {pendingVisits.length > 0 ? (
-                <div className="space-y-4">
-                  {pendingVisits.map((visit) => (
-                    <Card key={visit.visitId} className="p-4">
-                      <div className="grid grid-cols-2 gap-2 mb-4">
-                        <div className="flex items-center">
-                          <User className="mr-2 h-4 w-4" />
-                          <span>User ID: {Number(visit.userId)}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Clock className="mr-2 h-4 w-4" />
-                          <span>
-                            Duration: {Number(visit.duration)} minutes
-                          </span>
-                        </div>
-                        <div className="flex items-center">
-                          <Calendar className="mr-2 h-4 w-4" />
-                          <span>
-                            Date:{" "}
-                            {new Date(
-                              Number(visit.timestamp) / 1000000,
-                            ).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <div className="flex items-center">
-                          <Briefcase className="mr-2 h-4 w-4" />
-                          <span>
-                            Professional ID: {visit.professionalId || "N/A"}
-                          </span>
-                        </div>
-                        <div className="flex items-center">
-                          <Building className="mr-2 h-4 w-4" />
-                          <span>
-                            Facility ID: {Number(visit.facilityId) || "N/A"}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex justify-end space-x-2">
-                        <Button
-                          onClick={() => handleVisit(visit.visitId, "complete")}
-                        >
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Complete
-                        </Button>
-                        <Button
-                          onClick={() => handleVisit(visit.visitId, "reject")}
-                          variant="destructive"
-                        >
-                          <XCircle className="h-4 w-4 mr-2" />
-                          Reject
-                        </Button>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center text-gray-500 py-8">
-                  <AlertCircle className="mx-auto h-12 w-12 text-gray-400" />
-                  <p className="mt-2">No pending visits at the moment.</p>
-                </div>
-              )}
+              <p>Visit management functionality coming soon...</p>
             </CardContent>
           </Card>
         </TabsContent>

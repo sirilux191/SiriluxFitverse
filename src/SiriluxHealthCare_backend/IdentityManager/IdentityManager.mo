@@ -87,4 +87,11 @@ actor class IdentityManager() {
     public func returnAdmin() : async Text {
         return admin;
     };
+
+    public shared query ({ caller }) func getIdentityBySelf() : async Result.Result<(Text, Text), Text> {
+        switch (identityMap.get(caller)) {
+            case (?identity) { #ok(identity) };
+            case null { #err("Identity not found") };
+        };
+    };
 };

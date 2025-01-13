@@ -10,6 +10,14 @@ import {
   User,
   Briefcase,
   Building,
+  Badge,
+  MapPin,
+  Star,
+  Award,
+  Users,
+  Phone,
+  Mail,
+  Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
@@ -30,6 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -114,25 +123,25 @@ const Gamification = () => {
             await actors.gamificationSystem.getAvatarAttributes(tokenId);
           console.log("avatarAttributes", avatarAttributes);
           const visitCount =
-            await actors.visitManager.getAvatarVisitCount(tokenId);
-          console.log("visitCount", visitCount);
+            //   await actors.visitManager.getAvatarVisitCount(tokenId);
+            // console.log("visitCount", visitCount);
 
-          console.log({
-            id: Number(tokenId),
-            name,
-            description,
-            image,
-            type: attributes.avatarType,
-            quality: attributes.quality,
-            level: attributes.level,
-            energy: attributes.energy,
-            focus: attributes.focus,
-            vitality: attributes.vitality,
-            resilience: attributes.resilience,
-            hp: avatarAttributes.ok ? avatarAttributes.ok[1] : INITIAL_HP, // Use the HP from getAvatarAttributes
+            console.log({
+              id: Number(tokenId),
+              name,
+              description,
+              image,
+              type: attributes.avatarType,
+              quality: attributes.quality,
+              level: attributes.level,
+              energy: attributes.energy,
+              focus: attributes.focus,
+              vitality: attributes.vitality,
+              resilience: attributes.resilience,
+              hp: avatarAttributes.ok ? avatarAttributes.ok[1] : INITIAL_HP, // Use the HP from getAvatarAttributes
 
-            visitCount: 0, //Number(visitCount),
-          });
+              visitCount: 0, //Number(visitCount),
+            });
           return {
             id: Number(tokenId),
             name,
@@ -148,9 +157,9 @@ const Gamification = () => {
             hp: avatarAttributes.ok
               ? Number(avatarAttributes.ok[1])
               : INITIAL_HP, // Use the HP from getAvatarAttributes
-            visitCount: Number(visitCount),
+            visitCount: 0,
           };
-        }),
+        })
       );
 
       // Filter out any null values that might have been created due to invalid data
@@ -179,24 +188,75 @@ const Gamification = () => {
     }
   };
 
+  const formatDateTime = (nanoseconds) => {
+    // Convert nanoseconds to milliseconds
+    const milliseconds = Number(nanoseconds) / 1_000_000;
+    const date = new Date(milliseconds);
+
+    return {
+      date: date.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+      time: date.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      }),
+    };
+  };
+
+  const groupSlotsByDate = (slots) => {
+    const grouped = {};
+    slots.forEach((slot) => {
+      const { date } = formatDateTime(slot.start);
+      if (!grouped[date]) {
+        grouped[date] = [];
+      }
+      grouped[date].push(slot);
+    });
+
+    // Sort slots within each date
+    Object.keys(grouped).forEach((date) => {
+      grouped[date].sort((a, b) => Number(a.start) - Number(b.start));
+    });
+
+    return grouped;
+  };
+
   const fetchAvailableSlots = async (idToVisit) => {
     try {
       const result = await actors.visitManager.getAvailableSlots(idToVisit);
-      if (result.ok) {
+      if (Array.isArray(result)) {
         console.log("Available Slots for ID:", idToVisit);
-        console.log("Slots:", result.ok);
-        // Convert BigInt to Date (nanoseconds to milliseconds)
-        const formattedSlots = result.ok.map((slot) => [
-          new Date(Number(slot[0]) / 1_000_000), // Convert to milliseconds
-          new Date(Number(slot[1]) / 1_000_000), // Convert to milliseconds
-        ]);
-        console.log("Formatted Slots:", formattedSlots);
-        setAvailableSlots(formattedSlots);
+
+        // Filter out past slots
+        const currentTime = Date.now() * 1_000_000; // Convert to nanoseconds
+        const validSlots = result.filter(
+          (slot) => Number(slot.start) > currentTime
+        );
+
+        // Sort slots by start time
+        const sortedSlots = validSlots.sort(
+          (a, b) => Number(a.start) - Number(b.start)
+        );
+
+        setAvailableSlots(sortedSlots);
       } else {
-        console.error("Error fetching available slots:", result.err);
+        console.error("Invalid slots response:", result);
+        setAvailableSlots([]);
       }
     } catch (error) {
       console.error("Error fetching available slots:", error);
+      setAvailableSlots([]);
+      toast({
+        title: "Error",
+        description: "Failed to fetch available slots",
+        variant: "destructive",
+        duration: 3000,
+      });
     }
   };
 
@@ -206,7 +266,7 @@ const Gamification = () => {
       const result = await actors.gamificationSystem.initiateVisit(
         idToVisit,
         visitDuration,
-        selectedAvatarForVisit, // Pass selected avatar ID
+        selectedAvatarForVisit // Pass selected avatar ID
       );
       if (result.ok) {
         toast({
@@ -269,7 +329,7 @@ const Gamification = () => {
     try {
       await actors.gamificationSystem.restoreHP(
         Number(selectedAvatar.id),
-        Number(amount),
+        Number(amount)
       );
       setUserAvatars((prevAvatars) =>
         prevAvatars.map((avatar) =>
@@ -307,7 +367,7 @@ const Gamification = () => {
     try {
       const result = await actors.gamificationSystem.transferNFT(
         avatarId,
-        principalAddress,
+        principalAddress
       );
       console.log("result", result);
       // After successful transfer, update the user avatars
@@ -359,6 +419,20 @@ const Gamification = () => {
     </div>
   );
 
+  const formatAvailableSlots = (slots) => {
+    return slots.map(([start, end]) => ({
+      date: new Date(start).toLocaleDateString(),
+      startTime: new Date(start).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      endTime: new Date(end).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    }));
+  };
+
   return (
     <div className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
       <h1 className="text-4xl font-bold text-foreground mb-6">
@@ -371,7 +445,10 @@ const Gamification = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="lg:col-span-2">
-          <Tabs defaultValue="avatars" className="mb-6">
+          <Tabs
+            defaultValue="avatars"
+            className="mb-6"
+          >
             <TabsList className="flex justify-center bg-gray-800 text-white rounded-lg">
               <TabsTrigger
                 value="avatars"
@@ -420,119 +497,282 @@ const Gamification = () => {
             </TabsContent>
 
             <TabsContent value="professionals">
-              <h2 className="text-2xl font-semibold mb-4 text-blue-400">
-                Available Professionals
-              </h2>
-
-              <div className="my-6">
-                <h1 className="text-lg font-bold">
-                  Select an Avatar for Visit
-                </h1>
-                <Select
-                  onValueChange={setSelectedAvatarForVisit}
-                  value={selectedAvatarForVisit}
-                >
-                  <SelectTrigger className="w-56">
-                    <SelectValue
-                      placeholder="Select Avatar for Visit"
-                      className="text-white"
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {userAvatars.map((avatar) => (
-                      <SelectItem key={avatar.id} value={Number(avatar.id)}>
-                        {avatar.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {professionals.map((prof) => (
-                  <Card key={prof.id}>
-                    <CardHeader>
-                      <CardTitle>{prof.name}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="flex items-center mb-2">
-                        <UserCheck className="mr-2" size={18} />
-                        Specialization: {prof.specialization}
-                      </p>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button
-                            onClick={() => handleProfessionalSelect(prof)}
+              <div className="space-y-6">
+                <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5 text-blue-500" />
+                      Select Avatar for Visit
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Select
+                      onValueChange={setSelectedAvatarForVisit}
+                      value={selectedAvatarForVisit}
+                    >
+                      <SelectTrigger className="w-full bg-white dark:bg-gray-800">
+                        <SelectValue placeholder="Choose an avatar for your visit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {userAvatars.map((avatar) => (
+                          <SelectItem
+                            key={avatar.id}
+                            value={avatar.id}
                           >
-                            View Available Slots
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px]">
-                          <DialogHeader>
-                            <DialogTitle>
-                              Available Slots for {prof.name}
-                            </DialogTitle>
-                          </DialogHeader>
-                          <ScrollArea className="h-[300px] w-full rounded-md border p-4">
-                            {availableSlots.length > 0 ? (
-                              availableSlots.map((slot, index) => (
-                                <Card key={index} className="mb-4">
-                                  <CardContent className="pt-4">
-                                    <p className="flex items-center mb-2">
-                                      <Calendar className="mr-2" size={18} />
-                                      {slot[0].toLocaleDateString()}
-                                    </p>
-                                    <p className="flex items-center mb-2">
-                                      <Clock className="mr-2" size={18} />
-                                      {slot[0].toLocaleTimeString()} -{" "}
-                                      {slot[1].toLocaleTimeString()}
-                                    </p>
-                                    <Button
-                                      onClick={() => initiateVisit(prof.id)}
+                            <span className="flex items-center gap-2">
+                              <Star className="h-4 w-4 text-yellow-400" />
+                              {avatar.name} (Level {avatar.level})
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </CardContent>
+                </Card>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {professionals.map((prof) => (
+                    <Card
+                      key={prof.id}
+                      className="hover:shadow-lg transition-shadow"
+                    >
+                      <CardHeader className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-t-lg">
+                        <CardTitle className="flex items-center gap-3">
+                          <UserCheck className="h-6 w-6" />
+                          <div>
+                            <h3 className="text-xl font-bold">{prof.name}</h3>
+                            <p className="text-sm opacity-90">{prof.id}</p>
+                          </div>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-6 space-y-4">
+                        <div className="flex items-center gap-2">
+                          <Award className="h-5 w-5 text-blue-500" />
+                          <Badge
+                            variant="secondary"
+                            className="text-sm"
+                          >
+                            {prof.specialization}
+                          </Badge>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            {prof.description}
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Mail className="h-4 w-4" />
+                            <span>Contact via platform</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Globe className="h-4 w-4" />
+                            <span>Online consultations</span>
+                          </div>
+                        </div>
+
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              className="w-full bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600"
+                              disabled={!selectedAvatarForVisit}
+                              onClick={() => handleProfessionalSelect(prof)}
+                            >
+                              <Calendar className="h-4 w-4 mr-2" />
+                              View Available Slots
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl">
+                            <DialogHeader>
+                              <DialogTitle className="text-xl font-bold">
+                                Available Slots
+                              </DialogTitle>
+                              <DialogDescription>
+                                Select a time slot to book your visit
+                              </DialogDescription>
+                            </DialogHeader>
+
+                            <ScrollArea className="h-[500px] w-full p-4">
+                              {availableSlots.length > 0 ? (
+                                <div className="space-y-6">
+                                  {Object.entries(
+                                    groupSlotsByDate(availableSlots)
+                                  ).map(([date, dateSlots]) => (
+                                    <div
+                                      key={date}
+                                      className="space-y-3"
                                     >
-                                      Book Visit
-                                    </Button>
-                                  </CardContent>
-                                </Card>
-                              ))
-                            ) : (
-                              <p>No available slots for booking.</p>
-                            )}
-                          </ScrollArea>
-                        </DialogContent>
-                      </Dialog>
-                    </CardContent>
-                  </Card>
-                ))}
+                                      <h3 className="text-lg font-semibold sticky top-0 bg-background py-2 border-b">
+                                        {date}
+                                      </h3>
+                                      <div className="grid grid-cols-2 gap-3">
+                                        {dateSlots.map((slot, index) => {
+                                          const { time } = formatDateTime(
+                                            slot.start
+                                          );
+                                          return (
+                                            <Card
+                                              key={index}
+                                              className="hover:bg-accent transition-colors"
+                                            >
+                                              <CardContent className="p-4">
+                                                <div className="flex items-center justify-between">
+                                                  <div className="space-y-1">
+                                                    <p className="text-sm font-medium flex items-center gap-2">
+                                                      <Clock className="h-4 w-4" />
+                                                      {time}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                      Duration: 30 minutes
+                                                    </p>
+                                                  </div>
+                                                  <Button
+                                                    size="sm"
+                                                    onClick={() =>
+                                                      initiateVisit(
+                                                        slot.entityId
+                                                      )
+                                                    }
+                                                    disabled={
+                                                      !selectedAvatarForVisit
+                                                    }
+                                                  >
+                                                    Book
+                                                  </Button>
+                                                </div>
+                                              </CardContent>
+                                            </Card>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                                  <Calendar className="h-12 w-12 mb-4 opacity-50" />
+                                  <p className="text-lg font-medium">
+                                    No available slots
+                                  </p>
+                                  <p className="text-sm">
+                                    Try selecting a different professional or
+                                    check back later
+                                  </p>
+                                </div>
+                              )}
+                            </ScrollArea>
+                          </DialogContent>
+                        </Dialog>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               </div>
             </TabsContent>
 
             <TabsContent value="facilities">
-              <h2 className="text-2xl font-semibold mb-4 text-blue-400">
-                Available Facilities
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {facilities.map((facility) => (
-                  <div key={facility.id} className="border p-4 rounded">
-                    <h3 className="text-lg font-semibold">{facility.name}</h3>
-                    <p>Type: {facility.facilityType}</p>
-                    <Button
-                      onClick={() => {
-                        setSelectedFacility(facility.id);
-                        initiateVisit(facility.id);
-                      }}
+              <div className="space-y-6">
+                <Card className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5 text-emerald-500" />
+                      Select Avatar for Visit
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Select
+                      onValueChange={setSelectedAvatarForVisit}
+                      value={selectedAvatarForVisit}
                     >
-                      Book Visit
-                    </Button>
-                  </div>
-                ))}
+                      <SelectTrigger className="w-full bg-white dark:bg-gray-800">
+                        <SelectValue placeholder="Choose an avatar for your visit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {userAvatars.map((avatar) => (
+                          <SelectItem
+                            key={avatar.id}
+                            value={avatar.id}
+                          >
+                            <span className="flex items-center gap-2">
+                              <Star className="h-4 w-4 text-yellow-400" />
+                              {avatar.name} (Level {avatar.level})
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </CardContent>
+                </Card>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {facilities.map((facility) => (
+                    <Card
+                      key={facility.id}
+                      className="hover:shadow-lg transition-shadow"
+                    >
+                      <CardHeader className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-t-lg">
+                        <CardTitle className="flex items-center gap-3">
+                          <Building className="h-6 w-6" />
+                          <div>
+                            <h3 className="text-xl font-bold">
+                              {facility.name}
+                            </h3>
+                            <p className="text-sm opacity-90">{facility.id}</p>
+                          </div>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-6 space-y-4">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-5 w-5 text-emerald-500" />
+                          <Badge
+                            variant="secondary"
+                            className="text-sm"
+                          >
+                            {facility.facilityType}
+                          </Badge>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            {facility.description}
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Phone className="h-4 w-4" />
+                            <span>Contact via platform</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Clock className="h-4 w-4" />
+                            <span>Operating hours</span>
+                          </div>
+                        </div>
+
+                        <Button
+                          className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+                          disabled={!selectedAvatarForVisit}
+                          onClick={() => initiateVisit(facility.id)}
+                        >
+                          <Calendar className="h-4 w-4 mr-2" />
+                          Book Visit
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               </div>
             </TabsContent>
           </Tabs>
         </div>
       </div>
 
-      <Dialog open={isAvatarStatusOpen} onOpenChange={setIsAvatarStatusOpen}>
+      <Dialog
+        open={isAvatarStatusOpen}
+        onOpenChange={setIsAvatarStatusOpen}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Avatar Status</DialogTitle>

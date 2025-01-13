@@ -1,4 +1,7 @@
+import Principal "mo:base/Principal";
 import ICRC37 "mo:icrc37-mo";
+
+import Types "../../Types";
 
 module {
   public let defaultConfig = func(caller : Principal) : ICRC37.InitArgs {
@@ -8,7 +11,7 @@ module {
       collection_approval_requires_token = ?true;
       max_approvals = null;
       settle_to_approvals = null;
-      deployer = caller;
+      deployer = Principal.fromText(Types.admin);
     };
   };
 };

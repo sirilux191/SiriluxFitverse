@@ -94,6 +94,7 @@ export default function RegisterPage2Content() {
       // Validate the form data
       formSchema.parse(formData);
       setErrors({});
+      console.log(formData);
 
       setLoading(true);
       const {

@@ -433,98 +433,205 @@ const FileUpload = () => {
 
       {file && (
         <div>
-          <Table>
-            <TableHeader>
-              <TableRow className="dark:border-gray-700">
-                <TableHead className="dark:text-gray-200">Title</TableHead>
-                <TableHead className="dark:text-gray-200">
-                  Description
-                </TableHead>
-                <TableHead className="dark:text-gray-200">Keywords</TableHead>
-                <TableHead className="dark:text-gray-200">Category</TableHead>
-                <TableHead className="dark:text-gray-200">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow className="dark:border-gray-700">
-                <TableCell className="dark:text-gray-300">
-                  {file.file.name}
-                </TableCell>
-                <TableCell>
-                  <Input
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="w-full bg-transparent dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
-                    placeholder="Enter description"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    value={keywords}
-                    onChange={(e) => setKeywords(e.target.value)}
-                    className="w-full bg-transparent dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
-                    placeholder="Enter keywords"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Select
-                    value={category}
-                    onValueChange={setCategory}
+          {/* Desktop View */}
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="dark:border-gray-700">
+                  <TableHead className="w-[200px] dark:text-gray-200">
+                    Title
+                  </TableHead>
+                  <TableHead className="w-[400px] dark:text-gray-200">
+                    Description
+                  </TableHead>
+                  <TableHead className="w-[200px] dark:text-gray-200">
+                    Keywords
+                  </TableHead>
+                  <TableHead className="w-[200px] dark:text-gray-200">
+                    Category
+                  </TableHead>
+                  <TableHead className="w-[100px] dark:text-gray-200">
+                    Action
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow className="dark:border-gray-700">
+                  <TableCell className="dark:text-gray-300">
+                    {file.file.name}
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      className="w-full bg-transparent dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
+                      placeholder="Enter description"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      value={keywords}
+                      onChange={(e) => setKeywords(e.target.value)}
+                      className="w-full bg-transparent dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
+                      placeholder="Enter keywords"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={category}
+                      onValueChange={setCategory}
+                    >
+                      <SelectTrigger className="w-full dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent className="dark:bg-gray-800">
+                        <SelectItem
+                          value="Bills"
+                          className="dark:text-gray-200 dark:hover:bg-gray-700"
+                        >
+                          Bills
+                        </SelectItem>
+                        <SelectItem
+                          value="GeneticData"
+                          className="dark:text-gray-200 dark:hover:bg-gray-700"
+                        >
+                          Genetic Data
+                        </SelectItem>
+                        <SelectItem
+                          value="MedicalImageData"
+                          className="dark:text-gray-200 dark:hover:bg-gray-700"
+                        >
+                          Medical Image Data
+                        </SelectItem>
+                        <SelectItem
+                          value="MedicalStatData"
+                          className="dark:text-gray-200 dark:hover:bg-gray-700"
+                        >
+                          Medical Statistics Data
+                        </SelectItem>
+                        <SelectItem
+                          value="Reports"
+                          className="dark:text-gray-200 dark:hover:bg-gray-700"
+                        >
+                          Reports
+                        </SelectItem>
+                        <SelectItem
+                          value="TrainingModels"
+                          className="dark:text-gray-200 dark:hover:bg-gray-700"
+                        >
+                          Training Models
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      onClick={handleRemoveFile}
+                      className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                    >
+                      <CircleX className="text-gray-500 dark:text-gray-400" />
+                    </button>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Mobile View */}
+          <div className="md:hidden space-y-4 mt-4">
+            <div className="flex justify-between items-center mb-4">
+              <div className="font-medium dark:text-gray-200">File Details</div>
+              <button
+                onClick={handleRemoveFile}
+                className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                <CircleX className="text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium dark:text-gray-200">
+                Title
+              </label>
+              <div className="dark:text-gray-300 text-sm">{file.file.name}</div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium dark:text-gray-200">
+                Description
+              </label>
+              <Input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full bg-transparent dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
+                placeholder="Enter description"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium dark:text-gray-200">
+                Keywords
+              </label>
+              <Input
+                value={keywords}
+                onChange={(e) => setKeywords(e.target.value)}
+                className="w-full bg-transparent dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
+                placeholder="Enter keywords"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium dark:text-gray-200">
+                Category
+              </label>
+              <Select
+                value={category}
+                onValueChange={setCategory}
+              >
+                <SelectTrigger className="w-full dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-gray-800">
+                  <SelectItem
+                    value="Bills"
+                    className="dark:text-gray-200 dark:hover:bg-gray-700"
                   >
-                    <SelectTrigger className="w-full dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700">
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent className="dark:bg-gray-800">
-                      <SelectItem
-                        value="Bills"
-                        className="dark:text-gray-200 dark:hover:bg-gray-700"
-                      >
-                        Bills
-                      </SelectItem>
-                      <SelectItem
-                        value="GeneticData"
-                        className="dark:text-gray-200 dark:hover:bg-gray-700"
-                      >
-                        Genetic Data
-                      </SelectItem>
-                      <SelectItem
-                        value="MedicalImageData"
-                        className="dark:text-gray-200 dark:hover:bg-gray-700"
-                      >
-                        Medical Image Data
-                      </SelectItem>
-                      <SelectItem
-                        value="MedicalStatData"
-                        className="dark:text-gray-200 dark:hover:bg-gray-700"
-                      >
-                        Medical Statistics Data
-                      </SelectItem>
-                      <SelectItem
-                        value="Reports"
-                        className="dark:text-gray-200 dark:hover:bg-gray-700"
-                      >
-                        Reports
-                      </SelectItem>
-                      <SelectItem
-                        value="TrainingModels"
-                        className="dark:text-gray-200 dark:hover:bg-gray-700"
-                      >
-                        Training Models
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  <button
-                    onClick={handleRemoveFile}
-                    className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                    Bills
+                  </SelectItem>
+                  <SelectItem
+                    value="GeneticData"
+                    className="dark:text-gray-200 dark:hover:bg-gray-700"
                   >
-                    <CircleX className="text-gray-500 dark:text-gray-400" />
-                  </button>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+                    Genetic Data
+                  </SelectItem>
+                  <SelectItem
+                    value="MedicalImageData"
+                    className="dark:text-gray-200 dark:hover:bg-gray-700"
+                  >
+                    Medical Image Data
+                  </SelectItem>
+                  <SelectItem
+                    value="MedicalStatData"
+                    className="dark:text-gray-200 dark:hover:bg-gray-700"
+                  >
+                    Medical Statistics Data
+                  </SelectItem>
+                  <SelectItem
+                    value="Reports"
+                    className="dark:text-gray-200 dark:hover:bg-gray-700"
+                  >
+                    Reports
+                  </SelectItem>
+                  <SelectItem
+                    value="TrainingModels"
+                    className="dark:text-gray-200 dark:hover:bg-gray-700"
+                  >
+                    Training Models
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
       )}
 

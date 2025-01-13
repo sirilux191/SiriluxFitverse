@@ -1,5 +1,5 @@
 module {
-    public let admin : Text = ("bef65-dwkw7-quakh-m5sg2-ybjce-wuzop-s5yi3-ooyla-vn3td-tck22-lqe");
+    public let admin : Text = ("w7j6w-cjiuz-bo5v4-tjcdb-gj7ht-hr7f4-7rxcz-zziwv-fd4mc-f3bj2-dqe");
     public let vetkdSystemCanisterID : Text = ("dfdal-2uaaa-aaaaa-qaama-cai");
     public let wellnessAvatarNFTCanisterID : Text = ("cbopz-duaaa-aaaaa-qaaka-cai");
     public let identityManagerCanisterID : Text = ("avqkn-guaaa-aaaaa-qaaea-cai");
