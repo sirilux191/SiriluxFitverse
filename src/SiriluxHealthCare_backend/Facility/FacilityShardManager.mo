@@ -18,7 +18,7 @@ actor class FacilityShardManager() {
     private stable var totalFacilityCount : Nat = 0;
     private stable var shardCount : Nat = 0;
     private let FACILITIES_PER_SHARD : Nat = 20_480;
-    private let STARTING_FACILITY_ID : Nat = 20_000_000_000_000;
+    private let STARTING_FACILITY_ID : Nat = 1_000_000_000;
     private stable let shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
     private stable var facilityShardMap : BTree.BTree<Principal, Text> = BTree.init<Principal, Text>(null);
     private stable var reverseFacilityShardMap : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);

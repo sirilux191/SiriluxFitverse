@@ -2,7 +2,6 @@
 import Array "mo:base/Array";
 import Int "mo:base/Int";
 import Nat "mo:base/Nat";
-import Order "mo:base/Order";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
@@ -11,8 +10,17 @@ import env "mo:env";
 import BTree "mo:stableheapbtreemap/BTree";
 
 import IdentityManager "../IdentityManager/IdentityManager";
+import CanisterIDs "../Types/CanisterIDs";
 
 actor class VisitManager() {
+
+    public type VisitTimeStamps = {
+        slotTime : ?Time.Time;
+        bookingTime : ?Time.Time;
+        completionTime : ?Time.Time;
+        cancellationTime : ?Time.Time;
+        rejectionTime : ?Time.Time;
+    };
 
     public type VisitMode = {
         #Online;
@@ -36,8 +44,9 @@ actor class VisitManager() {
         facilityId : ?Text; // if visiting a facility
         visitMode : VisitMode;
         status : VisitStatus;
-        timestamp : Time.Time; // Time of booking
+        timestamp : VisitTimeStamps;
         avatarId : Nat;
+        meetingLink : ?Text; // Added field for online meetings
     };
 
     // Basic info for a professional (without slots)
@@ -60,6 +69,13 @@ actor class VisitManager() {
     public type AvailabilitySlot = {
         entityId : Text; // professional or facility ID
         start : Time.Time;
+        capacity : Nat;
+    };
+
+    public type BookedSlot = {
+        entityId : Text; // professional or facility ID
+        start : Time.Time;
+        visitId : Nat;
         capacity : Nat;
     };
 
@@ -88,7 +104,7 @@ actor class VisitManager() {
     // entityId -> BTree(startTime -> AvailabilitySlot)
     private stable var availabilitySlots : BTree.BTree<Text, BTree.BTree<Time.Time, AvailabilitySlot>> = BTree.init<Text, BTree.BTree<Time.Time, AvailabilitySlot>>(null);
 
-    private stable var bookedSlots : BTree.BTree<Text, BTree.BTree<Time.Time, AvailabilitySlot>> = BTree.init<Text, BTree.BTree<Time.Time, AvailabilitySlot>>(null);
+    private stable var bookedSlots : BTree.BTree<Text, BTree.BTree<Time.Time, BookedSlot>> = BTree.init<Text, BTree.BTree<Time.Time, BookedSlot>>(null);
     // For each avatar, track how many visits completed
     private stable var avatarVisitCount : BTree.BTree<Nat, Nat> = BTree.init<Nat, Nat>(null);
 
@@ -97,6 +113,13 @@ actor class VisitManager() {
 
     // Reference to IdentityManager
     private let identityManager : IdentityManager.IdentityManager = actor (env.identityManagerCanisterID);
+
+    // Store permitted principals that can call certain functions
+    private stable var permittedPrincipals : [Principal] = [Principal.fromText(CanisterIDs.gamificationSystemCanisterID)];
+
+    private func isPermittedCaller(caller : Principal) : Bool {
+        Array.find<Principal>(permittedPrincipals, func(p) { Principal.equal(p, caller) }) != null;
+    };
 
     public shared ({ caller }) func updateProfessionalInfo(professionalInfo : ProfessionalInfo) : async Result.Result<Text, Text> {
         // Check caller's identity
@@ -378,19 +401,21 @@ actor class VisitManager() {
     };
 
     public query func getAllProfessionals() : async [ProfessionalInfo] {
-        var professionals_list : [ProfessionalInfo] = [];
-        for ((_, info) in BTree.entries(professionals)) {
-            professionals_list := Array.append(professionals_list, [info]);
-        };
-        professionals_list;
+        BTree.toValueArray(professionals);
+        // var professionals_list : [ProfessionalInfo] = [];
+        // for ((_, info) in BTree.entries(professionals)) {
+        //     professionals_list := Array.append(professionals_list, [info]);
+        // };
+        // professionals_list;
     };
 
     public query func getAllFacilities() : async [FacilityInfo] {
-        var facilities_list : [FacilityInfo] = [];
-        for ((_, info) in BTree.entries(facilities)) {
-            facilities_list := Array.append(facilities_list, [info]);
-        };
-        facilities_list;
+        BTree.toValueArray(facilities);
+        // var facilities_list : [FacilityInfo] = [];
+        // for ((_, info) in BTree.entries(facilities)) {
+        //     facilities_list := Array.append(facilities_list, [info]);
+        // };
+        // facilities_list;
     };
 
     // Optional: Add filtered queries
@@ -412,5 +437,447 @@ actor class VisitManager() {
             };
         };
         filtered_list;
+    };
+
+    // Add these helper functions
+    private func isProfessionalID(id : Text) : Bool {
+        let idLength = Text.size(id);
+        idLength == 12;
+    };
+
+    private func isFacilityID(id : Text) : Bool {
+        let idLength = Text.size(id);
+        idLength == 10;
+    };
+
+    // Update the bookSlotAndCreateVisit function
+    public shared ({ caller }) func bookSlotAndCreateVisit(
+        userPrincipal : Principal,
+        idToVisit : Text,
+        slotTime : Time.Time,
+        visitMode : VisitMode,
+        avatarId : Nat,
+    ) : async Result.Result<Nat, Text> {
+        // Check if caller is permitted (GamificationSystem)
+        if (not isPermittedCaller(caller)) {
+            return #err("Unauthorized caller");
+        };
+
+        // Validate ID format
+        if (not (isProfessionalID(idToVisit) or isFacilityID(idToVisit))) {
+            return #err("Invalid ID format");
+        };
+
+        // Verify user identity
+        let userIdentityResult = await identityManager.getIdentity(userPrincipal);
+        switch (userIdentityResult) {
+            case (#err(msg)) {
+                return #err("User identity verification failed: " # msg);
+            };
+            case (#ok(userIdentity)) {
+                let userId = userIdentity.0;
+
+                // Check if slot exists and is available
+                switch (BTree.get(availabilitySlots, Text.compare, idToVisit)) {
+                    case (?entitySlots) {
+                        switch (BTree.get(entitySlots, Int.compare, slotTime)) {
+                            case (?availabilitySlot) {
+                                if (isSlotBooked(idToVisit, slotTime)) {
+                                    return #err("Slot is already booked");
+                                };
+
+                                // Generate meeting link for online visits
+                                let meetingLink = switch (visitMode) {
+                                    case (#Online) {
+                                        ?("https://beta.brie.fi/ng/" # Int.toText(Time.now()) # "-" # Nat.toText(nextVisitId));
+                                    };
+                                    case (#Offline) { null };
+                                };
+
+                                // Create the visit with meeting link
+                                let visit : Visit = {
+                                    visitId = nextVisitId;
+                                    userId = userId;
+                                    professionalId = if (isProfessionalID(idToVisit)) ?idToVisit else null;
+                                    facilityId = if (isFacilityID(idToVisit)) ?idToVisit else null;
+                                    visitMode = visitMode;
+                                    status = #Pending;
+                                    timestamp = {
+                                        slotTime = ?slotTime;
+                                        bookingTime = ?Time.now();
+                                        completionTime = null;
+                                        cancellationTime = null;
+                                        rejectionTime = null;
+                                    };
+                                    avatarId = avatarId;
+                                    meetingLink = meetingLink; // Add meeting link
+                                };
+
+                                // Create a BookedSlot instead of using AvailabilitySlot
+                                let bookedSlot : BookedSlot = {
+                                    entityId = idToVisit;
+                                    start = slotTime;
+                                    visitId = nextVisitId;
+                                    capacity = availabilitySlot.capacity;
+                                };
+
+                                // Book the slot with correct type
+                                var entityBookedSlots = switch (BTree.get(bookedSlots, Text.compare, idToVisit)) {
+                                    case (?existing) { existing };
+                                    case null {
+                                        let newTree = BTree.init<Time.Time, BookedSlot>(null);
+                                        ignore BTree.insert(bookedSlots, Text.compare, idToVisit, newTree);
+                                        newTree;
+                                    };
+                                };
+                                ignore BTree.insert(entityBookedSlots, Int.compare, slotTime, bookedSlot);
+
+                                // Remove the slot from availability
+                                ignore BTree.delete(entitySlots, Int.compare, slotTime);
+
+                                // Store the visit
+                                ignore BTree.insert(visits, Nat.compare, nextVisitId, visit);
+
+                                // Update user visits
+                                updateUserVisits(userId, nextVisitId);
+
+                                // Update professional/facility visits
+                                updateEntityVisits(idToVisit, nextVisitId);
+
+                                // Update avatar visit count
+                                updateAvatarVisitCount(avatarId);
+
+                                let currentVisitId = nextVisitId;
+                                nextVisitId += 1;
+                                #ok(currentVisitId);
+                            };
+                            case null { #err("Slot not found") };
+                        };
+                    };
+                    case null { #err("No slots found for entity") };
+                };
+            };
+        };
+    };
+
+    private func updateUserVisits(userId : Text, visitId : Nat) {
+        let currentVisits = switch (BTree.get(userVisits, Text.compare, userId)) {
+            case (?visits) { visits };
+            case null { [] };
+        };
+        ignore BTree.insert(userVisits, Text.compare, userId, Array.append(currentVisits, [visitId]));
+    };
+
+    private func updateEntityVisits(entityId : Text, visitId : Nat) {
+        let visitsMap = if (isProfessionalID(entityId)) {
+            professionalVisits;
+        } else {
+            facilityVisits;
+        };
+
+        let currentVisits = switch (BTree.get(visitsMap, Text.compare, entityId)) {
+            case (?visits) { visits };
+            case null { [] };
+        };
+        ignore BTree.insert(visitsMap, Text.compare, entityId, Array.append(currentVisits, [visitId]));
+    };
+
+    private func updateAvatarVisitCount(avatarId : Nat) {
+        let currentCount = switch (BTree.get(avatarVisitCount, Nat.compare, avatarId)) {
+            case (?count) { count };
+            case null { 0 };
+        };
+        ignore BTree.insert(avatarVisitCount, Nat.compare, avatarId, currentCount + 1);
+    };
+
+    public shared ({ caller }) func getBookedSlotsSelf() : async Result.Result<[BookedSlot], Text> {
+        let identityResult = await identityManager.getIdentity(caller);
+
+        switch (identityResult) {
+            case (#err(msg)) {
+                return #err("Identity verification failed: " # msg);
+            };
+            case (#ok(identity)) {
+                let id = identity.0;
+                let role = identity.1;
+
+                if (role != "Professional" and role != "Facility") {
+                    return #err("Only professionals or facilities can view their booked slots");
+                };
+
+                switch (BTree.get(bookedSlots, Text.compare, id)) {
+                    case (?entitySlots) {
+                        var slots : [BookedSlot] = [];
+                        for ((_, slot) in BTree.entries(entitySlots)) {
+                            slots := Array.append(slots, [slot]);
+                        };
+                        #ok(slots);
+                    };
+                    case null { #ok([]) };
+                };
+            };
+        };
+    };
+
+    public shared ({ caller }) func getUserVisits() : async Result.Result<[Visit], Text> {
+        let identityResult = await identityManager.getIdentity(caller);
+
+        switch (identityResult) {
+            case (#err(msg)) {
+                return #err("Identity verification failed: " # msg);
+            };
+            case (#ok(identity)) {
+                let userId = identity.0;
+
+                switch (BTree.get(userVisits, Text.compare, userId)) {
+                    case (?visitIds) {
+                        var visitList : [Visit] = [];
+                        for (visitId in visitIds.vals()) {
+                            switch (BTree.get(visits, Nat.compare, visitId)) {
+                                case (?visit) {
+                                    visitList := Array.append(visitList, [visit]);
+                                };
+                                case null {};
+                            };
+                        };
+                        #ok(visitList);
+                    };
+                    case null { #ok([]) };
+                };
+            };
+        };
+    };
+
+    public shared ({ caller }) func getEntityVisits() : async Result.Result<[Visit], Text> {
+        let identityResult = await identityManager.getIdentity(caller);
+
+        switch (identityResult) {
+            case (#err(msg)) {
+                return #err("Identity verification failed: " # msg);
+            };
+            case (#ok(identity)) {
+                let entityId = identity.0;
+                let role = identity.1;
+
+                if (role != "Professional" and role != "Facility") {
+                    return #err("Only professionals or facilities can view their visits");
+                };
+
+                let visitsMap = if (role == "Professional") {
+                    professionalVisits;
+                } else {
+                    facilityVisits;
+                };
+
+                switch (BTree.get(visitsMap, Text.compare, entityId)) {
+                    case (?visitIds) {
+                        var visitList : [Visit] = [];
+                        for (visitId in visitIds.vals()) {
+                            switch (BTree.get(visits, Nat.compare, visitId)) {
+                                case (?visit) {
+                                    visitList := Array.append(visitList, [visit]);
+                                };
+                                case null {};
+                            };
+                        };
+                        #ok(visitList);
+                    };
+                    case null { #ok([]) };
+                };
+            };
+        };
+    };
+
+    public query func getAvatarVisitCount(avatarId : Nat) : async Nat {
+        switch (BTree.get(avatarVisitCount, Nat.compare, avatarId)) {
+            case (?count) { count };
+            case null { 0 };
+        };
+    };
+
+    public shared ({ caller }) func completeVisit(visitId : Nat) : async Result.Result<Text, Text> {
+        let identityResult = await identityManager.getIdentity(caller);
+
+        switch (identityResult) {
+            case (#err(msg)) {
+                return #err("Identity verification failed: " # msg);
+            };
+            case (#ok(identity)) {
+                let entityId = identity.0;
+
+                switch (BTree.get(visits, Nat.compare, visitId)) {
+                    case (?visit) {
+                        // Check if the caller is the professional/facility assigned to this visit
+                        let isAuthorized = switch (visit.professionalId, visit.facilityId) {
+                            case (?profId, _) { profId == entityId };
+                            case (_, ?facId) { facId == entityId };
+                            case (null, null) { false };
+                        };
+
+                        if (not isAuthorized) {
+                            return #err("Not authorized to complete this visit");
+                        };
+
+                        // switch (visit.timestamp.slotTime) {
+                        //     case (?slotTime) {
+                        //         if (Time.now() < slotTime) {
+                        //             return #err("Visit is not yet due");
+                        //         };
+                        //     };
+                        //     case null {
+                        //         return #err("Visit has no slot time");
+                        //     };
+                        // };
+
+                        // Check if visit is in a valid state to complete
+                        switch (visit.status) {
+                            case (#Pending or #Approved) {
+                                let updatedVisit = {
+                                    visit with
+                                    status = #Completed;
+                                    timestamp = {
+                                        visit.timestamp with
+                                        completionTime = ?Time.now();
+                                    };
+                                };
+
+                                // Remove from bookedSlots
+                                switch (visit.timestamp.slotTime) {
+                                    case (?slotTime) {
+                                        switch (BTree.get(bookedSlots, Text.compare, entityId)) {
+                                            case (?entitySlots) {
+                                                ignore BTree.delete(entitySlots, Int.compare, slotTime);
+                                            };
+                                            case null {};
+                                        };
+                                    };
+                                    case null {};
+                                };
+
+                                ignore BTree.insert(visits, Nat.compare, visitId, updatedVisit);
+                                #ok("Visit completed successfully");
+                            };
+                            case (#Completed) {
+                                #err("Visit is already completed");
+                            };
+                            case (#Cancelled) {
+                                #err("Cannot complete a cancelled visit");
+                            };
+                            case (#Rejected) {
+                                #err("Cannot complete a rejected visit");
+                            };
+                        };
+                    };
+                    case null { #err("Visit not found") };
+                };
+            };
+        };
+    };
+
+    public shared ({ caller }) func rejectVisit(visitId : Nat) : async Result.Result<Text, Text> {
+        let identityResult = await identityManager.getIdentity(caller);
+
+        switch (identityResult) {
+            case (#err(msg)) {
+                return #err("Identity verification failed: " # msg);
+            };
+            case (#ok(identity)) {
+                let entityId = identity.0;
+
+                switch (BTree.get(visits, Nat.compare, visitId)) {
+                    case (?visit) {
+                        // Check if the caller is the professional/facility assigned to this visit
+                        let isAuthorized = switch (visit.professionalId, visit.facilityId) {
+                            case (?profId, _) { profId == entityId };
+                            case (_, ?facId) { facId == entityId };
+                            case (null, null) { false };
+                        };
+
+                        if (not isAuthorized) {
+                            return #err("Not authorized to reject this visit");
+                        };
+
+                        // switch (visit.timestamp.slotTime) {
+                        //     case (?slotTime) {
+                        //         if (Time.now() < slotTime) {
+                        //             return #err("Visit is not yet due");
+                        //         };
+                        //     };
+                        //     case null {
+                        //         return #err("Visit has no slot time");
+                        //     };
+                        // };
+
+                        // Check if visit is in a valid state to reject
+                        switch (visit.status) {
+                            case (#Pending) {
+                                let updatedVisit = {
+                                    visit with
+                                    status = #Rejected;
+                                    timestamp = {
+                                        visit.timestamp with
+                                        rejectionTime = ?Time.now();
+                                    };
+                                };
+
+                                // Remove from bookedSlots and restore availability
+                                switch (visit.timestamp.slotTime) {
+                                    case (?slotTime) {
+                                        switch (BTree.get(bookedSlots, Text.compare, entityId)) {
+                                            case (?entitySlots) {
+                                                switch (BTree.get(entitySlots, Int.compare, slotTime)) {
+                                                    case (?bookedSlot) {
+                                                        // Remove from bookedSlots
+                                                        ignore BTree.delete(entitySlots, Int.compare, slotTime);
+
+                                                        // Restore to availabilitySlots
+                                                        let availabilitySlot : AvailabilitySlot = {
+                                                            entityId = bookedSlot.entityId;
+                                                            start = bookedSlot.start;
+                                                            capacity = bookedSlot.capacity;
+                                                        };
+
+                                                        var entityAvailSlots = switch (BTree.get(availabilitySlots, Text.compare, entityId)) {
+                                                            case (?existing) {
+                                                                existing;
+                                                            };
+                                                            case null {
+                                                                let newTree = BTree.init<Time.Time, AvailabilitySlot>(null);
+                                                                ignore BTree.insert(availabilitySlots, Text.compare, entityId, newTree);
+                                                                newTree;
+                                                            };
+                                                        };
+                                                        ignore BTree.insert(entityAvailSlots, Int.compare, slotTime, availabilitySlot);
+                                                    };
+                                                    case null {};
+                                                };
+                                            };
+                                            case null {};
+                                        };
+                                    };
+                                    case null {};
+                                };
+
+                                ignore BTree.insert(visits, Nat.compare, visitId, updatedVisit);
+                                #ok("Visit rejected successfully");
+                            };
+                            case (#Completed) {
+                                #err("Cannot reject a completed visit");
+                            };
+                            case (#Cancelled) {
+                                #err("Cannot reject a cancelled visit");
+                            };
+                            case (#Rejected) {
+                                #err("Visit is already rejected");
+                            };
+                            case (#Approved) {
+                                #err("Cannot reject an approved visit");
+                            };
+                        };
+                    };
+                    case null { #err("Visit not found") };
+                };
+            };
+        };
     };
 };

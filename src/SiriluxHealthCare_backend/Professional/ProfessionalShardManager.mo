@@ -18,7 +18,7 @@ actor class ProfessionalShardManager() {
     private stable var totalProfessionalCount : Nat = 0;
     private stable var shardCount : Nat = 0;
     private let PROFESSIONALS_PER_SHARD : Nat = 20_480;
-    private let STARTING_PROFESSIONAL_ID : Nat = 10_000_000_000_000;
+    private let STARTING_PROFESSIONAL_ID : Nat = 100_000_000_000;
     private stable let shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null); // Map of Shard ID to Shard Principal
     private stable var professionalShardMap : BTree.BTree<Principal, Text> = BTree.init<Principal, Text>(null); // Map of Professional Principal to Professional ID
     private stable var reverseProfessionalShardMap : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null); // Map of Professional ID to Professional Principal

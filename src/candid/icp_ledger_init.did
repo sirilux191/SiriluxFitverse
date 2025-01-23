@@ -1,0 +1,30 @@
+(variant {
+  Init = record {
+    token_symbol = "SIRI";
+    token_name = "SIRILUX Healthcare";
+    minting_account = record {
+      owner = principal "4fqyk-tdzzr-ghfve-73a6v-cqo6l-qya74-5ualz-xdzzz-ousm3-vt3yo-bae"
+    };
+    transfer_fee = 0;
+    metadata = vec {};
+    initial_balances = vec {
+      record {
+        record {
+          owner = principal "4fqyk-tdzzr-ghfve-73a6v-cqo6l-qya74-5ualz-xdzzz-ousm3-vt3yo-bae";
+        };
+        10_000_000_000;
+      };
+    };
+    archive_options = record {
+      num_blocks_to_archive = 1000;
+      trigger_threshold = 2000;
+      controller_id = principal "4fqyk-tdzzr-ghfve-73a6v-cqo6l-qya74-5ualz-xdzzz-ousm3-vt3yo-bae";
+      cycles_for_archive_creation = opt 10_000_000_000_000;
+    };
+    feature_flags = opt record {
+      icrc2 = true;
+    };
+  }
+})
+
+

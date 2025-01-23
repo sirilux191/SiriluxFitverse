@@ -13,7 +13,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import ActorContext from "../../ActorContext";
-import { CalendarIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
+import {
+  CalendarIcon,
+  PlusIcon,
+  TrashIcon,
+  ArrowPathIcon,
+} from "@heroicons/react/24/outline";
 import TimeSlotPicker from "@/components/TimeSlotPicker";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -25,6 +30,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { Loader2Icon } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 const GamificationTab = () => {
   const { actors } = useContext(ActorContext);
@@ -34,10 +41,7 @@ const GamificationTab = () => {
     specialization: "",
     description: "",
   });
-  const [availabilitySlot, setAvailabilitySlot] = useState({
-    start: "",
-    capacity: "1",
-  });
+
   const [availableSlots, setAvailableSlots] = useState([]);
   const [multipleSlots, setMultipleSlots] = useState([
     { date: null, time: "", start: "", capacity: "1" },
@@ -52,6 +56,10 @@ const GamificationTab = () => {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const DATES_PER_PAGE = 5;
+  const [visits, setVisits] = useState([]);
+  const [bookedSlots, setBookedSlots] = useState([]);
+  const [isLoadingVisits, setIsLoadingVisits] = useState(false);
+  const [isLoadingBookedSlots, setIsLoadingBookedSlots] = useState(false);
 
   useEffect(() => {
     fetchProfessionalInfo();
@@ -400,6 +408,124 @@ const GamificationTab = () => {
       toast({
         title: "Error",
         description: "Failed to add availability slots",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const fetchVisits = async () => {
+    setIsLoadingVisits(true);
+    try {
+      const result = await actors.visitManager.getEntityVisits();
+      if (result.ok) {
+        setVisits(result.ok);
+      } else {
+        toast({
+          title: "Error",
+          description: result.err,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching visits:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch visits",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingVisits(false);
+    }
+  };
+
+  const fetchBookedSlots = async () => {
+    setIsLoadingBookedSlots(true);
+    try {
+      const result = await actors.visitManager.getBookedSlotsSelf();
+      if (result.ok) {
+        console.log(result.ok);
+        setBookedSlots(result.ok);
+      } else {
+        toast({
+          title: "Error",
+          description: result.err,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching booked slots:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch booked slots",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingBookedSlots(false);
+    }
+  };
+
+  const getStatusVariant = (status) => {
+    // status will be like { Completed: null } or { Pending: null }
+    const statusKey = Object.keys(status)[0];
+    switch (statusKey) {
+      case "Completed":
+        return "success";
+      case "Pending":
+        return "warning";
+      case "Cancelled":
+        return "destructive";
+      case "Rejected":
+        return "destructive";
+      case "Approved":
+        return "default";
+      default:
+        return "secondary";
+    }
+  };
+
+  const handleCompleteVisit = async (visitId) => {
+    try {
+      const result = await actors.visitManager.completeVisit(visitId);
+      if (result.ok) {
+        toast({
+          title: "Success",
+          description: "Visit completed successfully",
+        });
+        // Refresh the lists
+        fetchVisits();
+        fetchBookedSlots();
+      } else {
+        throw new Error(result.err);
+      }
+    } catch (error) {
+      console.error("Error completing visit:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to complete visit",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRejectVisit = async (visitId) => {
+    try {
+      const result = await actors.visitManager.rejectVisit(visitId);
+      if (result.ok) {
+        toast({
+          title: "Success",
+          description: "Visit rejected successfully",
+        });
+        // Refresh the lists
+        fetchVisits();
+        fetchBookedSlots();
+      } else {
+        throw new Error(result.err);
+      }
+    } catch (error) {
+      console.error("Error rejecting visit:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reject visit",
         variant: "destructive",
       });
     }
@@ -772,7 +898,8 @@ const GamificationTab = () => {
                                       <div>
                                         <p>{formatTimeRange(hourSlots)}</p>
                                         <p className="text-sm text-muted-foreground">
-                                          Capacity: {hourSlots[0].capacity}
+                                          Capacity:{" "}
+                                          {Number(hourSlots[0].capacity)}
                                         </p>
                                       </div>
                                     </div>
@@ -840,15 +967,200 @@ const GamificationTab = () => {
         </TabsContent>
 
         <TabsContent value="visits">
-          {/* Visits content will be implemented separately */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Your Visits</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>Visit management functionality coming soon...</p>
-            </CardContent>
-          </Card>
+          <div className="grid gap-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Pending Visits</CardTitle>
+                <Button
+                  variant="outline"
+                  onClick={fetchBookedSlots}
+                  disabled={isLoadingBookedSlots}
+                >
+                  {isLoadingBookedSlots ? (
+                    <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <ArrowPathIcon className="h-4 w-4 mr-2" />
+                  )}
+                  Refresh
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {isLoadingBookedSlots ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2Icon className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : bookedSlots.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    No pending visits found
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {bookedSlots.map((slot, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                      >
+                        <div>
+                          <p className="font-medium">
+                            {new Date(
+                              Number(slot.start) / 1000000
+                            ).toLocaleDateString(undefined, {
+                              weekday: "long",
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            })}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(
+                              Number(slot.start) / 1000000
+                            ).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-right mr-4">
+                            <p className="text-sm font-medium">
+                              Visit ID: {Number(slot.visitId)}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Capacity: {Number(slot.capacity)}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => handleCompleteVisit(slot.visitId)}
+                            >
+                              Complete
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleRejectVisit(slot.visitId)}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>All Visits</CardTitle>
+                <Button
+                  variant="outline"
+                  onClick={fetchVisits}
+                  disabled={isLoadingVisits}
+                >
+                  {isLoadingVisits ? (
+                    <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <ArrowPathIcon className="h-4 w-4 mr-2" />
+                  )}
+                  Refresh
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {isLoadingVisits ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2Icon className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : visits.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    No visits found
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {visits.map((visit, index) => (
+                      <div
+                        key={index}
+                        className="p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="font-medium">
+                              Visit ID: {Number(visit.visitId)}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              User ID: {visit.userId}
+                            </p>
+                          </div>
+                          <Badge variant={getStatusVariant(visit.status)}>
+                            {Object.keys(visit.status)[0]}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Mode</p>
+                            <p>{Object.keys(visit.visitMode)[0]}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Avatar ID</p>
+                            <p>{Number(visit.avatarId)}</p>
+                          </div>
+                          {visit.meetingLink && (
+                            <div className="col-span-2">
+                              <p className="text-muted-foreground">
+                                Meeting Link
+                              </p>
+                              <a
+                                href={visit.meetingLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-500 hover:underline"
+                              >
+                                {visit.meetingLink}
+                              </a>
+                            </div>
+                          )}
+                          <div className="col-span-2">
+                            <p className="text-muted-foreground">Timestamps</p>
+                            <div className="grid grid-cols-2 gap-2 mt-1">
+                              {visit.timestamp.slotTime && (
+                                <p>
+                                  Slot:{" "}
+                                  {new Date(
+                                    Number(visit.timestamp.slotTime) / 1000000
+                                  ).toLocaleString()}
+                                </p>
+                              )}
+                              {visit.timestamp.bookingTime && (
+                                <p>
+                                  Booked:{" "}
+                                  {new Date(
+                                    Number(visit.timestamp.bookingTime) /
+                                      1000000
+                                  ).toLocaleString()}
+                                </p>
+                              )}
+                              {visit.timestamp.completionTime && (
+                                <p>
+                                  Completed:{" "}
+                                  {new Date(
+                                    Number(visit.timestamp.completionTime) /
+                                      1000000
+                                  ).toLocaleString()}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

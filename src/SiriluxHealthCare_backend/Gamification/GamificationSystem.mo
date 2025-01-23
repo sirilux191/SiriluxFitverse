@@ -2,6 +2,7 @@
 
 import Array "mo:base/Array";
 import Blob "mo:base/Blob";
+import Debug "mo:base/Debug";
 import Error "mo:base/Error";
 import Float "mo:base/Float";
 import Hash "mo:base/Hash";
@@ -76,6 +77,11 @@ actor class GamificationSystem() {
 
     private let MAX_HP = 100;
     private let BASE_TOKENS_PER_VISIT = 10;
+
+    private type VisitMode = {
+        #Offline;
+        #Online;
+    };
 
     // Default avatar attributes
     private func defaultAttributes(avatarType : Text) : AvatarAttributes {
@@ -224,57 +230,85 @@ actor class GamificationSystem() {
         };
     };
 
-    public shared ({ caller }) func initiateVisit(idToVisit : Text, avatarId : Nat) : async Result.Result<Nat, Text> {
-        //avatarid check
-        //
-
-        let result = await visitManager.initiateVisit(caller, idToVisit, Int.abs(Time.now()), duration, #Offline, avatarId);
-        switch (result) {
-            case (#ok(visitId)) {
-                // Update avatar HP here
-                ignore await depleteHP(Nat.toText(avatarId), 10);
-                #ok(visitId);
-            };
-            case (#err(e)) #err(e);
-        };
-    };
-
-    public shared ({ caller }) func completeVisit(visitId : Nat, avatarId : Nat) : async Result.Result<Text, Text> {
-        // Get the owner (principal) of the avatar
+    public shared ({ caller }) func initiateVisit(idToVisit : Text, slotTime : Time.Time, visitMode : VisitMode, avatarId : Nat) : async Result.Result<Nat, Text> {
+        // Verify avatar ownership
         let ownerResult = await wellnessAvatarNFT.icrc7_owner_of([avatarId]);
-
         switch (ownerResult[0]) {
-            case (?owner) {
-                switch (owner) {
-                    case ({ owner = principal; subaccount = _ }) {
-                        let userIdResult = await getUserId(principal);
+            case (?{ owner }) {
+                Debug.print("Owner: " # Principal.toText(owner));
+                Debug.print("Caller: " # Principal.toText(caller));
+                if (not Principal.equal(owner, caller)) {
+                    return #err("Caller is not the owner of the avatar");
+                };
 
-                        switch (userIdResult) {
-                            case (#ok(userId)) {
-                                let result = await visitManager.updateVisitStatus(caller, visitId, #Completed);
-                                switch (result) {
-                                    case (#ok(_)) {
-                                        await updateAvatarAfterVisit(avatarId, userId);
-                                        #ok("Visit completed: " # Nat.toText(visitId));
-                                    };
-                                    case (#err(e)) {
-                                        #err(e);
-                                    };
-                                };
+                // Check avatar HP
+                switch (avatarHP.get(avatarId)) {
+                    case (?hp) {
+                        if (hp < 10) {
+                            return #err("Avatar HP too low for visit");
+                        };
+
+                        // Book slot and create visit
+                        let result = await visitManager.bookSlotAndCreateVisit(
+                            caller,
+                            idToVisit,
+                            slotTime,
+                            visitMode,
+                            avatarId,
+                        );
+
+                        switch (result) {
+                            case (#ok(visitId)) {
+                                // Deplete HP after successful booking
+                                ignore await depleteHP(Nat.toText(avatarId), 10);
+                                #ok(visitId);
                             };
-                            case (#err(e)) {
-                                #err("Error getting user ID: " # e);
-                            };
+                            case (#err(e)) #err(e);
                         };
                     };
-
+                    case null { #err("Avatar HP not found") };
                 };
             };
-            case (null) {
-                #err("Avatar not found");
-            };
+            case null { #err("Avatar not found") };
         };
     };
+
+    // public shared ({ caller }) func completeVisit(visitId : Nat, avatarId : Nat) : async Result.Result<Text, Text> {
+    //     // Get the owner (principal) of the avatar
+    //     let ownerResult = await wellnessAvatarNFT.icrc7_owner_of([avatarId]);
+
+    //     switch (ownerResult[0]) {
+    //         case (?owner) {
+    //             switch (owner) {
+    //                 case ({ owner = principal; subaccount = _ }) {
+    //                     let userIdResult = await getUserId(principal);
+
+    //                     switch (userIdResult) {
+    //                         case (#ok(userId)) {
+    //                             let result = await visitManager.updateVisitStatus(caller, visitId, #Completed);
+    //                             switch (result) {
+    //                                 case (#ok(_)) {
+    //                                     await updateAvatarAfterVisit(avatarId, userId);
+    //                                     #ok("Visit completed: " # Nat.toText(visitId));
+    //                                 };
+    //                                 case (#err(e)) {
+    //                                     #err(e);
+    //                                 };
+    //                             };
+    //                         };
+    //                         case (#err(e)) {
+    //                             #err("Error getting user ID: " # e);
+    //                         };
+    //                     };
+    //                 };
+
+    //             };
+    //         };
+    //         case (null) {
+    //             #err("Avatar not found");
+    //         };
+    //     };
+    // };
 
     public shared ({ caller }) func transferNFT(tokenId : Nat, newOwner : Text) : async [?ICRC7.TransferResult] {
         let transferArgs = [{
@@ -396,13 +430,13 @@ actor class GamificationSystem() {
         Principal.toText(caller);
     };
 
-    public shared ({ caller }) func rejectVisit(visitId : Nat) : async Result.Result<(), Text> {
-        let result = await visitManager.updateVisitStatus(caller, visitId, #Rejected);
-        switch (result) {
-            case (#ok(_)) { #ok(()) };
-            case (#err(e)) { #err(e) };
-        };
-    };
+    // public shared ({ caller }) func rejectVisit(visitId : Nat) : async Result.Result<(), Text> {
+    //     let result = await visitManager.updateVisitStatus(caller, visitId, #Rejected);
+    //     switch (result) {
+    //         case (#ok(_)) { #ok(()) };
+    //         case (#err(e)) { #err(e) };
+    //     };
+    // };
 
     private func updateAvatarAfterVisit(avatarId : Nat, userId : Text) : async () {
         switch (avatarAttributes.get(avatarId)) {

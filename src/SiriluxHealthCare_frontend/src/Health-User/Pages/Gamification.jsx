@@ -1,26 +1,26 @@
 import React, { useState, useEffect, useContext } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  AlertCircle,
-  Copy,
-  Coins,
-  Calendar,
-  Clock,
-  UserCheck,
   User,
-  Briefcase,
   Building,
-  Badge,
-  MapPin,
-  Star,
-  Award,
-  Users,
-  Phone,
-  Mail,
+  Calendar,
+  Briefcase,
   Globe,
+  Loader2 as Loader2Icon,
+  RefreshCw,
+  Star,
+  Coins,
+  Users,
+  UserCheck,
+  Award,
+  Mail,
+  Clock,
+  AlertCircle,
+  PlusCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
+import { Badge } from "@/components/ui/badge";
 import AvatarStatus from "./GamificationComponents/AvatarStatus";
 import NFTCard from "./GamificationComponents/NFTCard";
 import { INITIAL_HP } from "./GamificationComponents/constants";
@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ArrowPathIcon } from "@heroicons/react/24/outline";
 
 const Gamification = () => {
   const { actors } = useContext(ActorContext);
@@ -56,6 +57,8 @@ const Gamification = () => {
   const [selectedAvatarForVisit, setSelectedAvatarForVisit] = useState(null);
   const [userTokens, setUserTokens] = useState(null);
   const [isAvatarStatusOpen, setIsAvatarStatusOpen] = useState(false);
+  const [visits, setVisits] = useState([]);
+  const [isLoadingVisits, setIsLoadingVisits] = useState(false);
 
   useEffect(() => {
     fetchUserAvatars();
@@ -260,20 +263,22 @@ const Gamification = () => {
     }
   };
 
-  const initiateVisit = async (idToVisit) => {
-    await fetchAvailableSlots(idToVisit); // Fetch slots before initiating visit
+  const initiateVisit = async (idToVisit, slotTime) => {
     try {
       const result = await actors.gamificationSystem.initiateVisit(
         idToVisit,
-        visitDuration,
-        selectedAvatarForVisit // Pass selected avatar ID
+        slotTime,
+        { Online: null },
+        Number(selectedAvatarForVisit)
       );
+
       if (result.ok) {
         toast({
           title: "Visit Initiated",
           description: "Your visit has been successfully booked.",
           duration: 3000,
         });
+        await fetchAvailableSlots(idToVisit);
       } else {
         throw new Error(result.err);
       }
@@ -281,7 +286,7 @@ const Gamification = () => {
       console.error("Error initiating visit:", error);
       toast({
         title: "Error",
-        description: "Failed to book the visit.",
+        description: error.message || "Failed to book the visit.",
         variant: "destructive",
         duration: 3000,
       });
@@ -433,6 +438,52 @@ const Gamification = () => {
     }));
   };
 
+  const fetchVisits = async () => {
+    setIsLoadingVisits(true);
+    try {
+      const result = await actors.visitManager.getUserVisits();
+      if (result.ok) {
+        setVisits(result.ok);
+      } else {
+        console.error("Error fetching visits:", result.err);
+        toast({
+          title: "Error",
+          description: "Failed to fetch visits",
+          variant: "destructive",
+          duration: 3000,
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching visits:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch visits",
+        variant: "destructive",
+        duration: 3000,
+      });
+    } finally {
+      setIsLoadingVisits(false);
+    }
+  };
+
+  const getStatusVariant = (status) => {
+    const statusKey = Object.keys(status)[0];
+    switch (statusKey) {
+      case "Completed":
+        return "success";
+      case "Pending":
+        return "warning";
+      case "Cancelled":
+        return "destructive";
+      case "Rejected":
+        return "destructive";
+      case "Approved":
+        return "default";
+      default:
+        return "secondary";
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
       <h1 className="text-4xl font-bold text-foreground mb-6">
@@ -452,21 +503,27 @@ const Gamification = () => {
             <TabsList className="flex justify-center bg-gray-800 text-white rounded-lg">
               <TabsTrigger
                 value="avatars"
-                className="w-1/3 flex items-center justify-center gap-2 text-white"
+                className="w-1/4 flex items-center justify-center gap-2 text-white"
               >
                 <User size={18} /> Avatars
               </TabsTrigger>
               <TabsTrigger
                 value="professionals"
-                className="w-1/3 flex items-center justify-center gap-2 text-white"
+                className="w-1/4 flex items-center justify-center gap-2 text-white"
               >
                 <Briefcase size={18} /> Professionals
               </TabsTrigger>
               <TabsTrigger
                 value="facilities"
-                className="w-1/3 flex items-center justify-center gap-2 text-white"
+                className="w-1/4 flex items-center justify-center gap-2 text-white"
               >
                 <Building size={18} /> Facilities
+              </TabsTrigger>
+              <TabsTrigger
+                value="visits"
+                className="w-1/4 flex items-center justify-center gap-2 text-white"
+              >
+                <Calendar size={18} /> My Visits
               </TabsTrigger>
             </TabsList>
             <TabsContent value="avatars">
@@ -632,7 +689,8 @@ const Gamification = () => {
                                                     size="sm"
                                                     onClick={() =>
                                                       initiateVisit(
-                                                        slot.entityId
+                                                        slot.entityId,
+                                                        Number(slot.start)
                                                       )
                                                     }
                                                     disabled={
@@ -764,6 +822,201 @@ const Gamification = () => {
                   ))}
                 </div>
               </div>
+            </TabsContent>
+
+            <TabsContent value="visits">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5 text-blue-500" />
+                    My Visits
+                  </CardTitle>
+                  <Button
+                    variant="outline"
+                    onClick={fetchVisits}
+                    disabled={isLoadingVisits}
+                  >
+                    {isLoadingVisits ? (
+                      <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    Refresh
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingVisits ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2Icon className="h-8 w-8 animate-spin" />
+                    </div>
+                  ) : visits.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No visits found. Click refresh to load visits.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {visits.map(
+                        (visit) => (
+                          console.log(visit),
+                          (
+                            <Card
+                              key={visit.visitId}
+                              className="hover:shadow-md transition-shadow"
+                            >
+                              <CardContent className="p-4">
+                                <div className="flex justify-between items-start mb-4">
+                                  <div>
+                                    <h3 className="font-semibold text-lg">
+                                      Visit #{Number(visit.visitId)}
+                                    </h3>
+                                    <p className="text-sm text-muted-foreground">
+                                      {visit.professionalId
+                                        ? `Professional ID: ${visit.professionalId}`
+                                        : visit.facilityId
+                                          ? `Facility ID: ${visit.facilityId}`
+                                          : "Unspecified Location"}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <p className="text-muted-foreground">
+                                      User ID
+                                    </p>
+                                    <p className="font-medium">
+                                      {visit.userId}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted-foreground">
+                                      Avatar ID
+                                    </p>
+                                    <p className="font-medium">
+                                      #{Number(visit.avatarId)}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted-foreground">
+                                      Visit Mode
+                                    </p>
+                                    <p className="font-medium">
+                                      {Object.keys(visit.visitMode)[0]}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted-foreground">
+                                      Current Status
+                                    </p>
+                                    <p className="font-medium">
+                                      {Object.keys(visit.status)[0]}
+                                    </p>
+                                  </div>
+
+                                  <div className="col-span-2 mt-2">
+                                    <p className="font-semibold mb-2">
+                                      Timeline
+                                    </p>
+                                    <div className="space-y-2 pl-4 border-l-2 border-muted">
+                                      {visit.timestamp.slotTime && (
+                                        <div>
+                                          <p className="text-muted-foreground">
+                                            Scheduled For
+                                          </p>
+                                          <p className="font-medium">
+                                            {new Date(
+                                              Number(visit.timestamp.slotTime) /
+                                                1_000_000
+                                            ).toLocaleString()}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {visit.timestamp.bookingTime && (
+                                        <div>
+                                          <p className="text-muted-foreground">
+                                            Booked On
+                                          </p>
+                                          <p className="font-medium">
+                                            {new Date(
+                                              Number(
+                                                visit.timestamp.bookingTime
+                                              ) / 1_000_000
+                                            ).toLocaleString()}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {visit.timestamp.completionTime && (
+                                        <div>
+                                          <p className="text-muted-foreground">
+                                            Completed On
+                                          </p>
+                                          <p className="font-medium">
+                                            {new Date(
+                                              Number(
+                                                visit.timestamp.completionTime
+                                              ) / 1_000_000
+                                            ).toLocaleString()}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {visit.timestamp.cancellationTime && (
+                                        <div>
+                                          <p className="text-muted-foreground">
+                                            Cancelled On
+                                          </p>
+                                          <p className="font-medium">
+                                            {new Date(
+                                              Number(
+                                                visit.timestamp.cancellationTime
+                                              ) / 1_000_000
+                                            ).toLocaleString()}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {visit.timestamp.rejectionTime && (
+                                        <div>
+                                          <p className="text-muted-foreground">
+                                            Rejected On
+                                          </p>
+                                          <p className="font-medium">
+                                            {new Date(
+                                              Number(
+                                                visit.timestamp.rejectionTime
+                                              ) / 1_000_000
+                                            ).toLocaleString()}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {visit.meetingLink && (
+                                    <div className="col-span-2 mt-2">
+                                      <p className="text-muted-foreground mb-1">
+                                        Meeting Link
+                                      </p>
+                                      <a
+                                        href={visit.meetingLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-500 hover:underline break-all inline-flex items-center gap-2"
+                                      >
+                                        {visit.meetingLink}
+                                        <Globe className="h-4 w-4" />
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )
+                        )
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </div>
