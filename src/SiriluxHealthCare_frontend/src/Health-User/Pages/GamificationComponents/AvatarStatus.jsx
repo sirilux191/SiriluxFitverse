@@ -1,5 +1,5 @@
 import React from "react";
-import ProgressIndicator from "@/components/ui/progressIndicator";
+import { ProgressIndicator } from "@/components/ui/progressIndicator";
 import { Button } from "@/components/ui/button";
 import {
   User,
