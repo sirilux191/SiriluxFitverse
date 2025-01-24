@@ -2,7 +2,7 @@
 import * as React from "react";
 
 const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 5000;
+const TOAST_REMOVE_DELAY = 1000000;
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -48,7 +48,7 @@ export const reducer = (state, action) => {
       return {
         ...state,
         toasts: state.toasts.map((t) =>
-          t.id === action.toast.id ? { ...t, ...action.toast } : t
+          t.id === action.toast.id ? { ...t, ...action.toast } : t,
         ),
       };
 
@@ -73,7 +73,7 @@ export const reducer = (state, action) => {
                 ...t,
                 open: false,
               }
-            : t
+            : t,
         ),
       };
     }
