@@ -16,17 +16,17 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Send, 
-  AlertCircle, 
-  Eye, 
-  Sword, 
-  Activity, 
-  Brain, 
-  Heart, 
-  Shield, 
+import {
+  Send,
+  AlertCircle,
+  Eye,
+  Activity,
+  Brain,
+  Heart,
+  Shield,
   Gauge,
-  Target
+  Target,
+  Star,
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 
@@ -41,7 +41,73 @@ const NFTCard = ({
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [principalAddress, setPrincipalAddress] = useState("");
   const [isTransferring, setIsTransferring] = useState(false);
-  const qualityStyles = QUALITY_TIERS[nft.quality];
+  const qualityStyles = QUALITY_TIERS[nft.quality] || QUALITY_TIERS.Common;
+
+  // Type-specific configuration
+  const typeConfig = {
+    avatar: {
+      theme: "border-blue-400",
+      title: "Wellness Avatar",
+      attributes: [
+        {
+          label: "ENERGY",
+          value: nft.energy,
+          icon: <Activity className="w-4 h-4 text-blue-400" />,
+        },
+        {
+          label: "FOCUS",
+          value: nft.focus,
+          icon: <Brain className="w-4 h-4 text-purple-400" />,
+        },
+        {
+          label: "VITALITY",
+          value: nft.vitality,
+          icon: <Gauge className="w-4 h-4 text-green-400" />,
+        },
+        {
+          label: "RESILIENCE",
+          value: nft.resilience,
+          icon: <Shield className="w-4 h-4 text-orange-400" />,
+        },
+      ],
+    },
+    professional: {
+      theme: "border-green-400",
+      title: "Healthcare Professional",
+      attributes: [
+        {
+          label: "EXPERIENCE",
+          value: nft.experience,
+          icon: <Badge className="w-4 h-4 text-yellow-400" />,
+        },
+        {
+          label: "REPUTATION",
+          value: nft.reputation,
+          icon: <Star className="w-4 h-4 text-blue-400" />,
+        },
+      ],
+      specialization: true,
+    },
+    facility: {
+      theme: "border-purple-400",
+      title: "Healthcare Facility",
+      attributes: [
+        {
+          label: "TECH LEVEL",
+          value: nft.technologyLevel,
+          icon: <Gauge className="w-4 h-4 text-blue-400" />,
+        },
+        {
+          label: "REPUTATION",
+          value: nft.reputation,
+          icon: <Star className="w-4 h-4 text-yellow-400" />,
+        },
+      ],
+      services: true,
+    },
+  };
+
+  const currentType = typeConfig[nft.type] || typeConfig.avatar;
 
   const handleTransfer = async () => {
     if (!principalAddress.trim()) {
@@ -73,120 +139,162 @@ const NFTCard = ({
     }
   };
 
-  return (
-<Card 
-  className={`
-    bg-gray-800/40 text-white rounded-lg shadow-md transition-colors duration-300 ease-in-out relative overflow-hidden group max-w-sm 
-    border-4 ${qualityStyles.border} 
-    ${nft.quality === 'Common' ? 'hover:border-gray-400' : ''}
-    ${nft.quality === 'Uncommon' ? 'hover:border-green-400' : ''}
-    ${nft.quality === 'Rare' ? 'hover:border-blue-400' : ''}
-    ${nft.quality === 'Epic' ? 'hover:border-purple-400' : ''}
-    ${nft.quality === 'Legendary' ? 'hover:border-yellow-400' : ''}
-    ${nft.quality === 'Mythic' ? 'hover:border-red-400' : ''}
-  `}
->
+  // Remove or update getAvatarImage function to use metadata image
+  const getAvatarImage = () => {
+    // Return the image URL from metadata if available, otherwise use placeholder
+    return nft.image || "/assets/default-placeholder.png";
+  };
 
+  return (
+    <Card
+      className={`
+      bg-gray-900/95 text-white rounded-lg shadow-xl transition-all duration-300
+      hover:shadow-2xl relative overflow-hidden w-full max-w-[500px]
+      border-2 ${qualityStyles.border} ${currentType.theme}
+    `}
+    >
       <div className="relative z-10">
-        <CardHeader className="border-b border-gray-700 flex flex-row items-center space-x-4 p-4">
-          <img
-            src={nft.image}
-            alt={nft.name}
-            className="w-16 h-16 rounded-lg object-cover"
-          />
-          <div className="flex-1">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold">{nft.name}</h2>
+        {/* Header Section */}
+        <CardHeader className="space-y-2 p-4">
+          <div className="flex justify-between items-start">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold">{currentType.title}</h2>
+                <span className="text-sm text-gray-400">#{nft.id}</span>
+              </div>
+              <Badge className={`${qualityStyles.bg} ${qualityStyles.text}`}>
+                {nft.quality}
+              </Badge>
             </div>
             <Badge
-              className={`${qualityStyles.bg} ${qualityStyles.text} w-fit text-xs`}
+              variant="outline"
+              className="capitalize"
             >
-              {nft.quality}
+              {nft.type}
             </Badge>
-            <p className="text-xs text-gray-400">{nft.type}</p>
           </div>
+          <p className="text-sm text-gray-400">
+            {nft.avatarType || nft.specialization || nft.facilityType}
+          </p>
         </CardHeader>
 
-        <CardContent className="p-3 space-y-4">
-          {/* Level and HP Section */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-gray-700/30 rounded-lg p-2">
+        {/* Image Section */}
+        <CardContent className="space-y-4 p-4">
+          <div className="relative w-full aspect-square mb-4 rounded-lg overflow-hidden bg-gray-800/50">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <img
+                src={getAvatarImage()}
+                alt={`${nft.type} NFT`}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.src = "/assets/default-placeholder.png";
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Level and HP Row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-800/50 rounded-lg p-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Target className="w-4 h-4 text-yellow-500 mr-2" />
-                  <span className="text-xs text-gray-400">LEVEL</span>
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-yellow-500" />
+                  <span className="text-sm text-gray-400">LEVEL</span>
                 </div>
                 <span className="text-lg font-bold">{nft.level}</span>
               </div>
             </div>
-            <div className="bg-gray-700/30 rounded-lg p-2">
+            <div className="bg-gray-800/50 rounded-lg p-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Heart className="w-4 h-4 text-red-500 mr-2" />
-                  <span className="text-xs text-gray-400">HP</span>
+                <div className="flex items-center gap-2">
+                  <Heart className="w-4 h-4 text-red-500" />
+                  <span className="text-sm text-gray-400">HP</span>
                 </div>
                 <span className="text-lg font-bold">{nft.hp}</span>
               </div>
             </div>
           </div>
 
-          {/* Main Stats Grid */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center space-x-2 bg-gray-700/20 p-2 rounded-lg">
-              <Activity className="w-4 h-4 text-blue-400" />
-              <div className="flex justify-between items-center w-full">
-                <span className="text-xs text-gray-400">ENERGY</span>
-                <span className="text-sm font-semibold">{nft.energy}</span>
+          {/* Attributes Grid */}
+          <div className="grid grid-cols-2 gap-3">
+            {currentType.attributes.map((attr) => (
+              <div
+                key={attr.label}
+                className="bg-gray-800/50 rounded-lg p-3"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {attr.icon}
+                    <span className="text-sm text-gray-400">{attr.label}</span>
+                  </div>
+                  <span className="text-lg font-bold">{attr.value}</span>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center space-x-2 bg-gray-700/20 p-2 rounded-lg">
-              <Brain className="w-4 h-4 text-purple-400" />
-              <div className="flex justify-between items-center w-full">
-                <span className="text-xs text-gray-400">FOCUS</span>
-                <span className="text-sm font-semibold">{nft.focus}</span>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2 bg-gray-700/20 p-2 rounded-lg">
-              <Gauge className="w-4 h-4 text-green-400" />
-              <div className="flex justify-between items-center w-full">
-                <span className="text-xs text-gray-400">VITALITY</span>
-                <span className="text-sm font-semibold">{nft.vitality}</span>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2 bg-gray-700/20 p-2 rounded-lg">
-              <Shield className="w-4 h-4 text-orange-400" />
-              <div className="flex justify-between items-center w-full">
-                <span className="text-xs text-gray-400">RESILIENCE</span>
-                <span className="text-sm font-semibold">{nft.resilience}</span>
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* Visits Counter */}
-          <div className="flex items-center justify-end text-gray-400">
-            <Eye className="w-3 h-3 mr-1" />
-            <span className="text-xs">
-              Visits: {nft.visitCount || 0}
-            </span>
-          </div>
+          {/* Specialization/Services Section */}
+          {currentType.specialization && (
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-400">SPECIALIZATION</span>
+                <span className="text-sm font-medium">
+                  {nft.specialization}
+                </span>
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-sm text-gray-400">VISITS</span>
+                <span className="text-sm font-medium">
+                  {nft.visitCount || 0}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {currentType.services && (
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-400">SERVICES</span>
+                <span className="text-sm font-medium">{nft.services}</span>
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-sm text-gray-400">VISITS</span>
+                <span className="text-sm font-medium">
+                  {nft.visitCount || 0}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Visit Counter for Avatars */}
+          {nft.type === "avatar" && (
+            <div className="flex items-center justify-end text-gray-400">
+              <Eye className="w-3 h-3 mr-1" />
+              <span className="text-xs">Visits: {nft.visitCount || 0}</span>
+            </div>
+          )}
         </CardContent>
 
-        <CardFooter className="py-2 border-t border-gray-700 flex justify-between p-3">
+        {/* Footer Section */}
+        <CardFooter className="p-4 pt-0 flex gap-3">
           {showManage ? (
             <>
               <Button
-                className="bg-green-600 hover:bg-green-700 text-white text-sm"
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
                 onClick={() => onManage(nft)}
               >
                 Manage
               </Button>
-              <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
+              <Dialog
+                open={isTransferOpen}
+                onOpenChange={setIsTransferOpen}
+              >
                 <DialogTrigger asChild>
-                  <Button className="bg-blue-600 hover:bg-blue-700 text-white text-sm">
+                  <Button className="flex-1 bg-blue-600 hover:bg-blue-700">
                     Transfer
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-gray-800 text-white">
+                <DialogContent className="bg-gray-900 text-white">
                   <DialogHeader>
                     <DialogTitle>Transfer NFT</DialogTitle>
                   </DialogHeader>
@@ -195,7 +303,7 @@ const NFTCard = ({
                       placeholder="Enter principal address"
                       value={principalAddress}
                       onChange={(e) => setPrincipalAddress(e.target.value)}
-                      className="bg-gray-700 text-white"
+                      className="bg-gray-800 text-white"
                     />
                     <Button
                       onClick={handleTransfer}
@@ -220,7 +328,7 @@ const NFTCard = ({
             </>
           ) : (
             <Button
-              className="bg-blue-600 hover:bg-blue-700 text-white w-full text-sm"
+              className="w-full bg-blue-600 hover:bg-blue-700"
               onClick={() => onVisit(nft)}
               disabled={isPending}
             >

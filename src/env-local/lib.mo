@@ -1,5 +1,6 @@
 module {
     public let admin : Text = ("klc2v-kpix3-y73ov-rs4zp-qvi5e-b52vh-dzbi4-x72ce-pzf4l-uvcvl-oae");
+    public let icrc_ledger_canister_id : Text = ("cpmcr-yeaaa-aaaaa-qaala-cai");
     public let vetkdSystemCanisterID : Text = ("dfdal-2uaaa-aaaaa-qaama-cai");
     public let wellnessAvatarNFTCanisterID : Text = ("cbopz-duaaa-aaaaa-qaaka-cai");
     public let identityManagerCanisterID : Text = ("avqkn-guaaa-aaaaa-qaaea-cai");

@@ -80,3 +80,21 @@
     @apply font-customFont;
   }
 }
+
+/* Add to your global CSS if needed */
+.dialog-overlay {
+  backdrop-filter: blur(4px);
+}
+
+.scroll-area-slots::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scroll-area-slots::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
+  border-radius: 3px;
+}
+
+.scroll-area-slots::-webkit-scrollbar-track {
+  background-color: transparent;
+}

@@ -1,3 +1,4 @@
+import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
 import CertifiedData "mo:base/CertifiedData";
 import D "mo:base/Debug";
@@ -13,10 +14,11 @@ import ICRC37 "mo:icrc37-mo";
 import ICRC7 "mo:icrc7-mo";
 import Vec "mo:vector";
 
+import CanisterIDs "../Types/CanisterIDs";
 import ICRC3Default "./initial_state/icrc3";
 import ICRC37Default "./initial_state/icrc37";
 import ICRC7Default "./initial_state/icrc7";
-
+import GamificationTypes "GamificationTypes";
 shared (_init_msg) actor class WellnessAvatarNFT(
     _args : {
         icrc7_args : ?ICRC7.InitArgList;
@@ -56,17 +58,8 @@ shared (_init_msg) actor class WellnessAvatarNFT(
     type RevokeTokenApprovalResult = ICRC37.Service.RevokeTokenApprovalResult;
     type RevokeCollectionApprovalResult = ICRC37.Service.RevokeCollectionApprovalResult;
 
-    //
-    private type AvatarAttributes = {
-        energy : Nat;
-        focus : Nat;
-        vitality : Nat;
-        resilience : Nat;
-        quality : Text;
-        avatarType : Text;
-        level : Nat;
-    };
-
+    //Add a permitted principals that can call the canister
+    private let permittedPrincipals : [Principal] = [Principal.fromText(CanisterIDs.gamificationSystemCanisterID)];
     //
 
     stable var init_msg = _init_msg; //preserves original initialization;
@@ -364,8 +357,11 @@ shared (_init_msg) actor class WellnessAvatarNFT(
 
     //Modified
 
-    public shared (msg) func icrc7_transfer<system>(caller : Principal, args : [TransferArgs]) : async [?TransferResult] {
-        icrc7().transfer<system>(caller, args);
+    public shared ({ caller }) func icrc7_transfer<system>(sender : Principal, args : [TransferArgs]) : async Result.Result<[?TransferResult], Text> {
+        if (not isPermitted(caller)) {
+            return #err("Unauthorized");
+        };
+        #ok(icrc7().transfer<system>(sender, args));
     };
 
     //
@@ -411,36 +407,19 @@ shared (_init_msg) actor class WellnessAvatarNFT(
     // one might deploy an NFT.
     /////////
 
-    public shared func icrcX_mint(mintNFTPrincipal : Principal, tokens : ICRC7.SetNFTRequest) : async [ICRC7.SetNFTResult] {
-
+    public shared ({ caller }) func icrcX_mint(ownerNFTPrincipal : Principal, tokens : ICRC7.SetNFTRequest) : async [ICRC7.SetNFTResult] {
+        //permitted caller should only be allowed to call this function (to be added)
+        if (not isPermitted(caller)) {
+            return [];
+        };
         //for now we require an owner to mint.
-        switch (icrc7().set_nfts<system>(mintNFTPrincipal, tokens, true)) {
+        switch (icrc7().set_nfts<system>(ownerNFTPrincipal, tokens, true)) {
             case (#ok(val)) val;
             case (#err(err)) D.trap(err);
         };
     };
 
-    // Helper function to create metadata from attributes
-    public shared func icrcX_update(adminPrincipal : Principal, tokenId : Nat, attributes : AvatarAttributes) : async Result.Result<[ICRC7.UpdateNFTResult], Text> {
-        let updateRequest : ICRC7.UpdateNFTRequest = [{
-            memo = null;
-            created_at_time = null;
-            token_id = tokenId;
-            updates = [{
-                name = "attributes";
-                mode = #Set(
-                    CandyTypesLib.unshare(#Class([{ immutable = false; name = "energy"; value = #Nat(attributes.energy) }, { immutable = false; name = "focus"; value = #Nat(attributes.focus) }, { immutable = false; name = "vitality"; value = #Nat(attributes.vitality) }, { immutable = false; name = "resilience"; value = #Nat(attributes.resilience) }, { immutable = false; name = "quality"; value = #Text(attributes.quality) }, { immutable = false; name = "avatarType"; value = #Text(attributes.avatarType) }, { immutable = false; name = "level"; value = #Nat(attributes.level) }]))
-                );
-            }];
-        }];
-
-        switch (icrc7().update_nfts<system>(adminPrincipal, updateRequest)) {
-            case (#ok(val)) {
-                #ok(val);
-            };
-            case (#err(err)) { #err(err) };
-        };
-    };
+    ///
 
     public shared (msg) func icrcX_burn(tokens : ICRC7.BurnNFTRequest) : async ICRC7.BurnNFTBatchResponse {
         switch (icrc7().burn_nfts<system>(msg.caller, tokens)) {
@@ -523,5 +502,194 @@ shared (_init_msg) actor class WellnessAvatarNFT(
     };
 
     initManager.calls.add(ensure_block_types);
+
+    // Extra added functions
+
+    private func isPermitted(caller : Principal) : Bool {
+        Array.find(permittedPrincipals, func(p : Principal) : Bool { p == caller }) != null;
+    };
+
+    public shared ({ caller }) func icrcX_updateHPAndVisits(adminPrincipal : Principal, tokenId : Nat) : async Result.Result<[ICRC7.UpdateNFTResult], Text> {
+        // Get current metadata
+        if (not isPermitted(caller)) {
+            return #err("Unauthorized");
+        };
+
+        let tokenMetadata = await icrc7_token_metadata([tokenId]);
+
+        // Extract current values
+        let currentAttributes = switch (tokenMetadata[0]) {
+            case (?properties) {
+                let attributesProp = Array.find(properties, func(p : (Text, ICRC7.Value)) : Bool { p.0 == "attributes" });
+
+                switch (attributesProp) {
+
+                    case (?(_, #Map(attrs))) {
+                        let hp = Array.find<(Text, Value)>(attrs, func(p : (Text, Value)) : Bool { p.0 == "HP" });
+
+                        let visits = Array.find<(Text, Value)>(attrs, func(p : (Text, Value)) : Bool { p.0 == "visitCount" });
+
+                        let currentHP = switch (hp) {
+                            case (?(_, #Nat(val))) val;
+                            case _ return #err("Invalid HP format");
+                        };
+
+                        let currentVisits = switch (visits) {
+                            case (?(_, #Nat(val))) val;
+                            case _ return #err("Invalid visitCount format");
+                        };
+
+                        (currentHP, currentVisits);
+                    };
+                    case _ return #err("Attributes not found");
+                };
+            };
+            case null return #err("Token metadata not found");
+        };
+
+        // Calculate new values
+        let (currentHP, currentVisits) = currentAttributes;
+
+        if (currentHP < 10) {
+            return #err("HP cannot be less than 10");
+        };
+
+        let newHP = Nat.max(0, currentHP - 10);
+
+        let newVisits = currentVisits + 1;
+
+        // Create update request
+        let updateRequest : ICRC7.UpdateNFTRequest = [{
+            memo = null;
+            created_at_time = null;
+            token_id = tokenId;
+            updates = [{
+                name = "attributes";
+                mode = #Next([
+                    {
+                        name = "HP";
+                        mode = #Set(CandyTypesLib.unshare(#Nat(newHP)));
+                    },
+                    {
+                        name = "visitCount";
+                        mode = #Set(CandyTypesLib.unshare(#Nat(newVisits)));
+                    },
+                ]);
+            }];
+        }];
+
+        switch (icrc7().update_nfts<system>(adminPrincipal, updateRequest)) {
+            case (#ok(val)) {
+                #ok(val);
+            };
+            case (#err(err)) {
+                if (err != "NotFound") {
+                    #err(err);
+                } else {
+                    #ok([]);
+                };
+            };
+        };
+    };
+
+    public shared ({ caller }) func icrcX_updateHP(adminPrincipal : Principal, tokenId : Nat, amount : Nat) : async Result.Result<[ICRC7.UpdateNFTResult], Text> {
+        // Check if caller is permitted
+        if (not isPermitted(caller)) {
+            return #err("Unauthorized");
+        };
+
+        // Get current metadata
+        let tokenMetadata = await icrc7_token_metadata([tokenId]);
+
+        // Extract current HP value
+        let currentHP = switch (tokenMetadata[0]) {
+            case (?properties) {
+                let attributesProp = Array.find(properties, func(p : (Text, ICRC7.Value)) : Bool { p.0 == "attributes" });
+
+                switch (attributesProp) {
+                    case (?(_, #Map(attrs))) {
+                        let hp = Array.find<(Text, Value)>(attrs, func(p : (Text, Value)) : Bool { p.0 == "HP" });
+
+                        switch (hp) {
+                            case (?(_, #Nat(val))) val;
+                            case _ return #err("Invalid HP format");
+                        };
+                    };
+                    case _ return #err("Attributes not found");
+                };
+            };
+            case null return #err("Token metadata not found");
+        };
+
+        // Calculate new HP value
+        let newHP = currentHP + amount;
+
+        // Create update request
+        let updateRequest : ICRC7.UpdateNFTRequest = [{
+            memo = null;
+            created_at_time = null;
+            token_id = tokenId;
+            updates = [{
+                name = "attributes";
+                mode = #Next([{
+                    name = "HP";
+                    mode = #Set(CandyTypesLib.unshare(#Nat(newHP)));
+                }]);
+            }];
+        }];
+
+        // Update the NFT
+        switch (icrc7().update_nfts<system>(adminPrincipal, updateRequest)) {
+            case (#ok(val)) {
+                #ok(val);
+            };
+            case (#err(err)) {
+                if (err != "NotFound") {
+                    #err(err);
+                } else {
+                    #ok([]);
+                };
+            };
+        };
+    };
+
+    public shared ({ caller }) func icrcX_updateMetadata(adminPrincipal : Principal, tokenId : Nat, attributes : [(Text, Value)]) : async Result.Result<[ICRC7.UpdateNFTResult], Text> {
+        if (not isPermitted(caller)) {
+            return #err("Unauthorized");
+        };
+
+        // Convert flat attributes array to proper Class structure
+        let classAttributes = #Class(
+            Array.map<(Text, Value), CandyTypesLib.PropertyShared>(
+                attributes,
+                func((k, v)) = {
+                    immutable = false;
+                    name = k;
+                    value = v;
+                },
+            )
+        );
+
+        let updateRequest : ICRC7.UpdateNFTRequest = [{
+            memo = null;
+            created_at_time = null;
+            token_id = tokenId;
+            updates = [{
+                name = "attributes";
+                mode = #Set(CandyTypesLib.unshare(classAttributes));
+            }];
+        }];
+
+        switch (icrc7().update_nfts<system>(adminPrincipal, updateRequest)) {
+            case (#ok(val)) #ok(val);
+            case (#err(err)) {
+                if (err != "NotFound") {
+                    #err(err);
+                } else {
+                    #ok([]);
+                };
+            };
+        };
+    };
 
 };

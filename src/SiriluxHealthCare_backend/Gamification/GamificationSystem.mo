@@ -2,28 +2,24 @@
 
 import Array "mo:base/Array";
 import Blob "mo:base/Blob";
-import Debug "mo:base/Debug";
-import Error "mo:base/Error";
 import Float "mo:base/Float";
-import Hash "mo:base/Hash";
 import Int "mo:base/Int";
-import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
-import TrieMap "mo:base/TrieMap";
-import CandyTypesLib "mo:candy_0_3_0/types";
+import ICRC2 "mo:icrc2-types";
 import ICRC7 "mo:icrc7-mo";
 
 import IdentityManager "../IdentityManager/IdentityManager";
 import Types "../Types";
 import CanisterIDs "../Types/CanisterIDs";
+import GamificationTypes "./GamificationTypes";
 import VisitManager "./VisitManager";
 import WellnessAvatarNFT "./WellnessAvatarNFT";
 
-actor class GamificationSystem() {
+actor class GamificationSystem() = this {
     type Account = ICRC7.Account;
     type NFT = ICRC7.NFT;
     type SetNFTError = {
@@ -44,210 +40,90 @@ actor class GamificationSystem() {
 
     private let wellnessAvatarNFT : WellnessAvatarNFT.WellnessAvatarNFT = actor (CanisterIDs.wellnessAvatarNFTCanisterID);
     private let visitManager : VisitManager.VisitManager = actor (CanisterIDs.visitManagerCanisterID);
+    private let icrcLedger : ICRC2.Service = actor (CanisterIDs.icrc_ledger_canister_id);
 
-    private stable var userTokensEntries : [(Text, Nat)] = [];
-    private var userTokens : TrieMap.TrieMap<Text, Nat> = TrieMap.fromEntries(userTokensEntries.vals(), Text.equal, Text.hash);
-
-    private stable var avatarAttributesEntries : [(Nat, AvatarAttributes)] = [];
-    private var avatarAttributes : TrieMap.TrieMap<Nat, AvatarAttributes> = TrieMap.fromEntries(avatarAttributesEntries.vals(), Nat.equal, Hash.hash);
-
-    private stable var avatarHPEntries : [(Nat, Nat)] = [];
-    private var avatarHP : TrieMap.TrieMap<Nat, Nat> = TrieMap.fromEntries(avatarHPEntries.vals(), Nat.equal, Hash.hash);
-
-    private stable var userPrincipalMapEntries : [(Text, Principal)] = [];
-    private var userPrincipalMap : TrieMap.TrieMap<Text, Principal> = TrieMap.fromEntries(userPrincipalMapEntries.vals(), Text.equal, Text.hash);
-
-    private let identityManager : IdentityManager.IdentityManager = actor (CanisterIDs.identityManagerCanisterID);
-
-    private type AvatarAttributes = {
-        energy : Nat;
-        focus : Nat;
-        vitality : Nat;
-        resilience : Nat;
-        quality : Text;
-        avatarType : Text;
-        level : Nat;
-    };
-
-    private type AvatarMetadata = {
-        name : Text;
-        description : Text;
-        attributes : AvatarAttributes;
-    };
-
-    private let MAX_HP = 100;
-    private let BASE_TOKENS_PER_VISIT = 10;
-
-    private type VisitMode = {
-        #Offline;
-        #Online;
-    };
-
-    // Default avatar attributes
-    private func defaultAttributes(avatarType : Text) : AvatarAttributes {
-        {
-            energy = 100;
-            focus = 100;
-            vitality = 100;
-            resilience = 100;
-            quality = "Common";
-            avatarType = avatarType;
-            level = 1;
-        };
-    };
+    private let _identityManager : IdentityManager.IdentityManager = actor (CanisterIDs.identityManagerCanisterID);
 
     // Minting function with default values
-    public shared ({ caller }) func mintWellnessAvatar(mintNFTPrincipal : Text, memo : ?Blob, avatarType : Text, imageURL : Text) : async Result.Result<[SetNFTResult], ICRC7.TransferError> {
+    public shared ({ caller }) func mintWellnessAvatar(mintNFTPrincipal : Text, memo : ?Blob, avatarType : GamificationTypes.AvatarType, imageURL : Text) : async [SetNFTResult] {
         let currentTokenId = await wellnessAvatarNFT.icrc7_total_supply();
         let tokenId = currentTokenId + 1;
 
-        let defaultMetadata = createDefaultMetadata(tokenId, avatarType, defaultAttributes(avatarType), imageURL);
+        let defaultMetadata = GamificationTypes.createAvatarDefaultMetadata(tokenId, GamificationTypes.defaultAttributes(avatarType), imageURL);
 
         let request : SetNFTRequest = [{
-            owner = ?{ owner = caller; subaccount = null };
+            owner = ?{
+                owner = Principal.fromText(mintNFTPrincipal);
+                subaccount = null;
+            };
             metadata = defaultMetadata;
             memo = memo;
             override = true;
             token_id = tokenId;
             created_at_time = null;
         }];
-        avatarAttributes.put(tokenId, defaultAttributes(avatarType));
-        avatarHP.put(tokenId, MAX_HP);
-        let result = await wellnessAvatarNFT.icrcX_mint(caller, request);
-        let transferResult = await wellnessAvatarNFT.icrc7_transfer(Principal.fromText(mintNFTPrincipal), [{ from_subaccount = null; to = { owner = Principal.fromText(mintNFTPrincipal); subaccount = null }; token_id = tokenId; memo = memo; created_at_time = null }]);
-        switch (transferResult[0]) {
-            case (?#Ok(_)) { #ok(result) };
-            case (?#Err(err)) { return #err(err) };
-            case (null) { return (#ok(result)) };
-        };
+
+        return await wellnessAvatarNFT.icrcX_mint(caller, request);
 
     };
 
-    // Helper function to create default metadata
-    private func createDefaultMetadata(tokenId : Nat, avatarType : Text, attributes : AvatarAttributes, imageURL : Text) : CandyTypesLib.CandyShared {
-        #Class([
-            {
-                immutable = false;
-                name = "name";
-                value = #Text("Wellness Avatar #" # Nat.toText(tokenId));
-            },
-            {
-                immutable = false;
-                name = "description";
-                value = #Text("A " # avatarType # " Avatar in the SiriluxHealthCare ecosystem");
-            },
-            {
-                immutable = false;
-                name = "image";
-                value = #Text(imageURL);
-            },
-            {
-                immutable = false;
-                name = "attributes";
-                value = #Class([
-                    {
-                        immutable = false;
-                        name = "energy";
-                        value = #Nat(attributes.energy);
-                    },
-                    {
-                        immutable = false;
-                        name = "focus";
-                        value = #Nat(attributes.focus);
-                    },
-                    {
-                        immutable = false;
-                        name = "vitality";
-                        value = #Nat(attributes.vitality);
-                    },
-                    {
-                        immutable = false;
-                        name = "resilience";
-                        value = #Nat(attributes.resilience);
-                    },
-                    {
-                        immutable = false;
-                        name = "quality";
-                        value = #Text(attributes.quality);
-                    },
-                    {
-                        immutable = false;
-                        name = "avatarType";
-                        value = #Text(attributes.avatarType);
-                    },
-                    {
-                        immutable = false;
-                        name = "level";
-                        value = #Nat(attributes.level);
-                    },
-                ]);
-            },
-        ]);
-    };
+    public shared ({ caller }) func mintProfessionalNFT(mintNFTPrincipal : Text, memo : ?Blob, specialization : GamificationTypes.ProfessionalSpecialization, imageURL : Text) : async [SetNFTResult] {
+        let currentTokenId = await wellnessAvatarNFT.icrc7_total_supply();
+        let tokenId = currentTokenId + 1;
 
-    // Level up function
-    public shared ({ caller }) func levelUpAvatar(tokenId : Nat) : async Result.Result<[ICRC7.UpdateNFTResult], Text> {
+        let defaultMetadata = GamificationTypes.createProfessionalDefaultMetadata(tokenId, GamificationTypes.defaultProfessionalAttributes(specialization), imageURL);
 
-        switch (avatarAttributes.get(tokenId)) {
-            case (?attributes) {
-                let existingAttributes = attributes;
-                let updatedAttributes = {
-                    energy = existingAttributes.energy + 100;
-                    focus = existingAttributes.focus + 100;
-                    vitality = existingAttributes.vitality + 100;
-                    resilience = existingAttributes.resilience + 100;
-                    quality = switch (existingAttributes.quality) {
-                        case ("Common") { "Uncommon" };
-                        case ("Uncommon") { "Rare" };
-                        case ("Rare") { "Epic" };
-                        case ("Epic") { "Legendary" };
-                        case ("Legendary") { "Mythic" };
-                        case ("Mythic") { "Mythic" };
-                        case (_) { "Common" };
-                    };
-                    avatarType = existingAttributes.avatarType;
-                    level = existingAttributes.level + 1;
-                };
-                let tokensRequired = switch (existingAttributes.quality) {
-                    case ("Common") 100;
-                    case ("Uncommon") 200;
-                    case ("Rare") 300;
-                    case ("Epic") 400;
-                    case ("Legendary") 500;
-                    case ("Mythic") 600;
-                    case (_) 100;
-                };
-                ignore await spendTokens(caller, tokensRequired);
-
-                avatarAttributes.put(tokenId, updatedAttributes);
-                let response = await wellnessAvatarNFT.icrcX_update(Principal.fromText(Types.admin), tokenId, updatedAttributes);
-                switch (response) {
-                    case (#ok(val)) { #ok(val) };
-                    case (#err(err)) { #err(err) };
-                };
+        let request : SetNFTRequest = [{
+            owner = ?{
+                owner = Principal.fromText(mintNFTPrincipal);
+                subaccount = null;
             };
-            case (null) { #err("Avatar not found") };
-        };
+            metadata = defaultMetadata;
+            memo = memo;
+            override = true;
+            token_id = tokenId;
+            created_at_time = null;
+        }];
+
+        return await wellnessAvatarNFT.icrcX_mint(caller, request);
+
     };
 
-    public shared ({ caller }) func initiateVisit(idToVisit : Text, slotTime : Time.Time, visitMode : VisitMode, avatarId : Nat) : async Result.Result<Nat, Text> {
+    public shared ({ caller }) func mintFacilityNFT(mintNFTPrincipal : Text, memo : ?Blob, services : GamificationTypes.FacilityServices, imageURL : Text) : async [SetNFTResult] {
+        let currentTokenId = await wellnessAvatarNFT.icrc7_total_supply();
+        let tokenId = currentTokenId + 1;
+
+        let defaultMetadata = GamificationTypes.createFacilityDefaultMetadata(tokenId, GamificationTypes.defaultFacilityAttributes(services), imageURL);
+
+        let request : SetNFTRequest = [{
+            owner = ?{
+                owner = Principal.fromText(mintNFTPrincipal);
+                subaccount = null;
+            };
+            metadata = defaultMetadata;
+            memo = memo;
+            override = true;
+            token_id = tokenId;
+            created_at_time = null;
+        }];
+
+        return await wellnessAvatarNFT.icrcX_mint(caller, request);
+
+    };
+
+    public shared ({ caller }) func initiateVisit(idToVisit : Text, slotTime : Time.Time, visitMode : visitManager.VisitMode, avatarId : Nat) : async Result.Result<Nat, Text> {
         // Verify avatar ownership
         let ownerResult = await wellnessAvatarNFT.icrc7_owner_of([avatarId]);
         switch (ownerResult[0]) {
             case (?{ owner }) {
-                Debug.print("Owner: " # Principal.toText(owner));
-                Debug.print("Caller: " # Principal.toText(caller));
+
                 if (not Principal.equal(owner, caller)) {
                     return #err("Caller is not the owner of the avatar");
                 };
 
-                // Check avatar HP
-                switch (avatarHP.get(avatarId)) {
-                    case (?hp) {
-                        if (hp < 10) {
-                            return #err("Avatar HP too low for visit");
-                        };
-
+                let depleteResult = await depleteHPandVisitCountIncrease(avatarId);
+                switch (depleteResult) {
+                    case (#ok(_)) {
                         // Book slot and create visit
                         let result = await visitManager.bookSlotAndCreateVisit(
                             caller,
@@ -259,58 +135,64 @@ actor class GamificationSystem() {
 
                         switch (result) {
                             case (#ok(visitId)) {
-                                // Deplete HP after successful booking
-                                ignore await depleteHP(Nat.toText(avatarId), 10);
-                                #ok(visitId);
+                                return #ok(visitId);
                             };
                             case (#err(e)) #err(e);
                         };
+
                     };
-                    case null { #err("Avatar HP not found") };
+                    case (#err(e)) { return #err(e) };
                 };
+
             };
             case null { #err("Avatar not found") };
         };
     };
 
-    // public shared ({ caller }) func completeVisit(visitId : Nat, avatarId : Nat) : async Result.Result<Text, Text> {
-    //     // Get the owner (principal) of the avatar
-    //     let ownerResult = await wellnessAvatarNFT.icrc7_owner_of([avatarId]);
+    private func depleteHPandVisitCountIncrease(tokenId : Nat) : async Result.Result<[ICRC7.UpdateNFTResult], Text> {
+        await wellnessAvatarNFT.icrcX_updateHPAndVisits(Principal.fromText(Types.admin), tokenId);
+    };
 
-    //     switch (ownerResult[0]) {
-    //         case (?owner) {
-    //             switch (owner) {
-    //                 case ({ owner = principal; subaccount = _ }) {
-    //                     let userIdResult = await getUserId(principal);
+    public shared ({ caller }) func restoreHP(tokenId : Nat, amount : Nat) : async Result.Result<[ICRC7.UpdateNFTResult], Text> {
 
-    //                     switch (userIdResult) {
-    //                         case (#ok(userId)) {
-    //                             let result = await visitManager.updateVisitStatus(caller, visitId, #Completed);
-    //                             switch (result) {
-    //                                 case (#ok(_)) {
-    //                                     await updateAvatarAfterVisit(avatarId, userId);
-    //                                     #ok("Visit completed: " # Nat.toText(visitId));
-    //                                 };
-    //                                 case (#err(e)) {
-    //                                     #err(e);
-    //                                 };
-    //                             };
-    //                         };
-    //                         case (#err(e)) {
-    //                             #err("Error getting user ID: " # e);
-    //                         };
-    //                     };
-    //                 };
+        let result = await icrcLedger.icrc2_transfer_from({
+            from = { owner = caller; subaccount = null };
+            spender_subaccount = null;
+            to = { owner = Principal.fromActor(this); subaccount = null };
+            amount = amount * 100_000_000;
+            fee = null;
+            memo = null;
+            created_at_time = null;
+        });
 
-    //             };
-    //         };
-    //         case (null) {
-    //             #err("Avatar not found");
-    //         };
-    //     };
-    // };
+        switch (result) {
+            case (# Ok(_block_number)) {
+                return await wellnessAvatarNFT.icrcX_updateHP(Principal.fromText(Types.admin), tokenId, amount);
+            };
+            case (#Err(_e)) { return #err("Error transferring funds") };
+        };
 
-    public shared ({ caller }) func transferNFT(tokenId : Nat, newOwner : Text) : async [?ICRC7.TransferResult] {
+    };
+
+    //Helper functions
+    public func getUserAvatars(userPrincipalId : Text) : async [Nat] {
+        await wellnessAvatarNFT.icrc7_tokens_of({ owner = Principal.fromText(userPrincipalId); subaccount = null }, null, null);
+    };
+
+    public shared ({ caller }) func getUserAvatarsSelf() : async [(Nat, ?[(Text, ICRC7.Value)])] {
+
+        let tokenIds = await wellnessAvatarNFT.icrc7_tokens_of({ owner = caller; subaccount = null }, null, null);
+        let metadata = await wellnessAvatarNFT.icrc7_token_metadata(tokenIds);
+
+        (Array.tabulate<(Nat, ?[(Text, ICRC7.Value)])>(tokenIds.size(), func(i) { (tokenIds[i], metadata[i]) }));
+
+    };
+
+    public shared ({ caller }) func transferNFT(tokenId : Nat, newOwner : Text) : async Result.Result<[?ICRC7.TransferResult], Text> {
+        await transferNFTInternal(caller, tokenId, newOwner);
+    };
+
+    private func transferNFTInternal(caller : Principal, tokenId : Nat, newOwner : Text) : async Result.Result<[?ICRC7.TransferResult], Text> {
         let transferArgs = [{
             from_subaccount = null;
             to = { owner = Principal.fromText(newOwner); subaccount = null };
@@ -318,197 +200,307 @@ actor class GamificationSystem() {
             memo = null;
             created_at_time = null;
         }];
-        await wellnessAvatarNFT.icrc7_transfer(caller, transferArgs);
-    };
+        return await wellnessAvatarNFT.icrc7_transfer(caller, transferArgs);
 
-    // HP System functions
-    private func depleteHP(avatarId : Text, amount : Nat) : async Result.Result<Nat, Text> {
-        switch (Nat.fromText(avatarId)) {
-            case (?id) {
-                switch (avatarHP.get(id)) {
-                    case (?currentHP) {
-                        let newHP = Nat.max(0, currentHP - amount);
-                        avatarHP.put(id, newHP);
-                        #ok(newHP);
-                    };
-                    case null { #err("Avatar HP not found") };
-                };
-            };
-            case null { #err("Invalid avatar ID") };
-        };
-    };
-
-    public shared ({ caller }) func restoreHP(avatarId : Nat, amount : Nat) : async Result.Result<Nat, Text> {
-
-        switch (avatarHP.get(avatarId)) {
-            case (?currentHP) {
-                let tokensRequired = amount;
-                let result = await spendTokens(caller, tokensRequired);
-                switch (result) {
-                    case (#ok(_)) {
-                        let newHP = Nat.min(MAX_HP, currentHP + amount);
-                        avatarHP.put(avatarId, newHP);
-                        #ok(newHP);
-                    };
-                    case (#err(e)) { #err(e) };
-                };
-            };
-            case null { #err("Avatar HP not found") };
-        };
-
-    };
-
-    // Token management functions
-    private func earnTokens(userId : Text, amount : Nat) : async Result.Result<(), Text> {
-        switch (userTokens.get(userId)) {
-            case (?currentTokens) {
-                userTokens.put(userId, currentTokens + amount);
-            };
-            case (null) {
-                userTokens.put(userId, amount);
-            };
-        };
-        #ok(());
-    };
-
-    private func spendTokens(caller : Principal, amount : Nat) : async Result.Result<(), Text> {
-        let userIdResult = await getUserId(caller);
-        switch (userIdResult) {
-            case (#ok(userId)) {
-                switch (userTokens.get(userId)) {
-                    case (?currentTokens) {
-                        if (currentTokens >= amount) {
-                            userTokens.put(userId, currentTokens - amount);
-                            #ok(());
-                        } else {
-                            #err("Insufficient tokens");
-                        };
-                    };
-                    case null { #err("User has no tokens") };
-                };
-            };
-            case (#err(e)) { #err("Error getting user ID: " # e) };
-        };
-    };
-
-    // Query functions for frontend integration
-    public shared ({ caller }) func getUserTokens() : async Result.Result<?Nat, Text> {
-        let userIdResult = await getUserId(caller);
-        switch (userIdResult) {
-            case (#ok(userId)) { #ok(userTokens.get(userId)) };
-            case (#err(e)) { #err("Error getting user ID: " # e) };
-        };
-    };
-
-    public func getUserAvatars(userPrincipalId : Text) : async [Nat] {
-        await wellnessAvatarNFT.icrc7_tokens_of({ owner = Principal.fromText(userPrincipalId); subaccount = null }, null, null);
-    };
-
-    public shared ({ caller }) func getUserAvatarsSelf() : async Result.Result<[(Nat, ?[(Text, ICRC7.Value)])], Text> {
-        let userIdResult = await getUserId(caller);
-        switch (userIdResult) {
-            case (#ok(_userId)) {
-                let tokenIds = await wellnessAvatarNFT.icrc7_tokens_of({ owner = caller; subaccount = null }, null, null);
-                let metadata = await wellnessAvatarNFT.icrc7_token_metadata(tokenIds);
-
-                #ok(Array.tabulate<(Nat, ?[(Text, ICRC7.Value)])>(tokenIds.size(), func(i) { (tokenIds[i], metadata[i]) }));
-            };
-            case (#err(e)) {
-                #err("Error getting user ID: " # e);
-            };
-        };
-    };
-
-    public query func getAvatarAttributes(tokenId : Nat) : async Result.Result<(AvatarAttributes, Nat), Text> {
-        switch (avatarAttributes.get(tokenId), avatarHP.get(tokenId)) {
-            case (?attributes, ?hp) { #ok((attributes, hp)) };
-            case (_, _) { #err("Avatar not found") };
-        };
     };
 
     public shared query ({ caller }) func whoami() : async Text {
         Principal.toText(caller);
     };
 
-    // public shared ({ caller }) func rejectVisit(visitId : Nat) : async Result.Result<(), Text> {
-    //     let result = await visitManager.updateVisitStatus(caller, visitId, #Rejected);
-    //     switch (result) {
-    //         case (#ok(_)) { #ok(()) };
-    //         case (#err(e)) { #err(e) };
-    //     };
-    // };
+    public shared ({ caller }) func levelUpNFT(tokenId : Nat) : async Result.Result<[ICRC7.UpdateNFTResult], Text> {
+        // Get NFT metadata
+        let tokenMetadata = await wellnessAvatarNFT.icrc7_token_metadata([tokenId]);
 
-    private func updateAvatarAfterVisit(avatarId : Nat, userId : Text) : async () {
-        switch (avatarAttributes.get(avatarId)) {
-            case (?attributes) {
-                let tokensEarned = calculateTokensForVisit(attributes.quality, avatarId);
-                ignore await earnTokens(userId, tokensEarned);
-                ignore await depleteHP(Nat.toText(avatarId), 10);
-            };
-            case (null) {};
+        // Verify ownership
+        // let ownerResult = await wellnessAvatarNFT.icrc7_owner_of([tokenId]);
+        // switch (ownerResult[0]) {
+        //     case (?{ owner }) {
+        //         if (not Principal.equal(owner, caller)) {
+        //             return #err("Caller is not the owner of the NFT");
+        //         };
+        //     };
+        //     case null return #err("NFT not found");
+        // };
+
+        // Extract current quality and attributes
+        let (currentQuality, attributes, _nftType, _subtype) = extractMetadata(tokenMetadata[0]);
+
+        // Check if already at max level
+        if (currentQuality == #Mythic) {
+            return #err("NFT is already at maximum level");
         };
-    };
 
-    private func calculateTokensForVisit(quality : Text, avatarId : Nat) : Nat {
-        let qualityMultiplier = switch (quality) {
-            case "Common" 1;
-            case "Uncommon" 2;
-            case "Rare" 3;
-            case "Epic" 4;
-            case "Legendary" 5;
-            case "Mythic" 6;
-            case _ 1;
+        // Calculate required tokens
+        // let cost = GamificationTypes.getUpgradeCost(currentQuality);
+        // let result = await icrcLedger.icrc2_transfer_from({
+        //     from = { owner = caller; subaccount = null };
+        //     spender_subaccount = null;
+        //     to = { owner = Principal.fromActor(this); subaccount = null };
+        //     amount = cost * 100_000_000; // 8 decimals
+        //     fee = null;
+        //     memo = null;
+        //     created_at_time = null;
+        // });
+
+        // switch (result) {
+        //     case (#Err(_)) return #err("Insufficient balance for upgrade");
+        //     case _ {};
+        // };
+
+        // Determine next quality level
+        let newQuality = switch (currentQuality) {
+            case (#Common) #Uncommon;
+            case (#Uncommon) #Rare;
+            case (#Rare) #Epic;
+            case (#Epic) #Legendary;
+            case (#Legendary) #Mythic;
+            case (#Mythic) return #err("Already at max level");
         };
-        let currentHP = switch (avatarHP.get(avatarId)) {
-            case (?hp) hp;
-            case null MAX_HP;
-        };
-        let hpFactor = Float.fromInt(currentHP) / Float.fromInt(MAX_HP);
-        Int.abs(Float.toInt((Float.fromInt(BASE_TOKENS_PER_VISIT * qualityMultiplier) * hpFactor))) * 13;
-    };
 
-    system func preupgrade() {
-        userTokensEntries := Iter.toArray(userTokens.entries());
-        avatarAttributesEntries := Iter.toArray(avatarAttributes.entries());
-        avatarHPEntries := Iter.toArray(avatarHP.entries());
-        userPrincipalMapEntries := Iter.toArray(userPrincipalMap.entries());
-    };
+        // Get attribute increment percentage
+        let increment = GamificationTypes.getAttributeIncrement(newQuality);
 
-    system func postupgrade() {
-        userTokens := TrieMap.fromEntries(userTokensEntries.vals(), Text.equal, Text.hash);
-        avatarAttributes := TrieMap.fromEntries(avatarAttributesEntries.vals(), Nat.equal, Hash.hash);
-        avatarHP := TrieMap.fromEntries(avatarHPEntries.vals(), Nat.equal, Hash.hash);
-        userPrincipalMap := TrieMap.fromEntries(userPrincipalMapEntries.vals(), Text.equal, Text.hash);
-    };
+        // Get attributes to exclude from updating
+        let attributesToExclude = ["avatarType", "specialization", "services", "HP", "visitCount"];
 
-    // Function to register a user with their principal
-    public shared ({ caller }) func registerUser() : async Result.Result<(), Text> {
-        let userIdResult = await getUserId(caller);
-        switch (userIdResult) {
-            case (#ok(userId)) {
-                switch (userPrincipalMap.get(userId)) {
-                    case (?_) { #err("User already registered") };
-                    case null {
-                        userPrincipalMap.put(userId, caller);
-                        #ok(());
+        // Update attributes with calculated increments and quality
+        let updatedAttrs = Array.map<(Text, Value), (Text, Value)>(
+            attributes,
+            func((k, v) : (Text, Value)) : (Text, Value) {
+                if (k == "quality") {
+                    // Update quality field with new value
+                    (
+                        k,
+                        #Text(
+                            switch (newQuality) {
+                                case (#Uncommon) "Uncommon";
+                                case (#Rare) "Rare";
+                                case (#Epic) "Epic";
+                                case (#Legendary) "Legendary";
+                                case (#Mythic) "Mythic";
+                            }
+                        ),
+                    );
+                } else if (k == "level") {
+                    switch (v) {
+                        case (#Nat(n)) {
+                            (k, #Nat(n + 1));
+                        };
+                        case _ (k, v);
                     };
+                } else if (Array.find(attributesToExclude, func(exclude : Text) : Bool { exclude == k }) == null) {
+                    switch (v) {
+                        case (#Nat(n)) {
+                            let newValue = n + Float.toInt(Float.fromInt(n) * increment);
+                            (k, #Nat(Int.abs(newValue)));
+                        };
+                        case _ (k, v);
+                    };
+                } else {
+                    (k, v);
+                };
+            },
+        );
+
+        // Update NFT metadata
+        await wellnessAvatarNFT.icrcX_updateMetadata(
+            Principal.fromText(Types.admin),
+            tokenId,
+            updatedAttrs,
+        );
+    };
+
+    // Add new function to calculate and distribute visit rewards
+    public shared ({ caller }) func processVisitCompletion(
+        visitId : Nat,
+        entityAvatarId : Nat,
+    ) : async Result.Result<Text, Text> {
+
+        let ownerResult = await wellnessAvatarNFT.icrc7_owner_of([entityAvatarId]);
+        switch (ownerResult[0]) {
+            case (?{ owner }) {
+                if (not Principal.equal(owner, caller)) {
+                    return #err("Caller is not the owner of the avatar");
                 };
             };
-            case (#err(e)) {
-                #err("Error getting user ID: " # e);
+            case null return #err("Avatar not found");
+        };
+
+        // Complete the visit first
+        switch (await wellnessAvatarNFT.icrcX_updateHPAndVisits(Principal.fromText(Types.admin), entityAvatarId)) {
+            case (#ok(_)) {};
+            case (#err(msg)) { return #err(msg) };
+        };
+
+        let completionResult = await visitManager.completeVisit(caller, visitId);
+
+        switch (completionResult) {
+            case (#err(msg)) { return #err(msg) };
+            case (#ok(visit)) {
+                // Get both avatars' metadata
+                let userAvatarNFTOwner = switch ((await wellnessAvatarNFT.icrc7_owner_of([visit.avatarId]))[0]) {
+                    case (?{ owner }) { { owner = owner; subaccount = null } };
+                    case null { return #err("Avatar not found") };
+                };
+                let tokenMetadata = await wellnessAvatarNFT.icrc7_token_metadata([visit.avatarId, entityAvatarId]);
+                let userMetadata = tokenMetadata[0];
+                let entityMetadata = tokenMetadata[1];
+                // Extract attributes and types
+                let (userQuality, _userAttrs, userType, userSubtype) = extractMetadata(userMetadata);
+                let (entityQuality, _entityAttrs, entityType, entitySubtype) = extractMetadata(entityMetadata);
+
+                // Get base attributes for type matching
+                let userPrimaryAttr = getPrimaryAttribute(userType, userSubtype);
+                let entityPrimaryAttr = getPrimaryAttribute(entityType, entitySubtype);
+
+                // Calculate type match bonus
+                let typeMatchMultiplier = if (userPrimaryAttr == entityPrimaryAttr) {
+                    1.5;
+                } else { 1.0 };
+
+                // Calculate rarity multipliers
+                let userRarityMultiplier = getRarityMultiplier(userQuality);
+                let entityRarityMultiplier = getRarityMultiplier(entityQuality);
+
+                // Calculate rewards
+                let baseReward : Nat = 11;
+                let userReward = Float.toInt(Float.fromInt(baseReward) * typeMatchMultiplier * userRarityMultiplier);
+                let entityReward = Float.toInt(Float.fromInt(baseReward) * typeMatchMultiplier * entityRarityMultiplier);
+
+                // Distribute rewards
+                let userTransfer = await icrcLedger.icrc2_transfer_from({
+                    from = {
+                        owner = Principal.fromActor(this);
+                        subaccount = null;
+                    };
+                    spender_subaccount = null;
+                    to = userAvatarNFTOwner;
+                    amount = Int.abs(userReward) * 100_000_000;
+                    fee = null;
+                    memo = null;
+                    created_at_time = null;
+                });
+
+                let entityTransfer = await icrcLedger.icrc2_transfer_from({
+                    from = {
+                        owner = Principal.fromActor(this);
+                        subaccount = null;
+                    };
+                    spender_subaccount = null;
+                    to = {
+                        owner = caller;
+                        subaccount = null;
+                    };
+                    amount = Int.abs(entityReward) * 100_000_000;
+                    fee = null;
+                    memo = null;
+                    created_at_time = null;
+                });
+
+                switch (userTransfer, entityTransfer) {
+                    case (#Ok(_), #Ok(_)) {
+                        return #ok("Visit completed. User received " # Int.toText(userReward) # ", Entity received " # Int.toText(entityReward));
+                    };
+                    case (#Err(msg), _) { return #err(debug_show msg) };
+                    case (_, #Err(msg)) { return #err(debug_show msg) };
+                };
             };
         };
     };
 
-    private func getUserId(principal : Principal) : async Result.Result<Text, Text> {
-        try {
-            let result = await identityManager.getIdentity(principal);
-            switch (result) {
-                case (#ok((id, _))) { #ok(id) };
-                case (#err(e)) { #err(e) };
+    // Helper functions
+    private func getPrimaryAttribute(nftType : { #Avatar; #Professional; #Facility }, subtype : Text) : Text {
+        switch (nftType) {
+            case (#Avatar) {
+                switch (subtype) {
+                    case ("Fitness Champion" or "Metabolic Maestro" or "Stress Buster") "energy";
+                    case ("Mindfulness Master" or "Posture Pro" or "Sleep Optimizer") "focus";
+                    case ("Nutrition Expert" or "Immune Guardian" or "Aging Gracefully") "vitality";
+                    case ("Holistic Healer" or "Recovery Warrior" or "Chronic Care Champion") "resilience";
+                    case _ "energy"; // Default case
+                };
             };
-        } catch (error) {
-            #err("Error calling identity manager: " # Error.message(error));
+            case (#Professional) {
+                switch (subtype) {
+                    case ("Physical Trainer" or "Sports Medicine Expert" or "Fitness Instructor") "energy";
+                    case ("Mental Health Expert" or "Meditation Guide" or "Cognitive Behaviorist") "focus";
+                    case ("Nutritional Advisor" or "Functional Medicine Expert" or "Preventive Care Specialist") "vitality";
+                    case ("Rehabilitation Therapist" or "Chronic Care Specialist" or "Recovery Expert") "resilience";
+                    case _ "energy"; // Default case
+                };
+            };
+            case (#Facility) {
+                switch (subtype) {
+                    case ("Fitness Center" or "Sports Medicine Facility" or "Athletic Training Center") "energy";
+                    case ("Mental Health Clinic" or "Meditation Center" or "Cognitive Care Center") "focus";
+                    case ("Nutrition Center" or "Wellness Retreat" or "Preventive Health Center") "vitality";
+                    case ("Rehabilitation Hospital" or "Recovery Center" or "Chronic Care Clinic") "resilience";
+                    case _ "energy"; // Default case
+                };
+            };
+        };
+    };
+
+    private func getRarityMultiplier(quality : GamificationTypes.Quality) : Float {
+        switch (quality) {
+            case (#Common) 1.0;
+            case (#Uncommon) 1.2;
+            case (#Rare) 1.5;
+            case (#Epic) 1.8;
+            case (#Legendary) 2.2;
+            case (#Mythic) 3.0;
+        };
+    };
+
+    private func extractMetadata(metadata : ?[(Text, Value)]) : (GamificationTypes.Quality, [(Text, Value)], { #Avatar; #Professional; #Facility }, Text) {
+        switch (metadata) {
+            case (?properties) {
+                let attributesProp = Array.find(properties, func(p : (Text, Value)) : Bool { p.0 == "attributes" });
+
+                // Extract quality and attributes
+                let (quality, attrs) = switch (attributesProp) {
+                    case (?(_, #Map(attrs))) {
+                        let qualityProp = Array.find(attrs, func(p : (Text, Value)) : Bool { p.0 == "quality" });
+                        let quality = switch (qualityProp) {
+                            case (?(_, #Text(val))) {
+                                switch (val) {
+                                    case "Common" #Common;
+                                    case "Uncommon" #Uncommon;
+                                    case "Rare" #Rare;
+                                    case "Epic" #Epic;
+                                    case "Legendary" #Legendary;
+                                    case "Mythic" #Mythic;
+                                    case _ #Common;
+                                };
+                            };
+                            case _ #Common;
+                        };
+                        (quality, attrs);
+                    };
+                    case _ (#Common, []);
+                };
+
+                // Extract NFT type and subtype
+                let (nftType, subtype) = switch (attributesProp) {
+                    case (?(_, #Map(attrs))) {
+                        let avatarTypeProp = Array.find(attrs, func(p : (Text, Value)) : Bool { p.0 == "avatarType" });
+                        let specializationProp = Array.find(attrs, func(p : (Text, Value)) : Bool { p.0 == "specialization" });
+                        let servicesProp = Array.find(attrs, func(p : (Text, Value)) : Bool { p.0 == "services" });
+
+                        switch (avatarTypeProp, specializationProp, servicesProp) {
+                            case (?(_, #Text(subtype)), _, _) (#Avatar, subtype);
+                            case (_, ?(_, #Text(subtype)), _) (#Professional, subtype);
+                            case (_, _, ?(_, #Text(subtype))) (#Facility, subtype);
+                            case _ (#Avatar, ""); // Default case
+                        };
+                    };
+                    case _ (#Avatar, "");
+                };
+
+                (quality, attrs, nftType, subtype);
+            };
+            case null (#Common, [], #Avatar, "");
         };
     };
 

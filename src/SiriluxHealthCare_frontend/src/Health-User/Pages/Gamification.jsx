@@ -17,13 +17,14 @@ import {
   Clock,
   AlertCircle,
   PlusCircle,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
 import AvatarStatus from "./GamificationComponents/AvatarStatus";
 import NFTCard from "./GamificationComponents/NFTCard";
-import { INITIAL_HP } from "./GamificationComponents/constants";
+
 import ActorContext from "../../ActorContext";
 import {
   Select,
@@ -42,7 +43,92 @@ import {
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowPathIcon } from "@heroicons/react/24/outline";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { MapPin, Phone } from "lucide-react";
+
+const NavigationMenu = ({ activeTab, setActiveTab }) => {
+  const tabs = [
+    { id: "avatars", label: "Avatars", icon: <User className="h-4 w-4" /> },
+    {
+      id: "professionals",
+      label: "Professionals",
+      icon: <Briefcase className="h-4 w-4" />,
+    },
+    {
+      id: "facilities",
+      label: "Facilities",
+      icon: <Building className="h-4 w-4" />,
+    },
+    {
+      id: "visits",
+      label: "My Visits",
+      icon: <Calendar className="h-4 w-4" />,
+    },
+  ];
+
+  return (
+    <div className="w-full mb-6">
+      {/* Mobile View - Popover */}
+      <div className="sm:hidden w-full">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="w-full justify-between"
+            >
+              <div className="flex items-center gap-2">
+                {tabs.find((tab) => tab.id === activeTab)?.icon}
+                {tabs.find((tab) => tab.id === activeTab)?.label}
+              </div>
+              <ChevronDown className="h-4 w-4 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="w-full p-0"
+            align="start"
+          >
+            <div className="grid gap-1 p-1">
+              {tabs.map((tab) => (
+                <Button
+                  key={tab.id}
+                  variant={activeTab === tab.id ? "secondary" : "ghost"}
+                  className="w-full justify-start gap-2"
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </Button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Desktop View - Regular Tabs */}
+      <div className="hidden sm:block">
+        <div className="flex space-x-2 bg-gray-800/95 text-white rounded-lg p-1">
+          {tabs.map((tab) => (
+            <Button
+              key={tab.id}
+              variant={activeTab === tab.id ? "secondary" : "ghost"}
+              className={`flex-1 gap-2 ${
+                activeTab === tab.id ? "bg-white/10" : "hover:bg-white/5"
+              }`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.icon}
+              {tab.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Gamification = () => {
   const { actors } = useContext(ActorContext);
@@ -59,6 +145,7 @@ const Gamification = () => {
   const [isAvatarStatusOpen, setIsAvatarStatusOpen] = useState(false);
   const [visits, setVisits] = useState([]);
   const [isLoadingVisits, setIsLoadingVisits] = useState(false);
+  const [activeTab, setActiveTab] = useState("avatars");
 
   useEffect(() => {
     fetchUserAvatars();
@@ -69,107 +156,126 @@ const Gamification = () => {
 
   const fetchUserAvatars = async () => {
     try {
-      const avatars = await actors.gamificationSystem.getUserAvatarsSelf();
+      const avatarsResult =
+        await actors.gamificationSystem.getUserAvatarsSelf();
+      console.log("Raw avatars result:", avatarsResult);
 
-      if (!avatars.ok) {
-        console.error("Error fetching user avatars:", avatars.err);
-        return;
-      }
-
-      const formattedAvatars = await Promise.all(
-        avatars.ok.map(async ([tokenId, metadata]) => {
-          console.log("metadata", metadata);
-          console.log("metadata[0]", metadata[0]);
-
-          if (!Array.isArray(metadata[0]) || metadata[0].length < 4) {
-            console.error("Invalid metadata structure:", metadata[0]);
-            return null;
+      const formattedAvatars = [];
+      for (const [tokenId, metadata] of avatarsResult) {
+        try {
+          if (!metadata || !Array.isArray(metadata[0])) {
+            console.error("Invalid metadata structure for token:", tokenId);
+            continue;
           }
 
-          const [nameArray, descriptionArray, imageArray, attributesArray] =
-            metadata[0];
-          console.log("nameArray", nameArray);
-          console.log("descriptionArray", descriptionArray);
-          console.log("imageArray", imageArray);
-          console.log("attributesArray", attributesArray);
+          const metadataEntries = metadata[0];
+          if (!Array.isArray(metadataEntries)) {
+            console.error("Invalid metadata entries for token:", tokenId);
+            continue;
+          }
 
-          const getName = (arr) =>
-            arr && arr[1] && arr[1].Text ? arr[1].Text : "Unknown";
-          const getDescription = (arr) =>
-            arr && arr[1] && arr[1].Text ? arr[1].Text : "No description";
-          const getImage = (arr) =>
-            arr && arr[1] && arr[1].Text ? arr[1].Text : "";
-          const getAttributes = (arr) => {
-            if (!arr || !arr[1] || !arr[1].Map) {
-              console.error("Invalid attributes array:", arr);
-              return {};
-            }
-            const attributesMap = arr[1].Map;
-            return attributesMap.reduce((acc, [key, value]) => {
-              if (value && value.Nat) {
-                acc[key] = Number(value.Nat);
-              } else if (value && value.Text) {
-                acc[key] = value.Text;
-              }
-              return acc;
-            }, {});
+          // Find the attributes, name, and image in metadata
+          const attributesEntry = metadataEntries.find(
+            (entry) => entry[0] === "attributes"
+          );
+          const nameEntry = metadataEntries.find(
+            (entry) => entry[0] === "name"
+          );
+          const imageEntry = metadataEntries.find(
+            (entry) => entry[0] === "image"
+          );
+
+          if (
+            !attributesEntry ||
+            !attributesEntry[1] ||
+            !attributesEntry[1].Map
+          ) {
+            console.error("No attributes found for token:", tokenId);
+            continue;
+          }
+
+          const attributesMap = attributesEntry[1].Map;
+          const name = nameEntry?.[1]?.Text ?? "Unknown";
+
+          // Helper function to find attribute value
+          const getAttributeValue = (name) => {
+            const attribute = attributesMap.find((attr) => attr[0] === name);
+            if (!attribute) return null;
+
+            const value = attribute[1];
+            if (value.Nat) return Number(value.Nat);
+            if (value.Text) return value.Text;
+            return null;
           };
 
-          const name = getName(nameArray);
-          const description = getDescription(descriptionArray);
-          const image = getImage(imageArray);
-          const attributes = getAttributes(attributesArray);
-          console.log("attributes", attributes);
-
-          // Fetch additional details
-          const avatarAttributes =
-            await actors.gamificationSystem.getAvatarAttributes(tokenId);
-          console.log("avatarAttributes", avatarAttributes);
-          const visitCount =
-            //   await actors.visitManager.getAvatarVisitCount(tokenId);
-            // console.log("visitCount", visitCount);
-
-            console.log({
+          // Determine NFT type and create appropriate object
+          if (attributesMap.some((attr) => attr[0] === "energy")) {
+            formattedAvatars.push({
+              type: "avatar",
               id: Number(tokenId),
               name,
-              description,
-              image,
-              type: attributes.avatarType,
-              quality: attributes.quality,
-              level: attributes.level,
-              energy: attributes.energy,
-              focus: attributes.focus,
-              vitality: attributes.vitality,
-              resilience: attributes.resilience,
-              hp: avatarAttributes.ok ? avatarAttributes.ok[1] : INITIAL_HP, // Use the HP from getAvatarAttributes
-
-              visitCount: 0, //Number(visitCount),
+              image: imageEntry?.[1]?.Text ?? null,
+              energy: getAttributeValue("energy") ?? 0,
+              focus: getAttributeValue("focus") ?? 0,
+              vitality: getAttributeValue("vitality") ?? 0,
+              resilience: getAttributeValue("resilience") ?? 0,
+              quality:
+                (getAttributeValue("quality") || "Common")
+                  .charAt(0)
+                  .toUpperCase() +
+                (getAttributeValue("quality") || "Common")
+                  .slice(1)
+                  .toLowerCase(),
+              avatarType: getAttributeValue("avatarType") ?? "Unknown",
+              level: getAttributeValue("level") ?? 1,
+              HP: getAttributeValue("HP") ?? 100,
+              visitCount: getAttributeValue("visitCount") ?? 0,
             });
-          return {
-            id: Number(tokenId),
-            name,
-            description,
-            image,
-            type: attributes.avatarType,
-            quality: attributes.quality,
-            level: attributes.level,
-            energy: attributes.energy,
-            focus: attributes.focus,
-            vitality: attributes.vitality,
-            resilience: attributes.resilience,
-            hp: avatarAttributes.ok
-              ? Number(avatarAttributes.ok[1])
-              : INITIAL_HP, // Use the HP from getAvatarAttributes
-            visitCount: 0,
-          };
-        })
-      );
+          } else if (attributesMap.some((attr) => attr[0] === "experience")) {
+            formattedAvatars.push({
+              type: "professional",
+              id: Number(tokenId),
+              name,
+              image: imageEntry?.[1]?.Text ?? null,
+              experience: getAttributeValue("experience") ?? 0,
+              reputation: getAttributeValue("reputation") ?? 0,
+              specialization: getAttributeValue("specialization") ?? "Unknown",
+              quality: getAttributeValue("quality") ?? "Common",
+              HP: getAttributeValue("HP") ?? 100,
+              visitCount: getAttributeValue("visitCount") ?? 0,
+              level: getAttributeValue("level") ?? 1,
+            });
+          } else if (
+            attributesMap.some((attr) => attr[0] === "technologyLevel")
+          ) {
+            formattedAvatars.push({
+              type: "facility",
+              id: Number(tokenId),
+              name,
+              image: imageEntry?.[1]?.Text ?? null,
+              technologyLevel: getAttributeValue("technologyLevel") ?? 0,
+              reputation: getAttributeValue("reputation") ?? 0,
+              services: getAttributeValue("services") ?? "Unknown",
+              quality: getAttributeValue("quality") ?? "Common",
+              HP: getAttributeValue("HP") ?? 100,
+              visitCount: getAttributeValue("visitCount") ?? 0,
+              level: getAttributeValue("level") ?? 1,
+            });
+          }
+        } catch (error) {
+          console.error(`Error processing token ${tokenId}:`, error);
+        }
+      }
 
-      // Filter out any null values that might have been created due to invalid data
-      const validAvatars = formattedAvatars.filter((avatar) => avatar !== null);
-      setUserAvatars(validAvatars);
+      console.log("Final formatted NFTs:", formattedAvatars);
+      setUserAvatars(formattedAvatars);
     } catch (error) {
-      console.error("Error fetching user avatars:", error);
+      console.error("Error fetching NFTs:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch NFTs",
+        variant: "destructive",
+      });
     }
   };
 
@@ -312,7 +418,7 @@ const Gamification = () => {
                   ...updatedAttributes,
                   level: avatar.level + 1,
                   tokens: avatar.tokens - avatar.level * 100,
-                  hp: INITIAL_HP + avatar.level * 10,
+                  hp: 100,
                 }
               : avatar
           )
@@ -322,7 +428,7 @@ const Gamification = () => {
           ...updatedAttributes,
           level: prevAvatar.level + 1,
           tokens: prevAvatar.tokens - prevAvatar.level * 100,
-          hp: INITIAL_HP + prevAvatar.level * 10,
+          hp: 100,
         }));
       }
     } catch (error) {
@@ -341,10 +447,7 @@ const Gamification = () => {
           avatar.id === selectedAvatar.id
             ? {
                 ...avatar,
-                hp: Math.min(
-                  avatar.hp + amount,
-                  INITIAL_HP + (avatar.level - 1) * 10
-                ),
+                hp: Math.min(avatar.hp + amount, 100),
                 tokens: avatar.tokens - amount,
               }
             : avatar
@@ -352,10 +455,7 @@ const Gamification = () => {
       );
       setSelectedAvatar((prevAvatar) => ({
         ...prevAvatar,
-        hp: Math.min(
-          prevAvatar.hp + amount,
-          INITIAL_HP + (prevAvatar.level - 1) * 10
-        ),
+        hp: Math.min(prevAvatar.hp + amount, 100),
         tokens: prevAvatar.tokens - amount,
       }));
     } catch (error) {
@@ -364,8 +464,8 @@ const Gamification = () => {
   };
 
   const manageAvatar = (avatar) => {
-    console.log("avatar", avatar);
     setSelectedAvatar(avatar);
+    setIsAvatarStatusOpen(true);
   };
 
   const transferAvatar = async (avatarId, principalAddress) => {
@@ -413,13 +513,11 @@ const Gamification = () => {
   };
 
   const TokenDisplay = () => (
-    <div className="flex items-center space-x-2 mb-4">
-      <div className="bg-gradient-to-r from-blue-400 to-blue-200 text-black font-bold py-2 px-4 rounded-full flex items-center">
-        <Coins className="mr-2" />
-        <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-blue-800">
-          {userTokens}
-          <span className="text-lg font-semibold"> Tokens</span>
-        </span>
+    <div className="flex items-center">
+      <div className="bg-blue-500/10 text-blue-500 font-semibold py-2 px-4 rounded-full flex items-center gap-2">
+        <Coins className="h-4 w-4" />
+        <span>{userTokens}</span>
+        <span>Tokens</span>
       </div>
     </div>
   );
@@ -485,84 +583,69 @@ const Gamification = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-      <h1 className="text-4xl font-bold text-foreground mb-6">
-        Wellness Avatar Platform
-      </h1>
-
-      <span className="flex justify-end">
+    <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
+        <h1 className="text-3xl sm:text-4xl font-bold text-foreground">
+          Wellness Avatar Platform
+        </h1>
         {userTokens !== null && <TokenDisplay />}
-      </span>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="lg:col-span-2">
-          <Tabs
-            defaultValue="avatars"
-            className="mb-6"
-          >
-            <TabsList className="flex justify-center bg-gray-800 text-white rounded-lg">
-              <TabsTrigger
-                value="avatars"
-                className="w-1/4 flex items-center justify-center gap-2 text-white"
-              >
-                <User size={18} /> Avatars
-              </TabsTrigger>
-              <TabsTrigger
-                value="professionals"
-                className="w-1/4 flex items-center justify-center gap-2 text-white"
-              >
-                <Briefcase size={18} /> Professionals
-              </TabsTrigger>
-              <TabsTrigger
-                value="facilities"
-                className="w-1/4 flex items-center justify-center gap-2 text-white"
-              >
-                <Building size={18} /> Facilities
-              </TabsTrigger>
-              <TabsTrigger
-                value="visits"
-                className="w-1/4 flex items-center justify-center gap-2 text-white"
-              >
-                <Calendar size={18} /> My Visits
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="avatars">
-              <h2 className="text-2xl font-semibold mb-4 text-blue-400">
+          <NavigationMenu
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+          />
+
+          {activeTab === "avatars" && (
+            <div className="mt-4 sm:mt-6">
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-blue-400">
                 User Avatars
               </h2>
               {userAvatars.length === 0 ? (
-                <p className="text-gray-400">
-                  No Avatars. Visit Professionals and Facilities to find
-                  Avatars.
-                </p>
+                <div className="text-center p-8 bg-gray-800/50 rounded-lg">
+                  <User className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                  <p className="text-gray-400">
+                    No Avatars. Visit Professionals and Facilities to find
+                    Avatars.
+                  </p>
+                </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {userAvatars.map((avatar) => (
-                    <NFTCard
-                      key={avatar.id}
-                      nft={avatar}
-                      showManage={true}
-                      onManage={() => {
-                        setSelectedAvatar(avatar);
-                        setIsAvatarStatusOpen(true);
-                      }}
-                      onTransfer={transferAvatar}
-                    />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4 max-w-[1200px] mx-auto">
+                  {userAvatars.map((nft) => (
+                    <div
+                      key={nft.id}
+                      className="w-full flex justify-center"
+                    >
+                      <NFTCard
+                        nft={{
+                          ...nft,
+                          hp: nft.HP,
+                        }}
+                        showManage={true}
+                        onManage={manageAvatar}
+                        onTransfer={transferAvatar}
+                        onVisit={() => console.log("Visit initiated")}
+                      />
+                    </div>
                   ))}
                 </div>
               )}
-            </TabsContent>
+            </div>
+          )}
 
-            <TabsContent value="professionals">
-              <div className="space-y-6">
+          {activeTab === "professionals" && (
+            <div className="mt-4 sm:mt-6">
+              <div className="space-y-4 sm:space-y-6">
                 <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                  <CardHeader className="p-4 sm:p-6">
+                    <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
                       <Users className="h-5 w-5 text-blue-500" />
                       Select Avatar for Visit
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-4 sm:p-6">
                     <Select
                       onValueChange={setSelectedAvatarForVisit}
                       value={selectedAvatarForVisit}
@@ -578,7 +661,7 @@ const Gamification = () => {
                           >
                             <span className="flex items-center gap-2">
                               <Star className="h-4 w-4 text-yellow-400" />
-                              {avatar.name} (Level {avatar.level})
+                              {avatar.avatarType} (Level {avatar.level})
                             </span>
                           </SelectItem>
                         ))}
@@ -587,7 +670,7 @@ const Gamification = () => {
                   </CardContent>
                 </Card>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   {professionals.map((prof) => (
                     <Card
                       key={prof.id}
@@ -641,86 +724,115 @@ const Gamification = () => {
                               View Available Slots
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-2xl">
-                            <DialogHeader>
-                              <DialogTitle className="text-xl font-bold">
+                          <DialogContent className="w-[95vw] max-w-2xl p-0">
+                            <DialogHeader className="p-4 sm:p-6 border-b">
+                              <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                                <Calendar className="h-5 w-5 text-blue-500" />
                                 Available Slots
                               </DialogTitle>
-                              <DialogDescription>
-                                Select a time slot to book your visit
+                              <DialogDescription className="text-sm text-muted-foreground">
+                                Select a time slot to book your visit with{" "}
+                                {prof.name}
                               </DialogDescription>
                             </DialogHeader>
 
-                            <ScrollArea className="h-[500px] w-full p-4">
-                              {availableSlots.length > 0 ? (
-                                <div className="space-y-6">
-                                  {Object.entries(
-                                    groupSlotsByDate(availableSlots)
-                                  ).map(([date, dateSlots]) => (
-                                    <div
-                                      key={date}
-                                      className="space-y-3"
-                                    >
-                                      <h3 className="text-lg font-semibold sticky top-0 bg-background py-2 border-b">
-                                        {date}
-                                      </h3>
-                                      <div className="grid grid-cols-2 gap-3">
-                                        {dateSlots.map((slot, index) => {
-                                          const { time } = formatDateTime(
-                                            slot.start
-                                          );
-                                          return (
-                                            <Card
-                                              key={index}
-                                              className="hover:bg-accent transition-colors"
-                                            >
-                                              <CardContent className="p-4">
-                                                <div className="flex items-center justify-between">
-                                                  <div className="space-y-1">
-                                                    <p className="text-sm font-medium flex items-center gap-2">
-                                                      <Clock className="h-4 w-4" />
-                                                      {time}
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                      Duration: 30 minutes
-                                                    </p>
+                            <ScrollArea className="max-h-[60vh] sm:max-h-[70vh] w-full">
+                              <div className="p-4 sm:p-6">
+                                {availableSlots.length > 0 ? (
+                                  <div className="space-y-6">
+                                    {Object.entries(
+                                      groupSlotsByDate(availableSlots)
+                                    ).map(([date, dateSlots]) => (
+                                      <div
+                                        key={date}
+                                        className="space-y-3"
+                                      >
+                                        <h3 className="text-lg font-semibold sticky top-0 bg-background py-2 border-b z-10">
+                                          {date}
+                                        </h3>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                          {dateSlots.map((slot, index) => {
+                                            const { time } = formatDateTime(
+                                              slot.start
+                                            );
+                                            return (
+                                              <Card
+                                                key={index}
+                                                className="hover:bg-accent transition-colors"
+                                              >
+                                                <CardContent className="p-3 sm:p-4">
+                                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                    <div className="space-y-1">
+                                                      <p className="text-sm font-medium flex items-center gap-2">
+                                                        <Clock className="h-4 w-4 text-blue-500" />
+                                                        {time}
+                                                      </p>
+                                                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                        <Clock className="h-3 w-3" />
+                                                        <span>30 minutes</span>
+                                                      </div>
+                                                    </div>
+                                                    <Button
+                                                      size="sm"
+                                                      onClick={() =>
+                                                        initiateVisit(
+                                                          slot.entityId,
+                                                          Number(slot.start)
+                                                        )
+                                                      }
+                                                      disabled={
+                                                        !selectedAvatarForVisit
+                                                      }
+                                                      className="w-full sm:w-auto"
+                                                    >
+                                                      Book Slot
+                                                    </Button>
                                                   </div>
-                                                  <Button
-                                                    size="sm"
-                                                    onClick={() =>
-                                                      initiateVisit(
-                                                        slot.entityId,
-                                                        Number(slot.start)
-                                                      )
-                                                    }
-                                                    disabled={
-                                                      !selectedAvatarForVisit
-                                                    }
-                                                  >
-                                                    Book
-                                                  </Button>
-                                                </div>
-                                              </CardContent>
-                                            </Card>
-                                          );
-                                        })}
+                                                </CardContent>
+                                              </Card>
+                                            );
+                                          })}
+                                        </div>
                                       </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
-                                  <Calendar className="h-12 w-12 mb-4 opacity-50" />
-                                  <p className="text-lg font-medium">
-                                    No available slots
-                                  </p>
-                                  <p className="text-sm">
-                                    Try selecting a different professional or
-                                    check back later
-                                  </p>
-                                </div>
-                              )}
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                                    <Calendar className="h-12 w-12 mb-4 opacity-50" />
+                                    <p className="text-lg font-medium text-center">
+                                      No available slots
+                                    </p>
+                                    <p className="text-sm text-center mt-1">
+                                      Try selecting a different professional or
+                                      check back later
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
                             </ScrollArea>
+
+                            {selectedAvatarForVisit && (
+                              <div className="border-t p-4 bg-muted/50">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <User className="h-4 w-4" />
+                                    <span>Selected Avatar:</span>
+                                    <Badge variant="secondary">
+                                      #{selectedAvatarForVisit}
+                                    </Badge>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      setSelectedAvatarForVisit(null)
+                                    }
+                                  >
+                                    Change
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                           </DialogContent>
                         </Dialog>
                       </CardContent>
@@ -728,18 +840,20 @@ const Gamification = () => {
                   ))}
                 </div>
               </div>
-            </TabsContent>
+            </div>
+          )}
 
-            <TabsContent value="facilities">
-              <div className="space-y-6">
+          {activeTab === "facilities" && (
+            <div className="mt-4 sm:mt-6">
+              <div className="space-y-4 sm:space-y-6">
                 <Card className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                  <CardHeader className="p-4 sm:p-6">
+                    <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
                       <Users className="h-5 w-5 text-emerald-500" />
                       Select Avatar for Visit
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-4 sm:p-6">
                     <Select
                       onValueChange={setSelectedAvatarForVisit}
                       value={selectedAvatarForVisit}
@@ -755,7 +869,7 @@ const Gamification = () => {
                           >
                             <span className="flex items-center gap-2">
                               <Star className="h-4 w-4 text-yellow-400" />
-                              {avatar.name} (Level {avatar.level})
+                              {avatar.avatarType} (Level {avatar.level})
                             </span>
                           </SelectItem>
                         ))}
@@ -764,7 +878,7 @@ const Gamification = () => {
                   </CardContent>
                 </Card>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   {facilities.map((facility) => (
                     <Card
                       key={facility.id}
@@ -822,11 +936,13 @@ const Gamification = () => {
                   ))}
                 </div>
               </div>
-            </TabsContent>
+            </div>
+          )}
 
-            <TabsContent value="visits">
+          {activeTab === "visits" && (
+            <div className="mt-4 sm:mt-6">
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-2 sm:space-y-0">
                   <CardTitle className="flex items-center gap-2">
                     <Calendar className="h-5 w-5 text-blue-500" />
                     My Visits
@@ -835,6 +951,7 @@ const Gamification = () => {
                     variant="outline"
                     onClick={fetchVisits}
                     disabled={isLoadingVisits}
+                    className="w-full sm:w-auto"
                   >
                     {isLoadingVisits ? (
                       <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
@@ -852,173 +969,172 @@ const Gamification = () => {
                   ) : visits.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No visits found. Click refresh to load visits.</p>
+                      <p className="text-lg font-medium">No visits found</p>
+                      <p className="text-sm">Click refresh to load visits</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {visits.map(
-                        (visit) => (
-                          console.log(visit),
-                          (
-                            <Card
-                              key={visit.visitId}
-                              className="hover:shadow-md transition-shadow"
-                            >
-                              <CardContent className="p-4">
-                                <div className="flex justify-between items-start mb-4">
-                                  <div>
-                                    <h3 className="font-semibold text-lg">
-                                      Visit #{Number(visit.visitId)}
-                                    </h3>
-                                    <p className="text-sm text-muted-foreground">
-                                      {visit.professionalId
-                                        ? `Professional ID: ${visit.professionalId}`
-                                        : visit.facilityId
-                                          ? `Facility ID: ${visit.facilityId}`
-                                          : "Unspecified Location"}
-                                    </p>
-                                  </div>
-                                </div>
+                      {visits.map((visit) => (
+                        <Card
+                          key={visit.visitId}
+                          className="hover:shadow-md transition-shadow"
+                        >
+                          <CardContent className="p-4">
+                            {/* Visit Header */}
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-2 sm:space-y-0">
+                              <div>
+                                <h3 className="font-semibold text-lg">
+                                  Visit #{Number(visit.visitId)}
+                                </h3>
+                                <p className="text-sm text-muted-foreground">
+                                  {visit.professionalId
+                                    ? `Professional ID: ${visit.professionalId}`
+                                    : visit.facilityId
+                                      ? `Facility ID: ${visit.facilityId}`
+                                      : "Unspecified Location"}
+                                </p>
+                              </div>
+                              <Badge
+                                variant={getStatusVariant(visit.status)}
+                                className="capitalize"
+                              >
+                                {Object.keys(visit.status)[0]}
+                              </Badge>
+                            </div>
 
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                  <div>
-                                    <p className="text-muted-foreground">
-                                      User ID
-                                    </p>
-                                    <p className="font-medium">
-                                      {visit.userId}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground">
-                                      Avatar ID
-                                    </p>
-                                    <p className="font-medium">
-                                      #{Number(visit.avatarId)}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground">
-                                      Visit Mode
-                                    </p>
-                                    <p className="font-medium">
-                                      {Object.keys(visit.visitMode)[0]}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground">
-                                      Current Status
-                                    </p>
-                                    <p className="font-medium">
-                                      {Object.keys(visit.status)[0]}
-                                    </p>
-                                  </div>
+                            {/* Visit Details Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                              <div className="space-y-1">
+                                <p className="text-muted-foreground">User ID</p>
+                                <p className="font-medium break-all">
+                                  {visit.userId}
+                                </p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-muted-foreground">
+                                  Avatar ID
+                                </p>
+                                <p className="font-medium">
+                                  #{Number(visit.avatarId)}
+                                </p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-muted-foreground">
+                                  Visit Mode
+                                </p>
+                                <p className="font-medium">
+                                  {Object.keys(visit.visitMode)[0]}
+                                </p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-muted-foreground">
+                                  Current Status
+                                </p>
+                                <p className="font-medium">
+                                  {Object.keys(visit.status)[0]}
+                                </p>
+                              </div>
+                            </div>
 
-                                  <div className="col-span-2 mt-2">
-                                    <p className="font-semibold mb-2">
-                                      Timeline
-                                    </p>
-                                    <div className="space-y-2 pl-4 border-l-2 border-muted">
-                                      {visit.timestamp.slotTime && (
-                                        <div>
-                                          <p className="text-muted-foreground">
-                                            Scheduled For
-                                          </p>
-                                          <p className="font-medium">
-                                            {new Date(
-                                              Number(visit.timestamp.slotTime) /
-                                                1_000_000
-                                            ).toLocaleString()}
-                                          </p>
-                                        </div>
-                                      )}
-                                      {visit.timestamp.bookingTime && (
-                                        <div>
-                                          <p className="text-muted-foreground">
-                                            Booked On
-                                          </p>
-                                          <p className="font-medium">
-                                            {new Date(
-                                              Number(
-                                                visit.timestamp.bookingTime
-                                              ) / 1_000_000
-                                            ).toLocaleString()}
-                                          </p>
-                                        </div>
-                                      )}
-                                      {visit.timestamp.completionTime && (
-                                        <div>
-                                          <p className="text-muted-foreground">
-                                            Completed On
-                                          </p>
-                                          <p className="font-medium">
-                                            {new Date(
-                                              Number(
-                                                visit.timestamp.completionTime
-                                              ) / 1_000_000
-                                            ).toLocaleString()}
-                                          </p>
-                                        </div>
-                                      )}
-                                      {visit.timestamp.cancellationTime && (
-                                        <div>
-                                          <p className="text-muted-foreground">
-                                            Cancelled On
-                                          </p>
-                                          <p className="font-medium">
-                                            {new Date(
-                                              Number(
-                                                visit.timestamp.cancellationTime
-                                              ) / 1_000_000
-                                            ).toLocaleString()}
-                                          </p>
-                                        </div>
-                                      )}
-                                      {visit.timestamp.rejectionTime && (
-                                        <div>
-                                          <p className="text-muted-foreground">
-                                            Rejected On
-                                          </p>
-                                          <p className="font-medium">
-                                            {new Date(
-                                              Number(
-                                                visit.timestamp.rejectionTime
-                                              ) / 1_000_000
-                                            ).toLocaleString()}
-                                          </p>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {visit.meetingLink && (
-                                    <div className="col-span-2 mt-2">
-                                      <p className="text-muted-foreground mb-1">
-                                        Meeting Link
+                            {/* Timeline Section */}
+                            <div className="mt-4">
+                              <p className="font-semibold mb-2">Timeline</p>
+                              <div className="space-y-3 pl-4 border-l-2 border-muted">
+                                {visit.timestamp.slotTime && (
+                                  <div className="relative">
+                                    <div className="absolute -left-[17px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-blue-500"></div>
+                                    <div className="space-y-1">
+                                      <p className="text-sm text-muted-foreground">
+                                        Scheduled For
                                       </p>
-                                      <a
-                                        href={visit.meetingLink}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-500 hover:underline break-all inline-flex items-center gap-2"
-                                      >
-                                        {visit.meetingLink}
-                                        <Globe className="h-4 w-4" />
-                                      </a>
+                                      <p className="text-sm font-medium">
+                                        {new Date(
+                                          Number(visit.timestamp.slotTime) /
+                                            1_000_000
+                                        ).toLocaleString()}
+                                      </p>
                                     </div>
-                                  )}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )
-                        )
-                      )}
+                                  </div>
+                                )}
+                                {visit.timestamp.bookingTime && (
+                                  <div className="relative">
+                                    <div className="absolute -left-[17px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-green-500"></div>
+                                    <div className="space-y-1">
+                                      <p className="text-sm text-muted-foreground">
+                                        Booked On
+                                      </p>
+                                      <p className="text-sm font-medium">
+                                        {new Date(
+                                          Number(visit.timestamp.bookingTime) /
+                                            1_000_000
+                                        ).toLocaleString()}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                                {visit.timestamp.completionTime && (
+                                  <div className="relative">
+                                    <div className="absolute -left-[17px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-green-500"></div>
+                                    <div className="space-y-1">
+                                      <p className="text-sm text-muted-foreground">
+                                        Completed On
+                                      </p>
+                                      <p className="text-sm font-medium">
+                                        {new Date(
+                                          Number(
+                                            visit.timestamp.completionTime
+                                          ) / 1_000_000
+                                        ).toLocaleString()}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                                {visit.timestamp.cancellationTime && (
+                                  <div className="relative">
+                                    <div className="absolute -left-[17px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-red-500"></div>
+                                    <div className="space-y-1">
+                                      <p className="text-sm text-muted-foreground">
+                                        Cancelled On
+                                      </p>
+                                      <p className="text-sm font-medium">
+                                        {new Date(
+                                          Number(
+                                            visit.timestamp.cancellationTime
+                                          ) / 1_000_000
+                                        ).toLocaleString()}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Meeting Link Section */}
+                            {visit.meetingLink && (
+                              <div className="mt-4">
+                                <p className="text-sm text-muted-foreground mb-1">
+                                  Meeting Link
+                                </p>
+                                <a
+                                  href={visit.meetingLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-500 hover:underline break-all inline-flex items-center gap-2"
+                                >
+                                  {visit.meetingLink}
+                                  <Globe className="h-4 w-4 flex-shrink-0" />
+                                </a>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
                     </div>
                   )}
                 </CardContent>
               </Card>
-            </TabsContent>
-          </Tabs>
+            </div>
+          )}
         </div>
       </div>
 

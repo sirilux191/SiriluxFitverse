@@ -1,5 +1,5 @@
 import React from "react";
-import { DataReceivedTable } from "../../../Health-Service/Tables/DataReceived";
+import { DataReceivedTable } from "../../../Health-Professional/Tables/DataReceived";
 
 export default function SharedWithYou() {
   return (

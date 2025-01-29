@@ -4,6 +4,7 @@ module {
 
     public let admin : Text = (env.admin);
     // Canister IDs
+    public let icrc_ledger_canister_id : Text = (env.icrc_ledger_canister_id);
     public let vetkdSystemCanisterID : Text = (env.vetkdSystemCanisterID);
     public let wellnessAvatarNFTCanisterID : Text = (env.wellnessAvatarNFTCanisterID);
     public let identityManagerCanisterID : Text = (env.identityManagerCanisterID);

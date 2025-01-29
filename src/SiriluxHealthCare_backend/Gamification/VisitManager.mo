@@ -106,7 +106,6 @@ actor class VisitManager() {
 
     private stable var bookedSlots : BTree.BTree<Text, BTree.BTree<Time.Time, BookedSlot>> = BTree.init<Text, BTree.BTree<Time.Time, BookedSlot>>(null);
     // For each avatar, track how many visits completed
-    private stable var avatarVisitCount : BTree.BTree<Nat, Nat> = BTree.init<Nat, Nat>(null);
 
     // Next unique ID for new visits
     private stable var nextVisitId : Nat = 1;
@@ -402,20 +401,12 @@ actor class VisitManager() {
 
     public query func getAllProfessionals() : async [ProfessionalInfo] {
         BTree.toValueArray(professionals);
-        // var professionals_list : [ProfessionalInfo] = [];
-        // for ((_, info) in BTree.entries(professionals)) {
-        //     professionals_list := Array.append(professionals_list, [info]);
-        // };
-        // professionals_list;
+
     };
 
     public query func getAllFacilities() : async [FacilityInfo] {
         BTree.toValueArray(facilities);
-        // var facilities_list : [FacilityInfo] = [];
-        // for ((_, info) in BTree.entries(facilities)) {
-        //     facilities_list := Array.append(facilities_list, [info]);
-        // };
-        // facilities_list;
+
     };
 
     // Optional: Add filtered queries
@@ -544,9 +535,6 @@ actor class VisitManager() {
                                 // Update professional/facility visits
                                 updateEntityVisits(idToVisit, nextVisitId);
 
-                                // Update avatar visit count
-                                updateAvatarVisitCount(avatarId);
-
                                 let currentVisitId = nextVisitId;
                                 nextVisitId += 1;
                                 #ok(currentVisitId);
@@ -580,14 +568,6 @@ actor class VisitManager() {
             case null { [] };
         };
         ignore BTree.insert(visitsMap, Text.compare, entityId, Array.append(currentVisits, [visitId]));
-    };
-
-    private func updateAvatarVisitCount(avatarId : Nat) {
-        let currentCount = switch (BTree.get(avatarVisitCount, Nat.compare, avatarId)) {
-            case (?count) { count };
-            case null { 0 };
-        };
-        ignore BTree.insert(avatarVisitCount, Nat.compare, avatarId, currentCount + 1);
     };
 
     public shared ({ caller }) func getBookedSlotsSelf() : async Result.Result<[BookedSlot], Text> {
@@ -688,15 +668,11 @@ actor class VisitManager() {
         };
     };
 
-    public query func getAvatarVisitCount(avatarId : Nat) : async Nat {
-        switch (BTree.get(avatarVisitCount, Nat.compare, avatarId)) {
-            case (?count) { count };
-            case null { 0 };
+    public shared ({ caller }) func completeVisit(professionalPrincipal : Principal, visitId : Nat) : async Result.Result<Visit, Text> {
+        if (not isPermittedCaller(caller)) {
+            return #err("Unauthorized caller");
         };
-    };
-
-    public shared ({ caller }) func completeVisit(visitId : Nat) : async Result.Result<Text, Text> {
-        let identityResult = await identityManager.getIdentity(caller);
+        let identityResult = await identityManager.getIdentity(professionalPrincipal);
 
         switch (identityResult) {
             case (#err(msg)) {
@@ -755,7 +731,7 @@ actor class VisitManager() {
                                 };
 
                                 ignore BTree.insert(visits, Nat.compare, visitId, updatedVisit);
-                                #ok("Visit completed successfully");
+                                #ok(updatedVisit);
                             };
                             case (#Completed) {
                                 #err("Visit is already completed");
@@ -774,8 +750,11 @@ actor class VisitManager() {
         };
     };
 
-    public shared ({ caller }) func rejectVisit(visitId : Nat) : async Result.Result<Text, Text> {
-        let identityResult = await identityManager.getIdentity(caller);
+    public shared ({ caller }) func rejectVisit(professionalPrincipal : Principal, visitId : Nat) : async Result.Result<Text, Text> {
+        if (not isPermittedCaller(caller)) {
+            return #err("Unauthorized caller");
+        };
+        let identityResult = await identityManager.getIdentity(professionalPrincipal);
 
         switch (identityResult) {
             case (#err(msg)) {

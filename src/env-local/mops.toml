@@ -2,7 +2,6 @@
 name = "env-local"
 version = "0.1.0"
 description = "environment variables for motoko"
-repository = "https://github.com/PanIndustrial-Org/icrc37.mo"
-keywords = [ "nft" ]
+keywords = [ "canister ids" ]
 license = "MIT"
 

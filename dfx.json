@@ -31,10 +31,7 @@
       "main": "src/SiriluxHealthCare_backend/User/UserService.mo",
       "type": "motoko"
     },
-    "UserShardManager": {
-      "main": "src/SiriluxHealthCare_backend/User/UserShardManager.mo",
-      "type": "motoko"
-    },
+
     "UserShard": {
       "main": "src/SiriluxHealthCare_backend/User/UserShard.mo",
       "type": "motoko"
@@ -56,10 +53,7 @@
       "main": "src/SiriluxHealthCare_backend/Facility/FacilityService.mo",
       "type": "motoko"
     },
-    "FacilityShardManager": {
-      "main": "src/SiriluxHealthCare_backend/Facility/FacilityShardManager.mo",
-      "type": "motoko"
-    },
+
     "FacilityShard": {
       "main": "src/SiriluxHealthCare_backend/Facility/FacilityShard.mo",
       "type": "motoko"
@@ -112,13 +106,11 @@
         "vetkd_system_api",
         "Identity_Manager",
         "User",
-        "UserShardManager",
         "UserShard",
         "Professional",
         "ProfessionalShardManager",
         "ProfessionalShard",
         "Facility",
-        "FacilityShardManager",
         "FacilityShard",
         "DataAsset",
         "DataAssetShardManager",

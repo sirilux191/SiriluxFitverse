@@ -12,9 +12,9 @@ import CanisterIDs "../Types/CanisterIDs";
 actor class UserShard() {
 
     // BTree to store user data
-    private var userMap : BTree.BTree<Text, Types.HealthIDUser> = BTree.init<Text, Types.HealthIDUser>(null);
+    private stable var userMap : BTree.BTree<Text, Types.HealthIDUser> = BTree.init<Text, Types.HealthIDUser>(null);
 
-    private var permittedPrincipal : [Principal] = [Principal.fromText(CanisterIDs.userShardManagerCanisterID), Principal.fromText(CanisterIDs.userServiceCanisterID)];
+    private stable var permittedPrincipal : [Principal] = [Principal.fromText(CanisterIDs.userServiceCanisterID)];
 
     // Function to insert a user
     public shared ({ caller }) func insertUser(userID : Text, user : Types.HealthIDUser) : async Result.Result<(), Text> {
@@ -104,10 +104,7 @@ actor class UserShard() {
         if (not isPermitted(caller)) {
             return #err("You are not permitted to call this function");
         };
-
-        let permittedPrincipalBuffer = Buffer.fromArray<Principal>(permittedPrincipal);
-        permittedPrincipalBuffer.add(Principal.fromText(principalToAdd));
-        permittedPrincipal := Buffer.toArray(permittedPrincipalBuffer);
+        permittedPrincipal := Array.append(permittedPrincipal, [Principal.fromText(principalToAdd)]);
         return #ok("Added Principal as Permitted Permitted Principal Successfully");
     };
 
@@ -116,19 +113,22 @@ actor class UserShard() {
             return #err("You are not permitted to call this function");
         };
 
-        let permittedPrincipalBuffer = Buffer.fromArray<Principal>(permittedPrincipal);
-        let indexToRemove = Buffer.indexOf<Principal>(Principal.fromText(principalToRemove), permittedPrincipalBuffer, Principal.equal);
-        switch (indexToRemove) {
-            case (?value) {
-                ignore permittedPrincipalBuffer.remove(value);
-                permittedPrincipal := Buffer.toArray(permittedPrincipalBuffer);
-                return #ok("Removed Principal from Permitted Principal Successfully");
-            };
-            case (null) {
-                return #err("Princial ID is not present to remove");
-            };
+        let principalToRemoveObj = Principal.fromText(principalToRemove);
+        let permittedPrincipalBuffer = Buffer.fromArray<Principal>(
+            Array.filter(
+                permittedPrincipal,
+                func(p : Principal) : Bool {
+                    not Principal.equal(p, principalToRemoveObj);
+                },
+            )
+        );
+
+        if (permittedPrincipalBuffer.size() == permittedPrincipal.size()) {
+            return #err("Principal ID is not present to remove");
         };
 
+        permittedPrincipal := Buffer.toArray(permittedPrincipalBuffer);
+        return #ok("Removed Principal from Permitted Principal Successfully");
     };
 
 };
