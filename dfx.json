@@ -41,10 +41,6 @@
       "main": "src/SiriluxHealthCare_backend/Professional/ProfessionalService.mo",
       "type": "motoko"
     },
-    "ProfessionalShardManager": {
-      "main": "src/SiriluxHealthCare_backend/Professional/ProfessionalShardManager.mo",
-      "type": "motoko"
-    },
     "ProfessionalShard": {
       "main": "src/SiriluxHealthCare_backend/Professional/ProfessionalShard.mo",
       "type": "motoko"
@@ -60,10 +56,6 @@
     },
     "DataAsset": {
       "main": "src/SiriluxHealthCare_backend/DataAsset/DataAssetService.mo",
-      "type": "motoko"
-    },
-    "DataAssetShardManager": {
-      "main": "src/SiriluxHealthCare_backend/DataAsset/DataAssetShardManager.mo",
       "type": "motoko"
     },
     "DataAssetShard": {
@@ -108,12 +100,10 @@
         "User",
         "UserShard",
         "Professional",
-        "ProfessionalShardManager",
         "ProfessionalShard",
         "Facility",
         "FacilityShard",
         "DataAsset",
-        "DataAssetShardManager",
         "DataAssetShard",
         "Shared_Activity",
         "SharedActivityShardManager",

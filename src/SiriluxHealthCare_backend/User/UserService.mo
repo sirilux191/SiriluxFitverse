@@ -38,6 +38,7 @@ actor class UserService() {
     private let IC = "aaaaa-aa";
     private let ic : Interface.Self = actor (IC);
 
+    private stable var creatingShard : Bool = false;
     // Function to create a new user
     public shared ({ caller }) func createUser(userData : Types.HealthIDUserData) : async Result.Result<Text, Text> {
         let userIDResult = generateUserID(); // Generate User ID
@@ -320,6 +321,10 @@ actor class UserService() {
     private func getShard(userID : Text) : async Result.Result<UserShard.UserShard, Text> {
 
         if (shardCount == 0 or totalUserCount >= shardCount * USERS_PER_SHARD) {
+            if (creatingShard) {
+                return #err("Shard creation is in progress");
+            };
+            creatingShard := true;
             // Create a new shard
             let newShardResult = await createShard();
             switch (newShardResult) {
@@ -327,6 +332,7 @@ actor class UserService() {
                     let newShardID = "shard-" # Nat.toText(shardCount);
                     ignore BTree.insert(shards, Text.compare, newShardID, newShardPrincipal);
                     shardCount += 1;
+                    creatingShard := false;
                     return #ok(actor (Principal.toText(newShardPrincipal)) : UserShard.UserShard);
                 };
                 case (#err(e)) {

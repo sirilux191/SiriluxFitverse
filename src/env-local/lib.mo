@@ -9,13 +9,10 @@ module {
     public let facilityServiceCanisterID : Text = ("br5f7-7uaaa-aaaaa-qaaca-cai");
     public let dataAssetCanisterID : Text = ("bkyz2-fmaaa-aaaaa-qaaaq-cai");
     public let sharedActivityCanisterID : Text = ("ahw5u-keaaa-aaaaa-qaaha-cai");
-    public let userShardManagerCanisterID : Text = ("ctiya-peaaa-aaaaa-qaaja-cai");
-    public let professionalShardManagerCanisterID : Text = ("a4tbr-q4aaa-aaaaa-qaafq-cai");
-    public let facilityShardManagerCanisterID : Text = ("b77ix-eeaaa-aaaaa-qaada-cai");
-    public let dataAssetShardManagerCanisterID : Text = ("be2us-64aaa-aaaaa-qaabq-cai");
+
     public let sharedActivityShardManagerCanisterID : Text = ("aovwi-4maaa-aaaaa-qaagq-cai");
     public let xpSystemCanisterID : Text = ("cgpjn-omaaa-aaaaa-qaakq-cai");
     public let gamificationSystemCanisterID : Text = ("by6od-j4aaa-aaaaa-qaadq-cai");
     public let visitManagerCanisterID : Text = ("cuj6u-c4aaa-aaaaa-qaajq-cai");
-    public let marketplaceShardManagerCanisterID : Text = ("c2lt4-zmaaa-aaaaa-qaaiq-cai");
+    // public let marketplaceShardManagerCanisterID : Text = ("c2lt4-zmaaa-aaaaa-qaaiq-cai");
 };

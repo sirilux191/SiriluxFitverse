@@ -40,8 +40,8 @@ actor FacilityService {
     private stable var facilityShardWasmModule : [Nat8] = [];
 
     private stable var pendingRequests : Map.Map<Principal, HealthIDFacility> = Map.new<Principal, HealthIDFacility>(); // Map of pending requests
-    private stable var adminPrincipal = ""; // Admin Principal
-    private stable var isAdminRegistered = false; // Admin Registration Status
+
+    private stable var creatingShard : Bool = false;
 
     public shared ({ caller }) func createFacilityRequest(facilityInfo : Blob, licenseInfo : Blob, demographicInfo : Blob, servicesOfferedInfo : Blob) : async Result.Result<Text, Text> {
         let tempFacility : HealthIDFacility = {
@@ -59,14 +59,14 @@ actor FacilityService {
     };
 
     public shared ({ caller }) func getPendingFacilityRequests() : async Result.Result<[(Principal, HealthIDFacility)], Text> {
-        if (not isAdmin(caller)) {
+        if (not (await isAdmin(caller))) {
             return #err("Unauthorized: only admins can view pending requests");
         };
         #ok(Map.toArray(pendingRequests));
     };
 
     public shared ({ caller }) func approveFacilityRequest(requestPrincipal : Principal) : async Result.Result<Text, Text> {
-        if (not isAdmin(caller)) {
+        if (not (await isAdmin(caller))) {
             return #err("Unauthorized: only admins can approve requests");
         };
 
@@ -76,42 +76,36 @@ actor FacilityService {
                 let idResult = await generateFacilityID();
                 let uuidResult = await generateUUID();
 
-                switch (idResult) {
-                    case (#ok(id)) {
-                        let approvedFacility : HealthIDFacility = {
-                            IDNum = id;
-                            UUID = uuidResult;
-                            MetaData = facility.MetaData;
-                        };
-                        let registerResult = await registerFacility(id, approvedFacility, requestPrincipal);
-                        switch (registerResult) {
+                let approvedFacility : HealthIDFacility = {
+                    IDNum = idResult;
+                    UUID = uuidResult;
+                    MetaData = facility.MetaData;
+                };
+                let registerResult = await registerFacility(idResult, approvedFacility, requestPrincipal);
+                switch (registerResult) {
+                    case (#ok(_)) {
+                        Map.delete(pendingRequests, Map.phash, requestPrincipal);
+                        let identityResult = await identityManager.registerIdentity(requestPrincipal, idResult, "Facility");
+                        switch (identityResult) {
                             case (#ok(_)) {
-                                Map.delete(pendingRequests, Map.phash, requestPrincipal);
-                                let identityResult = await identityManager.registerIdentity(requestPrincipal, id, "Facility");
-                                switch (identityResult) {
-                                    case (#ok(_)) {
-                                        #ok("Facility has been successfully approved");
-                                    };
-                                    case (#err(e)) {
-                                        #err("Failed to register identity: " # e);
-                                    };
-                                };
+                                #ok("Facility has been successfully approved");
                             };
-                            case (#err(err)) {
-                                #err("Failed to register facility: " # err);
+                            case (#err(e)) {
+                                #err("Failed to register identity: " # e);
                             };
                         };
                     };
                     case (#err(err)) {
-                        #err("Failed to generate ID: " # err);
+                        #err("Failed to register facility: " # err);
                     };
                 };
+
             };
         };
     };
 
     public shared ({ caller }) func rejectFacilityRequest(requestPrincipal : Principal) : async Result.Result<Text, Text> {
-        if (not isAdmin(caller)) {
+        if (not (await isAdmin(caller))) {
             return #err("Unauthorized: only admins can reject requests");
         };
 
@@ -269,17 +263,12 @@ actor FacilityService {
         };
     };
 
-    private func isAdmin(principal : Principal) : Bool {
-        adminPrincipal == Principal.toText(principal);
-    };
-
-    public shared ({ caller }) func registerAdmin() : async Bool {
-        if (isAdminRegistered or Principal.isAnonymous(caller)) {
-            return false;
+    private func isAdmin(caller : Principal) : async Bool {
+        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
+            true;
+        } else {
+            false;
         };
-        adminPrincipal := Principal.toText(caller);
-        isAdminRegistered := true;
-        true;
     };
 
     // Function to get the caller's principal ID
@@ -320,11 +309,11 @@ actor FacilityService {
 
     //Shard Management
 
-    public func generateFacilityID() : async Result.Result<Text, Text> {
-        #ok(Nat.toText(STARTING_FACILITY_ID + totalFacilityCount));
+    private func generateFacilityID() : async Text {
+        (Nat.toText(STARTING_FACILITY_ID + totalFacilityCount));
     };
 
-    public func generateUUID() : async Text {
+    private func generateUUID() : async Text {
         let g = Source.Source();
         UUID.toText(await g.new());
     };
@@ -342,14 +331,19 @@ actor FacilityService {
         };
     };
 
-    public func getShard(facilityID : Text) : async Result.Result<FacilityShard.FacilityShard, Text> {
+    private func getShard(facilityID : Text) : async Result.Result<FacilityShard.FacilityShard, Text> {
         if (shardCount == 0 or totalFacilityCount >= shardCount * FACILITIES_PER_SHARD) {
+            if (creatingShard) {
+                return #err("Shard creation is in progress");
+            };
+            creatingShard := true;
             let newShardResult = await createShard();
             switch (newShardResult) {
                 case (#ok(newShardPrincipal)) {
                     let newShardID = getShardID(facilityID);
                     ignore BTree.insert(shards, Text.compare, newShardID, newShardPrincipal);
                     shardCount += 1;
+                    creatingShard := false;
                     return #ok(actor (Principal.toText(newShardPrincipal)) : FacilityShard.FacilityShard);
                 };
                 case (#err(e)) {
@@ -368,20 +362,6 @@ actor FacilityService {
             };
         };
     };
-
-    // public func registerFacility(caller : Principal, facilityID : Text) : async Result.Result<(), Text> {
-    //     switch (BTree.get(facilityShardMap, Principal.compare, caller)) {
-    //         case (?_) {
-    //             #err("Facility already registered");
-    //         };
-    //         case null {
-    //             ignore BTree.insert(facilityShardMap, Principal.compare, caller, facilityID);
-    //             ignore BTree.insert(reverseFacilityShardMap, Text.compare, facilityID, caller);
-    //             totalFacilityCount += 1;
-    //             #ok(());
-    //         };
-    //     };
-    // };
 
     public func getFacilityID(caller : Principal) : async Result.Result<Text, Text> {
         switch (BTree.get(facilityShardMap, Principal.compare, caller)) {
@@ -405,7 +385,7 @@ actor FacilityService {
         };
     };
 
-    public func removeFacility(caller : Principal) : async Result.Result<(), Text> {
+    private func removeFacility(caller : Principal) : async Result.Result<(), Text> {
         switch (BTree.get(facilityShardMap, Principal.compare, caller)) {
             case (?facilityID) {
                 ignore BTree.delete(facilityShardMap, Principal.compare, caller);
@@ -463,12 +443,61 @@ actor FacilityService {
     };
 
     public shared ({ caller }) func updateWasmModule(wasmModule : [Nat8]) : async Result.Result<(), Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("You are not Admin, only admin can perform this action");
+        };
         if (Array.size(wasmModule) < 8) {
             return #err("Invalid WASM module: too small");
         };
 
         facilityShardWasmModule := wasmModule;
         #ok(());
+    };
+
+    private func upgradeCodeOnShard(canisterPrincipal : Principal) : async Result.Result<(), Text> {
+        try {
+            await ic.install_code({
+                arg = [];
+                wasm_module = facilityShardWasmModule;
+                mode = #upgrade;
+                canister_id = canisterPrincipal;
+            });
+            #ok(());
+        } catch (e) {
+            #err("Failed to upgrade code on shard: " # Error.message(e));
+        };
+    };
+
+    public shared ({ caller }) func updateExistingShards() : async Result.Result<(), Text> {
+
+        if (not (await isAdmin(caller))) {
+            return #err("You are not Admin, only admin can perform this action");
+        };
+
+        if (Array.size(facilityShardWasmModule) == 0) {
+            return #err("Wasm module not set. Please update the Wasm module first.");
+        };
+
+        var updatedCount = 0;
+        var errorCount = 0;
+
+        for ((shardID, principal) in BTree.entries(shards)) {
+            let installResult = await upgradeCodeOnShard(principal);
+            switch (installResult) {
+                case (#ok(())) {
+                    updatedCount += 1;
+                };
+                case (#err(_)) {
+                    errorCount += 1;
+                };
+            };
+        };
+
+        if (errorCount > 0) {
+            #err("Updated " # Nat.toText(updatedCount) # " shards, but encountered errors in " # Nat.toText(errorCount) # " shards");
+        } else {
+            #ok(());
+        };
     };
 
     public query func getTotalFacilityCount() : async Nat {
@@ -481,5 +510,39 @@ actor FacilityService {
 
     public query func getFacilitiesPerShard() : async Nat {
         FACILITIES_PER_SHARD;
+    };
+
+    // Function to add a permitted principal to all shards
+    public shared ({ caller }) func addPermittedPrincipalToAllShards(principalToAdd : Text) : async Result.Result<Text, Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("You are not Admin, only admin can perform this action");
+        };
+
+        let resultsBuffer = Buffer.fromArray<Result.Result<Text, Text>>([]); // Initialize a buffer for results
+        for ((shardID, shardPrincipal) in BTree.entries(shards)) {
+            let shard = actor (Principal.toText(shardPrincipal)) : FacilityShard.FacilityShard;
+            let result = await shard.addPermittedPrincipal(principalToAdd);
+            resultsBuffer.add(result); // Add result to the buffer
+        };
+
+        // Optionally, you can process the results in the buffer here if needed
+        return #ok("Added Principal to all shards successfully");
+    };
+
+    // Function to remove a permitted principal from all shards
+    public shared ({ caller }) func removePermittedPrincipalFromAllShards(principalToRemove : Text) : async Result.Result<Text, Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("You are not Admin, only admin can perform this action");
+        };
+
+        let resultsBuffer = Buffer.fromArray<Result.Result<Text, Text>>([]); // Initialize a buffer for results
+        for ((shardID, shardPrincipal) in BTree.entries(shards)) {
+            let shard = actor (Principal.toText(shardPrincipal)) : FacilityShard.FacilityShard;
+            let result = await shard.removePermittedPrincipal(principalToRemove);
+            resultsBuffer.add(result); // Add result to the buffer
+        };
+
+        // Optionally, you can process the results in the buffer here if needed
+        return #ok("Removed Principal from all shards successfully");
     };
 };

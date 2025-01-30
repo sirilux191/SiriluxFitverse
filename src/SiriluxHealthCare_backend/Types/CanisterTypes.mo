@@ -1,5 +1,3 @@
-import GamificationSystem "../Gamification/GamificationSystem";
-import VisitManager "../Gamification/VisitManager";
 import IdentityManager "../IdentityManager/IdentityManager";
 import SharedActivityService "../SharedActivitySystem/SharedActivityService";
 import XPSystem "../XPSystem/XPRewardSystem";
@@ -26,11 +24,9 @@ module CanisterTypes {
 
     public let identityManager : IdentityManager.IdentityManager = actor (CanisterIDs.identityManagerCanisterID);
     public let vetkd_system_api : VETKD_SYSTEM_API = actor (CanisterIDs.vetkdSystemCanisterID);
-    public let gamificationSystem : GamificationSystem.GamificationSystem = actor (CanisterIDs.gamificationSystemCanisterID);
-    public let visitManager : VisitManager.VisitManager = actor (CanisterIDs.visitManagerCanisterID);
+
     public let xpSystem : XPSystem.XPRewardSystem = actor (CanisterIDs.xpSystemCanisterID);
     public let sharedActivityService : SharedActivityService.SharedActivityService = actor (CanisterIDs.sharedActivityCanisterID);
 
-    // User Shard Manager Canister ID
 
 };
