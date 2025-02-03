@@ -16,16 +16,13 @@ import UUID "mo:uuid/UUID";
 
 import Types "../Types";
 import CanisterTypes "../Types/CanisterTypes";
-import Hex "../utility/Hex";
 import Interface "../utility/ic-management-interface";
 import FacilityShard "FacilityShard";
 
 actor FacilityService {
+
     type HealthIDFacility = Types.HealthIDFacility;
-
     let identityManager = CanisterTypes.identityManager;
-
-    let vetkd_system_api = CanisterTypes.vetkd_system_api;
 
     private let IC = "aaaaa-aa";
     private let ic : Interface.Self = actor (IC);
@@ -34,9 +31,11 @@ actor FacilityService {
     private stable var shardCount : Nat = 0;
     private let FACILITIES_PER_SHARD : Nat = 20_480;
     private let STARTING_FACILITY_ID : Nat = 1_000_000_000;
+
     private stable let shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
-    private stable var facilityShardMap : BTree.BTree<Principal, Text> = BTree.init<Principal, Text>(null);
-    private stable var reverseFacilityShardMap : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
+
+    private stable var facilityPrincipalIDMap : BTree.BTree<Principal, Text> = BTree.init<Principal, Text>(null);
+    private stable var reverseFacilityPrincipalIDMap : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
     private stable var facilityShardWasmModule : [Nat8] = [];
 
     private stable var pendingRequests : Map.Map<Principal, HealthIDFacility> = Map.new<Principal, HealthIDFacility>(); // Map of pending requests
@@ -63,6 +62,23 @@ actor FacilityService {
             return #err("Unauthorized: only admins can view pending requests");
         };
         #ok(Map.toArray(pendingRequests));
+    };
+
+    public shared ({ caller }) func getFacilityStatus() : async Result.Result<Text, Text> {
+        switch (Map.get(pendingRequests, Map.phash, caller)) {
+            case (?_) { return #ok("Pending") };
+            case (null) {
+                let idResult = await getFacilityID(caller);
+                switch (idResult) {
+                    case (#ok(_)) {
+                        #ok("Approved");
+                    };
+                    case (#err(_)) {
+                        #ok("Not Registered");
+                    };
+                };
+            };
+        };
     };
 
     public shared ({ caller }) func approveFacilityRequest(requestPrincipal : Principal) : async Result.Result<Text, Text> {
@@ -118,54 +134,6 @@ actor FacilityService {
         };
     };
 
-    public shared ({ caller }) func getFacilityStatus() : async Result.Result<Text, Text> {
-        switch (Map.get(pendingRequests, Map.phash, caller)) {
-            case (?_) { return #ok("Pending") };
-            case (null) {
-                let idResult = await getFacilityID(caller);
-                switch (idResult) {
-                    case (#ok(_)) {
-                        #ok("Approved");
-                    };
-                    case (#err(_)) {
-                        #ok("Not Registered");
-                    };
-                };
-            };
-        };
-    };
-
-    private func registerFacility(id : Text, facility : HealthIDFacility, requestPrincipal : Principal) : async Result.Result<(), Text> {
-        let shardResult = await getShard(id);
-        switch (shardResult) {
-            case (#ok(shard)) {
-                let result = await shard.insertFacility(id, facility);
-                switch (result) {
-                    case (#ok(_)) {
-
-                        switch (BTree.get(facilityShardMap, Principal.compare, requestPrincipal)) {
-                            case (?_) {
-                                #err("Facility already registered");
-                            };
-                            case null {
-                                ignore BTree.insert(facilityShardMap, Principal.compare, requestPrincipal, id);
-                                ignore BTree.insert(reverseFacilityShardMap, Text.compare, id, requestPrincipal);
-                                totalFacilityCount += 1;
-                                #ok(());
-                            };
-                        };
-
-                    };
-                    case (#err(err)) {
-                        #err(err);
-                    };
-                };
-            };
-            case (#err(err)) {
-                #err(err);
-            };
-        };
-    };
     public shared ({ caller }) func updateFacility(facilityInfo : Blob, licenseInfo : Blob) : async Result.Result<Text, Text> {
         let idResult = await getFacilityID(caller);
         switch (idResult) {
@@ -245,6 +213,26 @@ actor FacilityService {
         };
     };
 
+    private func registerFacility(id : Text, facility : HealthIDFacility, requestPrincipal : Principal) : async Result.Result<(), Text> {
+        let shardResult = await getShard(id);
+        switch (shardResult) {
+            case (#ok(shard)) {
+                let result = await shard.insertFacility(id, facility);
+                switch (result) {
+                    case (#ok(_)) {
+                        await registerFacilityInternal(id, requestPrincipal);
+                    };
+                    case (#err(err)) {
+                        #err(err);
+                    };
+                };
+            };
+            case (#err(err)) {
+                #err(err);
+            };
+        };
+    };
+
     public shared ({ caller }) func getFacilityInfo() : async Result.Result<HealthIDFacility, Text> {
         let idResult = await getFacilityID(caller);
         switch (idResult) {
@@ -263,49 +251,18 @@ actor FacilityService {
         };
     };
 
-    private func isAdmin(caller : Principal) : async Bool {
-        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
-            true;
-        } else {
-            false;
+    public shared ({ caller }) func getFacilityByID(id : Text) : async Result.Result<HealthIDFacility, Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("Unauthorized: only admins can view facilities by ID");
+        };
+        let shardResult = await getShard(id);
+        switch (shardResult) {
+            case (#ok(shard)) {
+                await shard.getFacility(id);
+            };
+            case (#err(err)) { #err("Failed to get shard: " # err) };
         };
     };
-
-    // Function to get the caller's principal ID
-    public shared query ({ caller }) func whoami() : async Text {
-        Principal.toText(caller);
-    };
-
-    //VetKey Section
-
-    public func symmetric_key_verification_key() : async Text {
-        let { public_key } = await vetkd_system_api.vetkd_public_key({
-            canister_id = null;
-            derivation_path = Array.make(Text.encodeUtf8("symmetric_key"));
-            key_id = { curve = #bls12_381; name = "test_key_1" };
-        });
-        Hex.encode(Blob.toArray(public_key));
-    };
-
-    public shared ({ caller }) func encrypted_symmetric_key_for_facility(encryption_public_key : Blob) : async Result.Result<Text, Text> {
-        if (Principal.isAnonymous(caller)) {
-            return #err("Please log in with a wallet or internet identity.");
-        };
-
-        let buf = Buffer.Buffer<Nat8>(32);
-        buf.append(Buffer.fromArray(Blob.toArray(Text.encodeUtf8(Principal.toText(caller)))));
-        let derivation_id = Blob.fromArray(Buffer.toArray(buf));
-
-        let { encrypted_key } = await vetkd_system_api.vetkd_encrypted_key({
-            derivation_id;
-            public_key_derivation_path = Array.make(Text.encodeUtf8("symmetric_key"));
-            key_id = { curve = #bls12_381; name = "test_key_1" };
-            encryption_public_key;
-        });
-
-        #ok(Hex.encode(Blob.toArray(encrypted_key)));
-    };
-    //End of VetKey Section
 
     //Shard Management
 
@@ -316,6 +273,41 @@ actor FacilityService {
     private func generateUUID() : async Text {
         let g = Source.Source();
         UUID.toText(await g.new());
+    };
+
+    // Function to get the caller's principal ID
+    public shared query ({ caller }) func whoami() : async Text {
+        Principal.toText(caller);
+    };
+
+    public query func getTotalFacilityCountSignedUp() : async Nat {
+        totalFacilityCount;
+    };
+
+    public shared ({ caller }) func getFacilityIDSelf() : async Result.Result<Text, Text> {
+        await getFacilityID(caller);
+    };
+
+    public func getFacilityID(caller : Principal) : async Result.Result<Text, Text> {
+        switch (BTree.get(facilityPrincipalIDMap, Principal.compare, caller)) {
+            case (?facilityID) {
+                #ok(facilityID);
+            };
+            case null {
+                #err("Facility ID not found for the given principal");
+            };
+        };
+    };
+
+    public func getFacilityPrincipalByID(facilityID : Text) : async Result.Result<Principal, Text> {
+        switch (BTree.get(reverseFacilityPrincipalIDMap, Text.compare, facilityID)) {
+            case (?principal) {
+                #ok(principal);
+            };
+            case null {
+                #err("Facility not found");
+            };
+        };
     };
 
     private func getShardID(facilityID : Text) : Text {
@@ -359,42 +351,6 @@ actor FacilityService {
             };
             case null {
                 #err("Shard not found for facility ID: " # facilityID);
-            };
-        };
-    };
-
-    public func getFacilityID(caller : Principal) : async Result.Result<Text, Text> {
-        switch (BTree.get(facilityShardMap, Principal.compare, caller)) {
-            case (?facilityID) {
-                #ok(facilityID);
-            };
-            case null {
-                #err("Facility ID not found for the given principal");
-            };
-        };
-    };
-
-    public func getFacilityPrincipalByID(facilityID : Text) : async Result.Result<Principal, Text> {
-        switch (BTree.get(reverseFacilityShardMap, Text.compare, facilityID)) {
-            case (?principal) {
-                #ok(principal);
-            };
-            case null {
-                #err("Facility not found");
-            };
-        };
-    };
-
-    private func removeFacility(caller : Principal) : async Result.Result<(), Text> {
-        switch (BTree.get(facilityShardMap, Principal.compare, caller)) {
-            case (?facilityID) {
-                ignore BTree.delete(facilityShardMap, Principal.compare, caller);
-                ignore BTree.delete(reverseFacilityShardMap, Text.compare, facilityID);
-                totalFacilityCount -= 1;
-                #ok(());
-            };
-            case null {
-                #err("Facility not found");
             };
         };
     };
@@ -500,16 +456,40 @@ actor FacilityService {
         };
     };
 
-    public query func getTotalFacilityCount() : async Nat {
-        totalFacilityCount;
+    private func registerFacilityInternal(facilityID : Text, requestPrincipal : Principal) : async Result.Result<(), Text> {
+        switch (BTree.get(facilityPrincipalIDMap, Principal.compare, requestPrincipal)) {
+            case (?_) {
+                #err("Facility already registered");
+            };
+            case null {
+                ignore BTree.insert(facilityPrincipalIDMap, Principal.compare, requestPrincipal, facilityID);
+                ignore BTree.insert(reverseFacilityPrincipalIDMap, Text.compare, facilityID, requestPrincipal);
+                totalFacilityCount += 1;
+                #ok(());
+            };
+        };
     };
 
-    public query func getShardCount() : async Nat {
-        shardCount;
+    private func removeFacility(caller : Principal) : async Result.Result<(), Text> {
+        switch (BTree.get(facilityPrincipalIDMap, Principal.compare, caller)) {
+            case (?facilityID) {
+                ignore BTree.delete(facilityPrincipalIDMap, Principal.compare, caller);
+                ignore BTree.delete(reverseFacilityPrincipalIDMap, Text.compare, facilityID);
+                totalFacilityCount -= 1;
+                #ok(());
+            };
+            case null {
+                #err("Facility not found");
+            };
+        };
     };
 
-    public query func getFacilitiesPerShard() : async Nat {
-        FACILITIES_PER_SHARD;
+    private func isAdmin(caller : Principal) : async Bool {
+        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
+            true;
+        } else {
+            false;
+        };
     };
 
     // Function to add a permitted principal to all shards

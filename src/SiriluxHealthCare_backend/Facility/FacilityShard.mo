@@ -77,13 +77,6 @@ actor class FacilityShard() {
         BTree.size(facilityMap);
     };
 
-    public query ({ caller }) func getAllFacilityIDs() : async Result.Result<[Text], Text> {
-        if (not isPermitted(caller)) {
-            return #err("You are not permitted to call this function");
-        };
-        #ok(Array.map(BTree.toArray(facilityMap), func((id, _) : (Text, Types.HealthIDFacility)) : Text { id }));
-    };
-
     private func isPermitted(principal : Principal) : Bool {
         for (permittedPrincipal in permittedPrincipal.vals()) {
             if (principal == permittedPrincipal) {

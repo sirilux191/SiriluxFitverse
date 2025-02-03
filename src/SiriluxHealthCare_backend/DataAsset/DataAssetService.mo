@@ -12,7 +12,9 @@ import Text "mo:base/Text";
 import Time "mo:base/Time";
 import BTree "mo:stableheapbtreemap/BTree";
 
+import SharedActivityService "../SharedActivitySystem/SharedActivityService";
 import Types "../Types";
+import CanisterIDs "../Types/CanisterIDs";
 import CanisterTypes "../Types/CanisterTypes";
 import Hex "../utility/Hex";
 import Interface "../utility/ic-management-interface";
@@ -24,9 +26,8 @@ actor DataAssetService {
     type SharedType = Types.SharedType;
     type sharedActivityInfo = Types.sharedActivityInfo;
 
-    let sharedActivityService = CanisterTypes.sharedActivityService;
+    let sharedActivityService : SharedActivityService.SharedActivityService = actor (CanisterIDs.sharedActivityCanisterID);
     let identityManager = CanisterTypes.identityManager;
-    let xpRewardSystem = CanisterTypes.xpSystem;
 
     private stable var totalAssetCount : Nat = 1;
     private stable var shardCount : Nat = 0;
@@ -55,32 +56,12 @@ actor DataAssetService {
                         };
                         let result = await shard.insertDataAsset(userID, timestamp, updatedAsset, caller);
                         switch (result) {
-                            case (#ok(insertDataAssetResult)) {
-                                let shardID = await getShardIDFromAssetID(assetNum);
-                                switch (shardID) {
-                                    case (#ok(id)) {
-                                        let updateResult = await updateUserShardMap(userID, id);
-                                        switch (updateResult) {
-                                            case (#ok(_)) {
-                                                // Reward XP for the upload
-                                                let xpResult = await xpRewardSystem.rewardXPForUpload(userID);
-                                                switch (xpResult) {
-                                                    case (#ok(xp)) {
-                                                        return #ok(insertDataAssetResult);
-                                                    };
-                                                    case (#err(e)) {
-                                                        // XP reward failed, but asset upload was successful
-                                                        return #ok(insertDataAssetResult);
-                                                    };
-                                                };
-                                            };
-                                            case (#err(e)) {
-                                                return #err("Failed to update user shard map: " # e);
-                                            };
-                                        };
-                                    };
-                                    case (#err(e)) { return #err(e) };
-                                };
+                            case (#ok(_insertDataAssetResult)) {
+
+                                incrementTotalAssetCount();
+                                let shardID = getShardID(assetNum);
+                                await updateUserShardMap(userID, shardID);
+
                             };
                             case (#err(e)) { return #err(e) };
                         };
@@ -118,7 +99,7 @@ actor DataAssetService {
         };
     };
 
-    public func getDataAsset(caller : Principal, assetID : Text) : async Result.Result<DataAsset, Text> {
+    public shared ({ caller }) func getDataAsset(assetID : Text) : async Result.Result<DataAsset, Text> {
 
         let parts = Text.split(assetID, #text("-"));
         switch (parts.next(), parts.next(), parts.next()) {
@@ -238,36 +219,6 @@ actor DataAssetService {
         };
     };
 
-    public shared ({ caller }) func getReceivedDataAssets() : async Result.Result<[(Types.sharedActivityInfo, DataAsset)], Text> {
-        let userIDResult = await getUserID(caller);
-        switch (userIDResult) {
-            case (#ok(userID)) {
-
-                let receivedActivitiesResult = await sharedActivityService.getReceivedActivities(caller);
-                switch (receivedActivitiesResult) {
-                    case (#ok(activities)) {
-                        let receivedAssets = Buffer.Buffer<(Types.sharedActivityInfo, DataAsset)>(0);
-                        for (activity in activities.vals()) {
-                            let assetResult = await getDataAsset(caller, activity.assetID);
-                            switch (assetResult) {
-                                case (#ok(asset)) {
-                                    receivedAssets.add((activity, asset));
-                                };
-                                case (#err(_)) { /* Skip if error */ };
-                            };
-                        };
-                        #ok(Buffer.toArray(receivedAssets))
-                        // #ok(activities);
-                    };
-                    case (#err(e)) {
-                        #err("Failed to get received activities: " # e);
-                    };
-                };
-            };
-            case (#err(e)) { #err("Error getting user ID: " # e) };
-        };
-    };
-
     // By Facility & Professional
     private func uploadDataAssetForUser(caller : Principal, asset : DataAsset, userID : Text, uploadKey : Text) : async Result.Result<(Text, Text), Text> {
 
@@ -302,31 +253,16 @@ actor DataAssetService {
                                                 let result = await shard.insertDataAsset(userID, timestamp, asset, userPrincipal);
                                                 switch (result) {
                                                     case (#ok(insertDataAssetResult)) {
-                                                        let shardID = await getShardIDFromAssetID(assetNum);
-                                                        switch (shardID) {
-                                                            case (#ok(id)) {
-                                                                let updateResult = await updateUserShardMap(userID, id);
-                                                                switch (updateResult) {
-                                                                    case (#ok(_)) {
-                                                                        // Reward XP for the upload
-                                                                        let xpResult = await xpRewardSystem.rewardXPForUpload(userID);
-                                                                        switch (xpResult) {
-                                                                            case (#ok(xp)) {
-                                                                                return #ok(id, insertDataAssetResult);
-                                                                            };
-                                                                            case (#err(e)) {
-                                                                                // XP reward failed, but asset upload was successful
-                                                                                return #ok(id, insertDataAssetResult);
-                                                                            };
-                                                                        };
-                                                                    };
-                                                                    case (#err(e)) {
-                                                                        return #err("Failed to update user shard map: " # e);
-                                                                    };
-                                                                };
+                                                        let shardID = getShardID(assetNum);
+
+                                                        let updateResult = await updateUserShardMap(userID, shardID);
+                                                        switch (updateResult) {
+                                                            case (#ok(_)) {
+                                                                return #ok(id, insertDataAssetResult);
+
                                                             };
                                                             case (#err(e)) {
-                                                                return #err(e);
+                                                                return #err("Failed to update user shard map: " # e);
                                                             };
                                                         };
                                                     };
@@ -471,18 +407,8 @@ actor DataAssetService {
         };
     };
 
-    public shared ({ caller }) func getUserXP() : async Result.Result<Nat, Text> {
-        let userIDResult = await getUserID(caller);
-        switch (userIDResult) {
-            case (#ok(userID)) {
-                await xpRewardSystem.getUserXP(userID);
-            };
-            case (#err(e)) { #err("Error getting user ID: " # e) };
-        };
-    };
-
-    public func getShard(assetID : Text) : async Result.Result<DataAssetShard.DataAssetShard, Text> {
-        let shardID = getShardID(assetID);
+    public func getShard(assetNum : Text) : async Result.Result<DataAssetShard.DataAssetShard, Text> {
+        let shardID = getShardID(assetNum);
         switch (BTree.get(shards, Text.compare, shardID)) {
             case (?principal) {
                 #ok(actor (Principal.toText(principal)) : DataAssetShard.DataAssetShard);
@@ -503,9 +429,9 @@ actor DataAssetService {
         };
     };
 
-    private func getShardID(assetID : Text) : Text {
+    private func getShardID(assetNum : Text) : Text {
 
-        switch (Nat.fromText(assetID)) {
+        switch (Nat.fromText(assetNum)) {
             case (?num) {
                 let shardIndex = num / ASSETS_PER_SHARD;
                 "shard-" # Nat.toText(shardIndex + 1);
@@ -617,7 +543,7 @@ actor DataAssetService {
         };
     };
 
-    public func updateUserShardMap(userID : Text, shardID : Text) : async Result.Result<(), Text> {
+    private func updateUserShardMap(userID : Text, shardID : Text) : async Result.Result<Text, Text> {
         switch (BTree.get(userShardMap, Text.compare, userID)) {
             case null {
                 let newBuffer = Buffer.Buffer<Text>(1);
@@ -625,6 +551,7 @@ actor DataAssetService {
                 ignore BTree.insert(userShardMap, Text.compare, userID, Buffer.toArray(newBuffer));
             };
             case (?existingArray) {
+
                 let buffer = Buffer.fromArray<Text>(existingArray);
                 if (not Buffer.contains<Text>(buffer, shardID, Text.equal)) {
                     buffer.add(shardID);
@@ -632,7 +559,7 @@ actor DataAssetService {
                 };
             };
         };
-        #ok(());
+        #ok("User shard map updated successfully and Data Uploaded");
     };
 
     public func getUserShards(userID : Text) : async Result.Result<[DataAssetShard.DataAssetShard], Text> {
@@ -673,18 +600,10 @@ actor DataAssetService {
         ASSETS_PER_SHARD;
     };
 
-    public func getUserID(principal : Principal) : async Result.Result<Text, Text> {
+    private func getUserID(principal : Principal) : async Result.Result<Text, Text> {
         let identityResult = await identityManager.getIdentity(principal);
         switch (identityResult) {
             case (#ok((id, _))) { #ok(id) };
-            case (#err(e)) { #err(e) };
-        };
-    };
-
-    public func getPrincipal(userID : Text) : async Result.Result<Principal, Text> {
-        let principalResult = await identityManager.getPrincipalByID(userID);
-        switch (principalResult) {
-            case (#ok(principal)) { #ok(principal) };
             case (#err(e)) { #err(e) };
         };
     };
@@ -693,8 +612,8 @@ actor DataAssetService {
         totalAssetCount += 1;
     };
 
-    public func getNextAssetID() : async Text {
-        incrementTotalAssetCount();
+    private func getNextAssetID() : async Text {
+
         Nat.toText(totalAssetCount - 1);
     };
 
@@ -705,12 +624,12 @@ actor DataAssetService {
         };
     };
 
-    public query func getShardIDFromAssetID(assetID : Text) : async Result.Result<Text, Text> {
-        let shardID = getShardID(assetID);
-        switch (BTree.get(shards, Text.compare, shardID)) {
-            case (?principal) { #ok(shardID) };
-            case null { #err("Shard ID not found") };
-        };
-    };
+    // private func getShardIDFromAssetID(assetID : Text) : async Result.Result<Text, Text> {
+    //     let shardID = getShardID(assetID);
+    //     switch (BTree.get(shards, Text.compare, shardID)) {
+    //         case (?principal) { #ok(shardID) };
+    //         case null { #err("Shard ID not found") };
+    //     };
+    // };
 
 };

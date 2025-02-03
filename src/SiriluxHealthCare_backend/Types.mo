@@ -72,6 +72,13 @@ module Types {
         sharedType : SharedType;
     };
 
+    public type IdenitySharedInfo = {
+        timeShared : Int;
+        accessTill : Int;
+        userSharedToType : Text;
+        userSharedToID : Text;
+    };
+
     public type Listing = {
         id : Text;
         title : Text;

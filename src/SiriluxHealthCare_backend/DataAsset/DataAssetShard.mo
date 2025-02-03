@@ -7,9 +7,9 @@ import Text "mo:base/Text";
 import BTree "mo:stableheapbtreemap/BTree";
 
 import Types "../Types";
+import CanisterIDs "../Types/CanisterIDs";
 import CanisterTypes "../Types/CanisterTypes";
 import Hex "../utility/Hex";
-
 actor class DataAssetShard() {
     private stable var dataAssetStorage = BTree.init<Text, BTree.BTree<Text, Types.DataAsset>>(null);
     private stable var dataAccessTP = BTree.init<Text, [Principal]>(null);
@@ -18,16 +18,16 @@ actor class DataAssetShard() {
     let vetkd_system_api = CanisterTypes.vetkd_system_api;
 
     // List of permitted principals (e.g., DataAssetShardManager)
-    private stable var permittedPrincipals : [Principal] = []; // Add permitted principals here
+    private stable var permittedPrincipals : [Principal] = [Principal.fromText(CanisterIDs.dataAssetCanisterID)]; // Add permitted principals here
 
     private func isPermitted(caller : Principal) : Bool {
         Array.find<Principal>(permittedPrincipals, func(p) { p == caller }) != null;
     };
 
     public shared ({ caller }) func addPermittedPrincipal(principal : Principal) : async Result.Result<(), Text> {
-        // if (not isPermitted(caller)) {
-        //     return #err("You are not permitted to perform this operation");
-        // };
+        if (not isPermitted(caller)) {
+            return #err("You are not permitted to perform this operation");
+        };
         permittedPrincipals := Array.append(permittedPrincipals, [principal]);
         #ok(());
     };
@@ -41,9 +41,9 @@ actor class DataAssetShard() {
     };
 
     public shared ({ caller }) func insertDataAsset(userID : Text, timestamp : Text, asset : Types.DataAsset, userPrincipal : Principal) : async Result.Result<Text, Text> {
-        // if (not isPermitted(caller)) {
-        //     return #err("You are not permitted to perform this operation");
-        // };
+        if (not isPermitted(caller)) {
+            return #err("You are not permitted to perform this operation");
+        };
 
         switch (BTree.get(dataAssetStorage, Text.compare, userID)) {
             case null {
@@ -53,24 +53,24 @@ actor class DataAssetShard() {
             };
             case (?existingTree) {
                 ignore BTree.insert(existingTree, Text.compare, timestamp, asset);
-                ignore BTree.insert(dataAssetStorage, Text.compare, userID, existingTree);
+
             };
         };
         switch (await grantAccess(asset.assetID, userPrincipal)) {
-            case (#ok(value)) {
+            case (#ok(_value)) {
                 #ok(asset.assetID);
             };
             case (#err(error)) {
-                #err("Unable to grant access to the party");
+                #err("Unable to grant access to the party" # error);
             };
         };
 
     };
 
     public shared query ({ caller }) func getDataAsset(userID : Text, timestamp : Text) : async Result.Result<Types.DataAsset, Text> {
-        // if (not isPermitted(caller)) {
-        //     return #err("You are not permitted to perform this operation");
-        // };
+        if (not isPermitted(caller)) {
+            return #err("You are not permitted to perform this operation");
+        };
 
         switch (BTree.get(dataAssetStorage, Text.compare, userID)) {
             case null { #err("User not found") };
@@ -84,9 +84,9 @@ actor class DataAssetShard() {
     };
 
     public shared query ({ caller }) func getUserDataAssets(userID : Text) : async Result.Result<[(Text, Types.DataAsset)], Text> {
-        // if (not isPermitted(caller)) {
-        //     return #err("You are not permitted to perform this operation");
-        // };
+        if (not isPermitted(caller)) {
+            return #err("You are not permitted to perform this operation");
+        };
 
         switch (BTree.get(dataAssetStorage, Text.compare, userID)) {
             case null { #err("User not found") };
@@ -101,9 +101,9 @@ actor class DataAssetShard() {
     };
 
     public shared ({ caller }) func updateDataAsset(userID : Text, timestamp : Text, updatedAsset : Types.DataAsset) : async Result.Result<(), Text> {
-        // if (not isPermitted(caller)) {
-        //     return #err("You are not permitted to perform this operation");
-        // };
+        if (not isPermitted(caller)) {
+            return #err("You are not permitted to perform this operation");
+        };
 
         switch (BTree.get(dataAssetStorage, Text.compare, userID)) {
             case null { #err("User not found") };
@@ -126,9 +126,9 @@ actor class DataAssetShard() {
     };
 
     public shared ({ caller }) func deleteDataAsset(userID : Text, timestamp : Text) : async Result.Result<(), Text> {
-        // if (not isPermitted(caller)) {
-        //     return #err("You are not permitted to perform this operation");
-        // };
+        if (not isPermitted(caller)) {
+            return #err("You are not permitted to perform this operation");
+        };
 
         switch (BTree.get(dataAssetStorage, Text.compare, userID)) {
             case null { #err("User not found") };
@@ -141,9 +141,9 @@ actor class DataAssetShard() {
     };
 
     public shared ({ caller }) func grantAccess(assetID : Text, userID : Principal) : async Result.Result<(), Text> {
-        // if (not isPermitted(caller)) {
-        //     return #err("You are not permitted to perform this operation");
-        // };
+        if (not isPermitted(caller)) {
+            return #err("You are not permitted to perform this operation");
+        };
 
         // Update dataAccessTP
         switch (BTree.get(dataAccessTP, Text.compare, assetID)) {
@@ -171,9 +171,9 @@ actor class DataAssetShard() {
     };
 
     public shared ({ caller }) func revokeAccess(assetID : Text, userID : Principal) : async Result.Result<(), Text> {
-        // if (not isPermitted(caller)) {
-        //     return #err("You are not permitted to perform this operation");
-        // };
+        if (not isPermitted(caller)) {
+            return #err("You are not permitted to perform this operation");
+        };
 
         // Update dataAccessTP
         switch (BTree.get(dataAccessTP, Text.compare, assetID)) {
@@ -224,10 +224,10 @@ actor class DataAssetShard() {
 
     };
 
-    public shared func encrypted_symmetric_key_for_asset(requestor : Principal, assetID : Text, encryption_public_key : Blob) : async Result.Result<Text, Text> {
-        // if (not isPermitted(caller)) {
-        //     return #err("You are not permitted to perform this operation");
-        // };
+    public shared ({ caller }) func encrypted_symmetric_key_for_asset(requestor : Principal, assetID : Text, encryption_public_key : Blob) : async Result.Result<Text, Text> {
+        if (not isPermitted(caller)) {
+            return #err("You are not permitted to perform this operation");
+        };
 
         let accessList = BTree.get(dataAccessTP, Text.compare, assetID);
         switch (accessList) {

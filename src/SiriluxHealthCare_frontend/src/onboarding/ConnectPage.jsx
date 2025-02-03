@@ -8,7 +8,6 @@ import LoadingScreen from "../LoadingScreen";
 
 export default function ConnectPage() {
   const [isLoading, setIsLoading] = useState(false);
-  const [c, setc] = useState(false);
 
   const navigate = useNavigate();
   const { actors, isAuthenticated, login } = useContext(ActorContext);
@@ -63,7 +62,7 @@ export default function ConnectPage() {
             <div className="flex items-center mb-4">
               <img
                 alt="Logo"
-                className="h-10 w-48"
+                className="h-10 w-auto object-contain"
                 src="assets/SiriluxHealthCare.png"
               />
             </div>
@@ -72,17 +71,36 @@ export default function ConnectPage() {
             </p>
           </div>
 
-          <div className="flex-1 items-center bg-foreground rounded-lg p-8 py-12 shadow-lg relative">
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-gray-400 to-gray-500 rounded-t-lg"></div>
-            <h2 className="text-xl md:text-2xl font-bold text-black mb-4">
+          <div className="flex-1 items-center bg-background rounded-lg p-8 py-12 shadow-lg relative">
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-400 to-blue-500 rounded-t-lg"></div>
+            <h2 className="text-xl md:text-2xl font-bold mb-4">
               Connect Your Wallet
             </h2>
-            <Button
-              className="w-full border border-gray-300 p-3 rounded-md"
-              onClick={handleConnectClick}
-            >
-              Connect
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={handleConnectClick}
+              >
+                Connect
+              </Button>
+              <div className="relative group">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="w-8 h-8 rounded-full"
+                >
+                  i
+                </Button>
+                <div className="fixed hidden group-hover:block left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-black p-4 rounded-lg z-50">
+                  <img
+                    src="assets/your-info-gif.gif"
+                    alt="Wallet connection info"
+                    className="w-[50vw] h-auto rounded"
+                    style={{ minWidth: "50vw" }}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

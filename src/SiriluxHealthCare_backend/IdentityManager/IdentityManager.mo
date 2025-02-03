@@ -38,6 +38,18 @@ actor class IdentityManager() {
         };
     };
 
+    public query func getPrincipalAndIdentityTypeByID(id : Text) : async Result.Result<(Principal, Text), Text> {
+        switch (BTree.get(reverseIdentityMap, Text.compare, id)) {
+            case (?principal) {
+                switch (BTree.get(identityMap, Principal.compare, principal)) {
+                    case (?identity) { #ok((principal, identity.1)) };
+                    case null { #err("Identity not found") };
+                };
+            };
+            case null { #err("Identity not found") };
+        };
+    };
+
     public query func getPrincipalByID(id : Text) : async Result.Result<Principal, Text> {
         switch (BTree.get(reverseIdentityMap, Text.compare, id)) {
             case (?principal) { #ok(principal) };
@@ -80,6 +92,7 @@ actor class IdentityManager() {
         return caller;
     };
 
+    //Should Not Be Query Function Due To Security Concerns
     public func returnAdmin() : async Text {
         return admin;
     };

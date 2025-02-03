@@ -15,28 +15,27 @@ import UUID "mo:uuid/UUID";
 
 import Types "../Types";
 import CanisterTypes "../Types/CanisterTypes";
-import Hex "../utility/Hex";
 import Interface "../utility/ic-management-interface";
 import ProfessionalShard "ProfessionalShard";
 
 actor ProfessionalService {
 
     type HealthIDProfessional = Types.HealthIDProfessional;
-
     let identityManager = CanisterTypes.identityManager;
-    let vetkd_system_api = CanisterTypes.vetkd_system_api;
+
+    private let IC = "aaaaa-aa";
+    private let ic : Interface.Self = actor (IC);
 
     private stable var totalProfessionalCount : Nat = 0;
     private stable var shardCount : Nat = 0;
     private let PROFESSIONALS_PER_SHARD : Nat = 20_480;
     private let STARTING_PROFESSIONAL_ID : Nat = 100_000_000_000;
-    private stable let shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null); // Map of Shard ID to Shard Principal
-    private stable var professionalShardMap : BTree.BTree<Principal, Text> = BTree.init<Principal, Text>(null); // Map of Professional Principal to Professional ID
-    private stable var reverseProfessionalShardMap : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null); // Map of Professional ID to Professional Principal
-    private stable var professionalShardWasmModule : [Nat8] = []; // Wasm Module for Shards
 
-    private let IC = "aaaaa-aa";
-    private let ic : Interface.Self = actor (IC);
+    private stable var shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null); // Map of Shard ID to Shard Principal
+
+    private stable var professionalPrincipalIDMap : BTree.BTree<Principal, Text> = BTree.init<Principal, Text>(null); // Map of Professional Principal to Professional ID
+    private stable var reverseProfessionalPrincipalIDMap : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null); // Map of Professional ID to Professional Principal
+    private stable var professionalShardWasmModule : [Nat8] = []; // Wasm Module for Shards
 
     private stable var pendingRequests : Map.Map<Principal, HealthIDProfessional> = Map.new<Principal, HealthIDProfessional>(); // Map of Pending Requests of Professionals Registered
 
@@ -59,6 +58,23 @@ actor ProfessionalService {
             return #err("Unauthorized: only admins can view pending requests");
         };
         #ok(Map.toArray(pendingRequests));
+    };
+
+    public shared ({ caller }) func getProfessionalStatus() : async Result.Result<Text, Text> {
+        switch (Map.get(pendingRequests, Map.phash, caller)) {
+            case (?_) { return #ok("Pending") };
+            case (null) {
+                let idResult = await getProfessionalID(caller);
+                switch (idResult) {
+                    case (#ok(_)) {
+                        #ok("Approved");
+                    };
+                    case (#err(_)) {
+                        #ok("Not Registered");
+                    };
+                };
+            };
+        };
     };
 
     public shared ({ caller }) func approveProfessionalRequest(requestPrincipal : Principal) : async Result.Result<Text, Text> {
@@ -118,7 +134,43 @@ actor ProfessionalService {
             };
         };
     };
+    public shared ({ caller }) func updateProfessionalInfo(demoInfo : Blob, occupationInfo : Blob, certificationInfo : Blob) : async Result.Result<(), Text> {
+        let userIDResult = await getProfessionalID(caller);
+        switch (userIDResult) {
+            case (#ok(id)) {
+                let shardResult = await getShard(id);
+                switch (shardResult) {
+                    case (#ok(shard)) {
+                        let professionalResult = await shard.getProfessional(id);
+                        switch (professionalResult) {
+                            case (#ok(value)) {
+                                let updatedProfessional : HealthIDProfessional = {
+                                    IDNum = value.IDNum;
+                                    UUID = value.UUID;
+                                    MetaData = {
+                                        DemographicInformation = demoInfo;
+                                        OccupationInformation = occupationInfo;
+                                        CertificationInformation = certificationInfo;
+                                    };
+                                };
+                                await shard.updateProfessional(id, updatedProfessional);
 
+                            };
+                            case (#err(err)) {
+                                #err(err);
+                            };
+                        };
+                    };
+                    case (#err(e)) {
+                        #err(e);
+                    };
+                };
+            };
+            case (#err(_)) {
+                #err("You're not registered as a Health Professional");
+            };
+        };
+    };
     public shared ({ caller }) func deleteProfessional() : async Result.Result<(), Text> {
         let professionalIDResult = await getProfessionalID(caller);
         switch (professionalIDResult) {
@@ -153,23 +205,6 @@ actor ProfessionalService {
         };
     };
 
-    public shared ({ caller }) func getProfessionalStatus() : async Result.Result<Text, Text> {
-        switch (Map.get(pendingRequests, Map.phash, caller)) {
-            case (?_) { return #ok("Pending") };
-            case (null) {
-                let idResult = await getProfessionalID(caller);
-                switch (idResult) {
-                    case (#ok(_)) {
-                        #ok("Approved");
-                    };
-                    case (#err(_)) {
-                        #ok("Not Registered");
-                    };
-                };
-            };
-        };
-    };
-
     private func registerProfessional(id : Text, professional : HealthIDProfessional, requestPrincipal : Principal) : async Result.Result<(), Text> {
 
         let shardResult = await getShard(id);
@@ -178,8 +213,8 @@ actor ProfessionalService {
                 let result = await shard.insertProfessional(id, professional);
                 switch (result) {
                     case (#ok(_)) {
-                        ignore await registerProfessionalInternal(requestPrincipal, id);
-                        #ok(());
+                        await registerProfessionalInternal(requestPrincipal, id);
+
                     };
                     case (#err(err)) {
                         #err(err);
@@ -228,106 +263,12 @@ actor ProfessionalService {
 
         switch (shardResult) {
             case (#ok(shard)) {
-                let professionalResult = await shard.getProfessional(id);
-                switch (professionalResult) {
-                    case (#ok(professional)) {
-                        #ok(professional);
-                    };
-                    case (#err(e)) {
-                        #err("Failed to get professional: " # e);
-                    };
-                };
+                await shard.getProfessional(id);
             };
             case (#err(e)) {
                 #err("Failed to get shard: " # e);
             };
         };
-    };
-
-    public shared ({ caller }) func updateProfessionalInfo(demoInfo : Blob, occupationInfo : Blob, certificationInfo : Blob) : async Result.Result<(), Text> {
-        let userIDResult = await getProfessionalID(caller);
-        switch (userIDResult) {
-            case (#ok(id)) {
-                let shardResult = await getShard(id);
-                switch (shardResult) {
-                    case (#ok(shard)) {
-                        let professionalResult = await shard.getProfessional(id);
-                        switch (professionalResult) {
-                            case (#ok(value)) {
-                                let updatedProfessional : HealthIDProfessional = {
-                                    IDNum = value.IDNum;
-                                    UUID = value.UUID;
-                                    MetaData = {
-                                        DemographicInformation = demoInfo;
-                                        OccupationInformation = occupationInfo;
-                                        CertificationInformation = certificationInfo;
-                                    };
-                                };
-                                ignore await shard.updateProfessional(id, updatedProfessional);
-                                #ok(());
-                            };
-                            case (#err(err)) {
-                                #err(err);
-                            };
-                        };
-                    };
-                    case (#err(e)) {
-                        #err(e);
-                    };
-                };
-            };
-            case (#err(_)) {
-                #err("You're not registered as a Health Professional");
-            };
-        };
-    };
-
-    public query func countPendingRequests() : async Nat {
-        Map.size(pendingRequests);
-    };
-
-    // Function to get the caller's principal ID
-    public shared query ({ caller }) func whoami() : async Text {
-        Principal.toText(caller);
-    };
-
-    // Helper function to check if a principal is an admin
-    public shared func isAdmin(caller : Principal) : async Bool {
-        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
-            true;
-        } else {
-            false;
-        };
-    };
-
-    //VetKey Section
-
-    public func symmetric_key_verification_key() : async Text {
-        let { public_key } = await vetkd_system_api.vetkd_public_key({
-            canister_id = null;
-            derivation_path = Array.make(Text.encodeUtf8("symmetric_key"));
-            key_id = { curve = #bls12_381; name = "test_key_1" };
-        });
-        Hex.encode(Blob.toArray(public_key));
-    };
-
-    public shared ({ caller }) func encrypted_symmetric_key_for_professional(encryption_public_key : Blob) : async Result.Result<Text, Text> {
-        if (Principal.isAnonymous(caller)) {
-            return #err("Please log in with a wallet or internet identity.");
-        };
-
-        let buf = Buffer.Buffer<Nat8>(32);
-        buf.append(Buffer.fromArray(Blob.toArray(Text.encodeUtf8(Principal.toText(caller)))));
-        let derivation_id = Blob.fromArray(Buffer.toArray(buf));
-
-        let { encrypted_key } = await vetkd_system_api.vetkd_encrypted_key({
-            derivation_id;
-            public_key_derivation_path = Array.make(Text.encodeUtf8("symmetric_key"));
-            key_id = { curve = #bls12_381; name = "test_key_1" };
-            encryption_public_key;
-        });
-
-        #ok(Hex.encode(Blob.toArray(encrypted_key)));
     };
 
     //Shard Management Section
@@ -339,6 +280,41 @@ actor ProfessionalService {
     public func generateUUID() : async Text {
         let g = Source.Source();
         (UUID.toText(await g.new()));
+    };
+
+    // Function to get the caller's principal ID
+    public shared query ({ caller }) func whoami() : async Text {
+        Principal.toText(caller);
+    };
+
+    public query func getTotalProfessionalCountSignedUp() : async Nat {
+        totalProfessionalCount;
+    };
+
+    public shared ({ caller }) func getProfessionalIDSelf() : async Result.Result<Text, Text> {
+        await getProfessionalID(caller);
+    };
+
+    public func getProfessionalID(caller : Principal) : async Result.Result<Text, Text> {
+        switch (BTree.get(professionalPrincipalIDMap, Principal.compare, caller)) {
+            case (?professionalID) {
+                #ok(professionalID);
+            };
+            case null {
+                #err("Professional ID not found for the given principal");
+            };
+        };
+    };
+
+    public func getProfessionalPrincipalByID(professionalID : Text) : async Result.Result<Principal, Text> {
+        switch (BTree.get(reverseProfessionalPrincipalIDMap, Text.compare, professionalID)) {
+            case (?principal) {
+                #ok(principal);
+            };
+            case null {
+                #err("Professional not found");
+            };
+        };
     };
 
     private func getShardID(professionalID : Text) : Text {
@@ -378,55 +354,6 @@ actor ProfessionalService {
             };
             case null {
                 #err("Shard not found for professional ID: " # professionalID);
-            };
-        };
-    };
-
-    private func registerProfessionalInternal(caller : Principal, professionalID : Text) : async Result.Result<(), Text> {
-        switch (BTree.get(professionalShardMap, Principal.compare, caller)) {
-            case (?_) {
-                #err("Professional already registered");
-            };
-            case null {
-                ignore BTree.insert(professionalShardMap, Principal.compare, caller, professionalID);
-                ignore BTree.insert(reverseProfessionalShardMap, Text.compare, professionalID, caller);
-                totalProfessionalCount += 1;
-                #ok(());
-            };
-        };
-    };
-
-    public func getProfessionalID(caller : Principal) : async Result.Result<Text, Text> {
-        switch (BTree.get(professionalShardMap, Principal.compare, caller)) {
-            case (?professionalID) {
-                #ok(professionalID);
-            };
-            case null {
-                #err("Professional ID not found for the given principal");
-            };
-        };
-    };
-
-    public func getProfessionalPrincipal(professionalID : Text) : async Result.Result<Principal, Text> {
-        switch (BTree.get(reverseProfessionalShardMap, Text.compare, professionalID)) {
-            case (?principal) {
-                #ok(principal);
-            };
-            case null {
-                #err("Professional not found");
-            };
-        };
-    };
-    private func removeProfessional(caller : Principal) : async Result.Result<(), Text> {
-        switch (BTree.get(professionalShardMap, Principal.compare, caller)) {
-            case (?professionalID) {
-                ignore BTree.delete(professionalShardMap, Principal.compare, caller);
-                ignore BTree.delete(reverseProfessionalShardMap, Text.compare, professionalID);
-                totalProfessionalCount -= 1;
-                #ok(());
-            };
-            case null {
-                #err("Professional not found");
             };
         };
     };
@@ -487,15 +414,125 @@ actor ProfessionalService {
         #ok(());
     };
 
-    public query func getTotalProfessionalCount() : async Nat {
-        totalProfessionalCount;
+    private func upgradeCodeOnShard(canisterPrincipal : Principal) : async Result.Result<(), Text> {
+        try {
+            await ic.install_code({
+                arg = [];
+                wasm_module = professionalShardWasmModule;
+                mode = #upgrade;
+                canister_id = canisterPrincipal;
+            });
+            #ok(());
+        } catch (e) {
+            #err("Failed to upgrade code on shard: " # Error.message(e));
+        };
     };
 
-    public query func getShardCount() : async Nat {
-        shardCount;
+    public shared ({ caller }) func updateExistingShards() : async Result.Result<(), Text> {
+
+        if (not (await isAdmin(caller))) {
+            return #err("You are not Admin, only admin can perform this action");
+        };
+
+        if (Array.size(professionalShardWasmModule) == 0) {
+            return #err("Wasm module not set. Please update the Wasm module first.");
+        };
+
+        var updatedCount = 0;
+        var errorCount = 0;
+
+        for ((shardID, principal) in BTree.entries(shards)) {
+            let installResult = await upgradeCodeOnShard(principal);
+            switch (installResult) {
+                case (#ok(())) {
+                    updatedCount += 1;
+                };
+                case (#err(_)) {
+                    errorCount += 1;
+                };
+            };
+        };
+
+        if (errorCount > 0) {
+            #err("Updated " # Nat.toText(updatedCount) # " shards, but encountered errors in " # Nat.toText(errorCount) # " shards");
+        } else {
+            #ok(());
+        };
     };
 
-    public query func getProfessionalsPerShard() : async Nat {
-        PROFESSIONALS_PER_SHARD;
+    private func registerProfessionalInternal(requestPrincipal : Principal, professionalID : Text) : async Result.Result<(), Text> {
+        switch (BTree.get(professionalPrincipalIDMap, Principal.compare, requestPrincipal)) {
+            case (?_) {
+                #err("Professional already registered");
+            };
+            case null {
+                ignore BTree.insert(professionalPrincipalIDMap, Principal.compare, requestPrincipal, professionalID);
+                ignore BTree.insert(reverseProfessionalPrincipalIDMap, Text.compare, professionalID, requestPrincipal);
+                totalProfessionalCount += 1;
+                #ok(());
+            };
+        };
     };
+    private func removeProfessional(caller : Principal) : async Result.Result<(), Text> {
+        switch (BTree.get(professionalPrincipalIDMap, Principal.compare, caller)) {
+            case (?professionalID) {
+                ignore BTree.delete(professionalPrincipalIDMap, Principal.compare, caller);
+                ignore BTree.delete(reverseProfessionalPrincipalIDMap, Text.compare, professionalID);
+                totalProfessionalCount -= 1;
+                #ok(());
+            };
+            case null {
+                #err("Professional not found");
+            };
+        };
+    };
+
+    // Helper function to check if a principal is an admin
+    public func isAdmin(caller : Principal) : async Bool {
+        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
+            true;
+        } else {
+            false;
+        };
+    };
+    // Function to add a permitted principal to all shards
+    public shared ({ caller }) func addPermittedPrincipalToAllShards(principalToAdd : Text) : async Result.Result<Text, Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("You are not Admin, only admin can perform this action");
+        };
+
+        let resultsBuffer = Buffer.fromArray<Result.Result<Text, Text>>([]); // Initialize a buffer for results
+        for ((shardID, shardPrincipal) in BTree.entries(shards)) {
+            let shard = actor (Principal.toText(shardPrincipal)) : ProfessionalShard.ProfessionalShard;
+            let result = await shard.addPermittedPrincipal(principalToAdd);
+            resultsBuffer.add(result); // Add result to the buffer
+        };
+
+        // Optionally, you can process the results in the buffer here if needed
+        return #ok("Added Principal to all shards successfully");
+    };
+
+    // Function to remove a permitted principal from all shards
+    public shared ({ caller }) func removePermittedPrincipalFromAllShards(principalToRemove : Text) : async Result.Result<Text, Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("You are not Admin, only admin can perform this action");
+        };
+
+        let resultsBuffer = Buffer.fromArray<Result.Result<Text, Text>>([]); // Initialize a buffer for results
+        for ((shardID, shardPrincipal) in BTree.entries(shards)) {
+            let shard = actor (Principal.toText(shardPrincipal)) : ProfessionalShard.ProfessionalShard;
+            let result = await shard.removePermittedPrincipal(principalToRemove);
+            resultsBuffer.add(result); // Add result to the buffer
+        };
+
+        // Optionally, you can process the results in the buffer here if needed
+        return #ok("Removed Principal from all shards successfully");
+    };
+
+    // // Query function to get the shard count
+
+    // public query func getShardCount() : async Nat {
+    //     shardCount;
+    // };
+
 };

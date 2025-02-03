@@ -1,6 +1,74 @@
 import Nat "mo:base/Nat";
+import Time "mo:base/Time";
 import CandyTypesLib "mo:candy_0_3_0/types";
+
 module {
+
+    public type VisitTimeStamps = {
+        slotTime : ?Time.Time;
+        bookingTime : ?Time.Time;
+        completionTime : ?Time.Time;
+        cancellationTime : ?Time.Time;
+        rejectionTime : ?Time.Time;
+    };
+
+    public type VisitMode = {
+        #Online;
+        #Offline;
+    };
+
+    // Status of a visit
+    public type VisitStatus = {
+        #Pending; // booking initiated
+        #Approved; // optional extra stage
+        #Completed;
+        #Cancelled;
+        #Rejected;
+    };
+
+    // Represents an individual booking/visit
+    public type Visit = {
+        visitId : Nat;
+        userId : Text; // the user who is booking
+        professionalId : ?Text; // if visiting a professional
+        facilityId : ?Text; // if visiting a facility
+        visitMode : VisitMode;
+        status : VisitStatus;
+        timestamp : VisitTimeStamps;
+        avatarId : Nat;
+        meetingLink : ?Text; // Added field for online meetings
+    };
+
+    // Basic info for a professional (without slots)
+    public type ProfessionalInfo = {
+        id : Text;
+        name : Text;
+        specialization : Text;
+        description : Text;
+    };
+
+    // Basic info for a facility (without slots)
+    public type FacilityInfo = {
+        id : Text;
+        name : Text;
+        facilityType : Text;
+        description : Text;
+    };
+
+    // A single time block with capacity
+    public type AvailabilitySlot = {
+        entityId : Text; // professional or facility ID
+        start : Time.Time;
+        capacity : Nat;
+    };
+
+    public type BookedSlot = {
+        entityId : Text; // professional or facility ID
+        start : Time.Time;
+        visitId : Nat;
+        capacity : Nat;
+    };
+
     // Avatar Types grouped by primary attributes
     public type AvatarType = {
         // Energy-focused avatars

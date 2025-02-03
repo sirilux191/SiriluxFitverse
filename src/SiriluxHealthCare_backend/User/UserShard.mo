@@ -17,7 +17,7 @@ actor class UserShard() {
     private stable var permittedPrincipal : [Principal] = [Principal.fromText(CanisterIDs.userServiceCanisterID)];
 
     // Function to insert a user
-    public shared ({ caller }) func insertUser(userID : Text, user : Types.HealthIDUser) : async Result.Result<(), Text> {
+    public shared ({ caller }) func insertUser(userID : Text, user : Types.HealthIDUser) : async Result.Result<Text, Text> {
         if (not isPermitted(caller)) {
             return #err("You are not permitted to call this function");
         };
@@ -28,7 +28,7 @@ actor class UserShard() {
             switch (insertResult) {
                 case null {
                     if (BTree.has(userMap, Text.compare, userID)) {
-                        return #ok(());
+                        return #ok("User inserted successfully" # userID);
                     } else {
                         return #err("Failed to insert user with user ID " # userID);
                     };
@@ -52,14 +52,16 @@ actor class UserShard() {
     };
 
     // Function to update a user
-    public shared ({ caller }) func updateUser(userID : Text, user : Types.HealthIDUser) : async Result.Result<(), Text> {
+    public shared ({ caller }) func updateUser(userID : Text, user : Types.HealthIDUser) : async Result.Result<Text, Text> {
         if (not isPermitted(caller)) {
             return #err("You are not permitted to call this function");
         };
         switch (BTree.get(userMap, Text.compare, userID)) {
             case (?_) {
                 switch (BTree.insert(userMap, Text.compare, userID, user)) {
-                    case (?_) { return #ok(()) };
+                    case (?_) {
+                        return #ok("User updated successfully" # userID);
+                    };
                     case null { return #err("Failed to update user") };
                 };
             };
@@ -83,11 +85,6 @@ actor class UserShard() {
     // Function to get the total number of users
     public query func getUserCount() : async Nat {
         BTree.size(userMap);
-    };
-
-    // Function to get all user IDs
-    public query func getAllUserIDs() : async [Text] {
-        Array.map(BTree.toArray(userMap), func((id, _) : (Text, Types.HealthIDUser)) : Text { id });
     };
 
     private func isPermitted(principal : Principal) : Bool {

@@ -1,17 +1,19 @@
 module {
     public let admin : Text = ("klc2v-kpix3-y73ov-rs4zp-qvi5e-b52vh-dzbi4-x72ce-pzf4l-uvcvl-oae");
+
     public let icrc_ledger_canister_id : Text = ("cpmcr-yeaaa-aaaaa-qaala-cai");
     public let vetkdSystemCanisterID : Text = ("dfdal-2uaaa-aaaaa-qaama-cai");
+
     public let wellnessAvatarNFTCanisterID : Text = ("cbopz-duaaa-aaaaa-qaaka-cai");
     public let identityManagerCanisterID : Text = ("avqkn-guaaa-aaaaa-qaaea-cai");
+
     public let userServiceCanisterID : Text = ("c5kvi-uuaaa-aaaaa-qaaia-cai");
     public let professionalServiceCanisterID : Text = ("asrmz-lmaaa-aaaaa-qaaeq-cai");
     public let facilityServiceCanisterID : Text = ("br5f7-7uaaa-aaaaa-qaaca-cai");
+
     public let dataAssetCanisterID : Text = ("bkyz2-fmaaa-aaaaa-qaaaq-cai");
     public let sharedActivityCanisterID : Text = ("ahw5u-keaaa-aaaaa-qaaha-cai");
 
-    public let sharedActivityShardManagerCanisterID : Text = ("aovwi-4maaa-aaaaa-qaagq-cai");
-    public let xpSystemCanisterID : Text = ("cgpjn-omaaa-aaaaa-qaakq-cai");
     public let gamificationSystemCanisterID : Text = ("by6od-j4aaa-aaaaa-qaadq-cai");
     public let visitManagerCanisterID : Text = ("cuj6u-c4aaa-aaaaa-qaajq-cai");
     // public let marketplaceShardManagerCanisterID : Text = ("c2lt4-zmaaa-aaaaa-qaaiq-cai");

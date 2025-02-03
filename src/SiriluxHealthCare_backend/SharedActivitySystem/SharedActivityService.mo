@@ -15,7 +15,7 @@ import Types "../Types";
 import CanisterIDs "../Types/CanisterIDs";
 import Interface "../utility/ic-management-interface";
 import SharedActivityShard "SharedActivityShard";
-import SharedActivityShardManager "SharedActivityShardManager";
+
 actor class SharedActivityService() {
 
     private stable var totalActivityCount : Nat = 0;
@@ -30,15 +30,13 @@ actor class SharedActivityService() {
     private let IC = "aaaaa-aa";
     private let ic : Interface.Self = actor (IC);
 
-    private var permittedPrincipal : [Principal] = [Principal.fromText(CanisterIDs.userServiceCanisterID)];
-    private let shardManager : SharedActivityShardManager.SharedActivityShardManager = actor (CanisterIDs.sharedActivityShardManagerCanisterID); // Replace with actual canister ID
     private let identityManager : IdentityManager.IdentityManager = actor (CanisterIDs.identityManagerCanisterID); // Replace with actual canister ID
 
     public shared func recordSharedActivity(caller : Principal, assetID : Text, recipientID : Text, sharedType : Types.SharedType) : async Result.Result<(), Text> {
         let senderIDResult = await identityManager.getIdentity(caller);
         switch (senderIDResult) {
             case (#ok((senderID, _))) {
-                let activityIDResult = await shardManager.getNextActivityID(senderID);
+                let activityIDResult = await getNextActivityID(senderID);
                 switch (activityIDResult) {
                     case (#ok(activityID)) {
                         let activity : Types.sharedActivityInfo = {
@@ -49,7 +47,7 @@ actor class SharedActivityService() {
                             sharedType = sharedType;
                         };
 
-                        let shardResult = await shardManager.getShard(activityID);
+                        let shardResult = await getShard(activityID);
                         switch (shardResult) {
                             case (#ok(shard)) {
                                 let result = await shard.insertActivity(activity);
@@ -74,7 +72,7 @@ actor class SharedActivityService() {
         let userIDResult = await identityManager.getIdentity(caller);
         switch (userIDResult) {
             case (#ok((userID, _))) {
-                let userShardsResult = await shardManager.getUserShards(userID);
+                let userShardsResult = await getUserShards(userID);
                 switch (userShardsResult) {
                     case (#ok(userShards)) {
                         var allActivities : [Types.sharedActivityInfo] = [];
@@ -100,7 +98,7 @@ actor class SharedActivityService() {
         let userIDResult = await identityManager.getIdentity(caller);
         switch (userIDResult) {
             case (#ok((userID, _))) {
-                let userShardsResult = await shardManager.getUserShards(userID);
+                let userShardsResult = await getUserShards(userID);
                 switch (userShardsResult) {
                     case (#ok(userShards)) {
                         var allActivities : [Types.sharedActivityInfo] = [];
@@ -123,7 +121,7 @@ actor class SharedActivityService() {
     };
 
     public shared func getSharedActivity(activityID : Text) : async Result.Result<Types.sharedActivityInfo, Text> {
-        let shardResult = await shardManager.getShard(activityID);
+        let shardResult = await getShard(activityID);
         switch (shardResult) {
             case (#ok(shard)) {
                 await shard.getActivity(activityID);
@@ -135,7 +133,7 @@ actor class SharedActivityService() {
     public shared ({ caller }) func updateSharedActivityShardWasmModule(wasmModule : [Nat8]) : async Result.Result<Text, Text> {
         if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
             // Call the updateWasmModule function of the FacilityShardManager
-            let result = await shardManager.updateWasmModule(caller, wasmModule);
+            let result = await updateWasmModule(wasmModule);
 
             switch (result) {
                 case (#ok(())) {

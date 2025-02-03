@@ -66,16 +66,9 @@
       "main": "src/SiriluxHealthCare_backend/SharedActivitySystem/SharedActivityService.mo",
       "type": "motoko"
     },
-    "SharedActivityShardManager": {
-      "main": "src/SiriluxHealthCare_backend/SharedActivitySystem/SharedActivityShardManager.mo",
-      "type": "motoko"
-    },
+
     "SharedActivityShard": {
       "main": "src/SiriluxHealthCare_backend/SharedActivitySystem/SharedActivityShard.mo",
-      "type": "motoko"
-    },
-    "XPRewardSystem": {
-      "main": "src/SiriluxHealthCare_backend/XPSystem/XPRewardSystem.mo",
       "type": "motoko"
     },
 
@@ -87,31 +80,32 @@
       "main": "src/SiriluxHealthCare_backend/Gamification/GamificationSystem.mo",
       "type": "motoko"
     },
-    "VisitManager": {
-      "main": "src/SiriluxHealthCare_backend/Gamification/VisitManager.mo",
-      "type": "motoko"
-    },
+
     "SiriluxHealthCare_frontend": {
       "dependencies": [
         "internet_identity",
         "icrc_ledger_canister",
         "vetkd_system_api",
+
         "Identity_Manager",
+
         "User",
         "UserShard",
+
         "Professional",
         "ProfessionalShard",
+
         "Facility",
         "FacilityShard",
+
         "DataAsset",
         "DataAssetShard",
+
         "Shared_Activity",
-        "SharedActivityShardManager",
         "SharedActivityShard",
-        "XPRewardSystem",
+
         "WellnessAvatarNFT",
-        "GamificationSystem",
-        "VisitManager"
+        "GamificationSystem"
       ],
       "source": ["src/SiriluxHealthCare_frontend/dist"],
       "type": "assets",
