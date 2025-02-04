@@ -27,12 +27,12 @@ export default function ProfileContent() {
       rawKey,
       "AES-GCM",
       false,
-      ["encrypt"],
+      ["encrypt"]
     );
     const ciphertext_buffer = await window.crypto.subtle.encrypt(
       { name: "AES-GCM", iv: iv },
       aes_key,
-      data,
+      data
     );
     const ciphertext = new Uint8Array(ciphertext_buffer);
     const iv_and_ciphertext = new Uint8Array(iv.length + ciphertext.length);
@@ -49,18 +49,18 @@ export default function ProfileContent() {
       rawKey,
       "AES-GCM",
       false,
-      ["decrypt"],
+      ["decrypt"]
     );
     const decrypted_buffer = await window.crypto.subtle.decrypt(
       { name: "AES-GCM", iv: iv },
       aes_key,
-      ciphertext,
+      ciphertext
     );
     return new Uint8Array(decrypted_buffer);
   };
   const hex_decode = (hexString) =>
     Uint8Array.from(
-      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)),
+      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
     );
 
   useEffect(() => {
@@ -138,13 +138,13 @@ export default function ProfileContent() {
           // );
 
           const parsedDemographicInfo = JSON.parse(
-            new TextDecoder().decode(DemographicInformation),
+            new TextDecoder().decode(DemographicInformation)
           );
           const parsedServicesOfferedInfo = JSON.parse(
-            new TextDecoder().decode(ServicesOfferedInformation),
+            new TextDecoder().decode(ServicesOfferedInformation)
           );
           const parsedLicenseInfo = JSON.parse(
-            new TextDecoder().decode(LicenseInformation),
+            new TextDecoder().decode(LicenseInformation)
           );
 
           setFacilityData({
@@ -163,7 +163,7 @@ export default function ProfileContent() {
     };
 
     fetchFacilityData();
-  }, [lyfelynkMVP_backend]);
+  }, [actors.facility]);
 
   useEffect(() => {
     if (facilityData) {
@@ -208,63 +208,14 @@ export default function ProfileContent() {
       // Convert JSON strings to Uint8Array
       const demoInfoArray = new TextEncoder().encode(demoInfoJson);
       const servicesOfferedInfoArray = new TextEncoder().encode(
-        servicesOfferedInfoJson,
+        servicesOfferedInfoJson
       );
       const licenseInfoArray = new TextEncoder().encode(licenseInfoJson);
 
-      // Step 2: Fetch the encrypted key using encrypted_symmetric_key_for_dataAsset
-      const seed = window.crypto.getRandomValues(new Uint8Array(32));
-      const tsk = new vetkd.TransportSecretKey(seed);
-      const encryptedKeyResult =
-        await lyfelynkMVP_backend.encrypted_symmetric_key_for_user(
-          Object.values(tsk.public_key()),
-        );
-
-      let encryptedKey = "";
-
-      Object.keys(encryptedKeyResult).forEach((key) => {
-        if (key === "err") {
-          alert(encryptedKeyResult[key]);
-          setLoading(false);
-          return;
-        }
-        if (key === "ok") {
-          encryptedKey = encryptedKeyResult[key];
-        }
-      });
-
-      if (!encryptedKey) {
-        setLoading(false);
-        return;
-      }
-
-      const pkBytesHex =
-        await lyfelynkMVP_backend.symmetric_key_verification_key();
-      const principal = await lyfelynkMVP_backend.whoami();
-      console.log(pkBytesHex);
-      console.log(encryptedKey);
-      const aesGCMKey = tsk.decrypt_and_hash(
-        hex_decode(encryptedKey),
-        hex_decode(pkBytesHex),
-        new TextEncoder().encode(principal),
-        32,
-        new TextEncoder().encode("aes-256-gcm"),
-      );
-      console.log(aesGCMKey);
-
-      const encryptedDataDemo = await aes_gcm_encrypt(demoInfoArray, aesGCMKey);
-      const encryptedDataService = await aes_gcm_encrypt(
-        servicesOfferedInfoArray,
-        aesGCMKey,
-      );
-      const encryptedDataLicense = await aes_gcm_encrypt(
-        licenseInfoArray,
-        aesGCMKey,
-      );
       const result = await lyfelynkMVP_backend.updateFacility(
         Object.values(encryptedDataDemo),
         Object.values(encryptedDataService),
-        Object.values(encryptedDataLicense),
+        Object.values(encryptedDataLicense)
       );
       Object.keys(result).forEach((key) => {
         if (key == "err") {
@@ -306,11 +257,17 @@ export default function ProfileContent() {
           <p className="mt-2 text-center text-sm leading-5 text-gray-600">
             Update your Profile Information
           </p>
-          <form className="mt-8" onSubmit={handleUpdateFacility}>
+          <form
+            className="mt-8"
+            onSubmit={handleUpdateFacility}
+          >
             <div className="rounded-md shadow-sm">
               <div className="flex flex-col items-center">
                 <Avatar className="-z-10 w-36 h-36">
-                  <AvatarImage alt="John Lenon" src="" />
+                  <AvatarImage
+                    alt="John Lenon"
+                    src=""
+                  />
                   <AvatarFallback className="text-4xl">JL</AvatarFallback>
                 </Avatar>
 
@@ -458,7 +415,10 @@ export default function ProfileContent() {
               </div>
             </div>
             <div className="mt-6">
-              <Button className="w-full" type="submit">
+              <Button
+                className="w-full"
+                type="submit"
+              >
                 Update
               </Button>
             </div>

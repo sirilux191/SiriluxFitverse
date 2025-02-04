@@ -12,7 +12,7 @@ import CanisterIDs "../Types/CanisterIDs";
 actor class ProfessionalShard() {
 
     private var professionalMap : BTree.BTree<Text, Types.HealthIDProfessional> = BTree.init<Text, Types.HealthIDProfessional>(null);
-    private stable var permittedPrincipal : [Principal] = [Principal.fromText(CanisterIDs.userServiceCanisterID)];
+    private stable var permittedPrincipal : [Principal] = [Principal.fromText(CanisterIDs.professionalServiceCanisterID)];
 
     public shared ({ caller }) func insertProfessional(professionalID : Text, professional : Types.HealthIDProfessional) : async Result.Result<(), Text> {
 

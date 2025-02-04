@@ -42,12 +42,12 @@ actor FacilityService {
 
     private stable var creatingShard : Bool = false;
 
-    public shared ({ caller }) func createFacilityRequest(facilityInfo : Blob, licenseInfo : Blob, demographicInfo : Blob, servicesOfferedInfo : Blob) : async Result.Result<Text, Text> {
+    public shared ({ caller }) func createFacilityRequest(licenseInfo : Blob, demographicInfo : Blob, servicesOfferedInfo : Blob) : async Result.Result<Text, Text> {
         let tempFacility : HealthIDFacility = {
             IDNum = ""; // Will be assigned upon approval
             UUID = Principal.toText(caller);
             MetaData = {
-                FacilityInformation = facilityInfo;
+
                 LicenseInformation = licenseInfo;
                 DemographicInformation = demographicInfo;
                 ServicesOfferedInformation = servicesOfferedInfo;

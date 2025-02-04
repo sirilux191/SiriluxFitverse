@@ -42,47 +42,68 @@ actor DataAssetService {
     let uploadKeyAssetIDmap = HashMap.HashMap<Text, Text>(0, Text.equal, Text.hash);
 
     public shared ({ caller }) func uploadDataAsset(asset : DataAsset) : async Result.Result<Text, Text> {
+
         let userIDResult = await getUserID(caller);
+
         switch (userIDResult) {
             case (#ok(userID)) {
+
                 let assetNum = await getNextAssetID();
                 let timestamp = Int.toText(Time.now());
 
                 let shardResult = await getShard(assetNum);
+
                 switch (shardResult) {
                     case (#ok(shard)) {
+
                         let updatedAsset = {
                             asset with assetID = assetNum # "-" # userID # "-" # timestamp
                         };
+
                         let result = await shard.insertDataAsset(userID, timestamp, updatedAsset, caller);
+
                         switch (result) {
-                            case (#ok(_insertDataAssetResult)) {
+                            case (#ok(insertDataAssetResult)) {
 
                                 incrementTotalAssetCount();
                                 let shardID = getShardID(assetNum);
-                                await updateUserShardMap(userID, shardID);
+                                ignore await updateUserShardMap(userID, shardID);
+                                #ok(insertDataAssetResult);
 
                             };
-                            case (#err(e)) { return #err(e) };
+                            case (#err(e)) {
+                                return #err(e);
+                            };
                         };
                     };
-                    case (#err(e)) { return #err(e) };
+                    case (#err(e)) {
+                        return #err(e);
+                    };
                 };
             };
-            case (#err(e)) { return #err("User not found: " # e) };
+            case (#err(e)) {
+                return #err("User not found: " # e);
+            };
         };
     };
 
     public shared ({ caller }) func getUserDataAssets() : async Result.Result<[(Text, DataAsset)], Text> {
+
         let userIDResult = await getUserID(caller);
         switch (userIDResult) {
             case (#ok(userID)) {
+
                 let shardsResult = await getUserShards(userID);
+
                 switch (shardsResult) {
                     case (#ok(shards)) {
+
                         let allAssets = Buffer.Buffer<(Text, DataAsset)>(0);
+
                         for (shard in shards.vals()) {
+
                             let assetsResult = await shard.getUserDataAssets(userID);
+
                             switch (assetsResult) {
                                 case (#ok(assets)) {
                                     allAssets.append(Buffer.fromArray(assets));
@@ -91,11 +112,16 @@ actor DataAssetService {
                             };
                         };
                         #ok(Buffer.toArray(allAssets));
+
                     };
-                    case (#err(e)) { #err(e) };
+                    case (#err(e)) {
+                        #err(e);
+                    };
                 };
             };
-            case (#err(e)) { #err("User not found: " # e) };
+            case (#err(e)) {
+                #err("User not found: " # e);
+            };
         };
     };
 
@@ -326,7 +352,7 @@ actor DataAssetService {
     public func getSymmetricKeyVerificationKey(assetID : Text) : async Result.Result<Text, Text> {
         let parts = Text.split(assetID, #text("-"));
         switch (parts.next(), parts.next(), parts.next()) {
-            case (?assetNum, ?userID, ?timestamp) {
+            case (?assetNum, ?_userID, ?_timestamp) {
                 let shardResult = await getShard(assetNum);
                 switch (shardResult) {
                     case (#ok(shard)) {
@@ -345,7 +371,7 @@ actor DataAssetService {
     public shared ({ caller }) func getEncryptedSymmetricKeyForAsset(assetID : Text, encryption_public_key : Blob) : async Result.Result<Text, Text> {
         let parts = Text.split(assetID, #text("-"));
         switch (parts.next(), parts.next(), parts.next()) {
-            case (?assetNum, ?userID, ?timestamp) {
+            case (?assetNum, ?_userID, ?_timestamp) {
                 let shardResult = await getShard(assetNum);
                 switch (shardResult) {
                     case (#ok(shard)) {
@@ -366,7 +392,7 @@ actor DataAssetService {
         switch (identityResult) {
             case (#ok(value)) {
                 switch (value) {
-                    case (id, userType) {
+                    case (_id, userType) {
 
                         if (userType != "Professional" and userType != "Facility") {
                             return #err("Only professionals or facilities can upload data for users");

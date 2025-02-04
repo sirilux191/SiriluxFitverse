@@ -20,7 +20,11 @@ export default function ConnectPage() {
           let resultOfRegistration =
             await actors.identityManager.checkRegistration();
           if (resultOfRegistration.ok) {
-            navigate(`/Health-${resultOfRegistration.ok}/Profile`);
+            if (resultOfRegistration.ok == "Facility") {
+              navigate(`/Health-Service/Profile`);
+            } else {
+              navigate(`/Health-${resultOfRegistration.ok}/Profile`);
+            }
           } else {
             navigate(`/Register`);
           }

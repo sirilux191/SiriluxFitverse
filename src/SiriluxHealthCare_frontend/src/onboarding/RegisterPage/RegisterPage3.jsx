@@ -7,7 +7,7 @@ import { Link, useNavigate } from "react-router-dom";
 import ActorContext from "../../ActorContext";
 import LoadingScreen from "../../LoadingScreen";
 import OnboardingBanner from "../../OnboardingBanner";
-import * as vetkd from "ic-vetkd-utils";
+// import * as vetkd from "ic-vetkd-utils";
 import { z } from "zod";
 
 // Define the Zod schema
@@ -51,8 +51,8 @@ export default function RegisterPage3Content() {
       // Validate the form data
       formSchema.parse(formData);
       setErrors({});
-
       setLoading(true);
+
       const {
         facultyName,
         registrationId,
@@ -64,76 +64,38 @@ export default function RegisterPage3Content() {
         serviceDesc,
       } = formData;
 
-      const demoInfo = { facultyName, country, state, city, pincode };
-      const servicesOfferedInfo = { serviceName, serviceDesc };
-      const licenseInfo = { registrationId };
+      // Create the data objects
+      const licenseInfo = {
+        licenseId: registrationId,
+      };
+      const demographicInfo = {
+        country,
+        state,
+        city,
+        pincode,
+        facilityName: facultyName, // Include facility name in demographic info
+      };
+      const servicesOfferedInfo = {
+        serviceName,
+        serviceDesc,
+      };
 
-      // Convert to JSON strings
-      const demoInfoJson = JSON.stringify(demoInfo);
-      const servicesOfferedInfoJson = JSON.stringify(servicesOfferedInfo);
-      const licenseInfoJson = JSON.stringify(licenseInfo);
-
-      // Convert JSON strings to Uint8Array
-      const demoInfoArray = new TextEncoder().encode(demoInfoJson);
+      // Convert to JSON strings and then to Uint8Array
+      const licenseInfoArray = new TextEncoder().encode(
+        JSON.stringify(licenseInfo)
+      );
+      const demographicInfoArray = new TextEncoder().encode(
+        JSON.stringify(demographicInfo)
+      );
       const servicesOfferedInfoArray = new TextEncoder().encode(
-        servicesOfferedInfoJson
-      );
-      const licenseInfoArray = new TextEncoder().encode(licenseInfoJson);
-
-      // Fetch the encrypted key
-      const seed = window.crypto.getRandomValues(new Uint8Array(32));
-      const tsk = new vetkd.TransportSecretKey(seed);
-      const encryptedKeyResult =
-        await actors.facility.encrypted_symmetric_key_for_facility(
-          Object.values(tsk.public_key())
-        );
-
-      let encryptedKey = "";
-
-      Object.keys(encryptedKeyResult).forEach((key) => {
-        if (key === "err") {
-          toast({
-            title: "Error",
-            description: encryptedKeyResult[key],
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
-        }
-        if (key === "ok") {
-          encryptedKey = encryptedKeyResult[key];
-        }
-      });
-
-      if (!encryptedKey) {
-        setLoading(false);
-        return;
-      }
-
-      const pkBytesHex = await actors.facility.symmetric_key_verification_key();
-      const principal = await actors.facility.whoami();
-      const aesGCMKey = tsk.decrypt_and_hash(
-        hex_decode(encryptedKey),
-        hex_decode(pkBytesHex),
-        new TextEncoder().encode(principal),
-        32,
-        new TextEncoder().encode("aes-256-gcm")
+        JSON.stringify(servicesOfferedInfo)
       );
 
-      const encryptedDataDemo = await aes_gcm_encrypt(demoInfoArray, aesGCMKey);
-      const encryptedDataService = await aes_gcm_encrypt(
-        servicesOfferedInfoArray,
-        aesGCMKey
-      );
-      const encryptedDataLicense = await aes_gcm_encrypt(
-        licenseInfoArray,
-        aesGCMKey
-      );
-
+      // Call the correct backend method
       const result = await actors.facility.createFacilityRequest(
-        Object.values(encryptedDataDemo),
-        Object.values(encryptedDataService),
-        Object.values(encryptedDataLicense)
+        licenseInfoArray,
+        demographicInfoArray,
+        servicesOfferedInfoArray
       );
 
       Object.keys(result).forEach((key) => {
@@ -169,31 +131,31 @@ export default function RegisterPage3Content() {
     }
   };
 
-  const aes_gcm_encrypt = async (data, rawKey) => {
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const aes_key = await window.crypto.subtle.importKey(
-      "raw",
-      rawKey,
-      "AES-GCM",
-      false,
-      ["encrypt"]
-    );
-    const ciphertext_buffer = await window.crypto.subtle.encrypt(
-      { name: "AES-GCM", iv: iv },
-      aes_key,
-      data
-    );
-    const ciphertext = new Uint8Array(ciphertext_buffer);
-    const iv_and_ciphertext = new Uint8Array(iv.length + ciphertext.length);
-    iv_and_ciphertext.set(iv, 0);
-    iv_and_ciphertext.set(ciphertext, iv.length);
-    return iv_and_ciphertext;
-  };
+  // const aes_gcm_encrypt = async (data, rawKey) => {
+  //   const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  //   const aes_key = await window.crypto.subtle.importKey(
+  //     "raw",
+  //     rawKey,
+  //     "AES-GCM",
+  //     false,
+  //     ["encrypt"]
+  //   );
+  //   const ciphertext_buffer = await window.crypto.subtle.encrypt(
+  //     { name: "AES-GCM", iv: iv },
+  //     aes_key,
+  //     data
+  //   );
+  //   const ciphertext = new Uint8Array(ciphertext_buffer);
+  //   const iv_and_ciphertext = new Uint8Array(iv.length + ciphertext.length);
+  //   iv_and_ciphertext.set(iv, 0);
+  //   iv_and_ciphertext.set(ciphertext, iv.length);
+  //   return iv_and_ciphertext;
+  // };
 
-  const hex_decode = (hexString) =>
-    Uint8Array.from(
-      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
-    );
+  // const hex_decode = (hexString) =>
+  //   Uint8Array.from(
+  //     hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
+  //   );
 
   if (loading) {
     return <LoadingScreen />;

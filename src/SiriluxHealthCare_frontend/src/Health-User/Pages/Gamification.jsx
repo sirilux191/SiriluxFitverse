@@ -281,7 +281,7 @@ const Gamification = () => {
 
   const fetchProfessionals = async () => {
     try {
-      const result = await actors.visitManager.getAllProfessionals();
+      const result = await actors.gamificationSystem.getAllProfessionals();
       setProfessionals(result); // Ensure result is in the expected format
     } catch (error) {
       console.error("Error fetching professionals:", error);
@@ -290,7 +290,7 @@ const Gamification = () => {
 
   const fetchFacilities = async () => {
     try {
-      const result = await actors.visitManager.getAllFacilities();
+      const result = await actors.gamificationSystem.getAllFacilities();
       setFacilities(result); // Ensure result is in the expected format
     } catch (error) {
       console.error("Error fetching facilities:", error);
@@ -337,7 +337,8 @@ const Gamification = () => {
 
   const fetchAvailableSlots = async (idToVisit) => {
     try {
-      const result = await actors.visitManager.getAvailableSlots(idToVisit);
+      const result =
+        await actors.gamificationSystem.getAvailableSlots(idToVisit);
       if (Array.isArray(result)) {
         console.log("Available Slots for ID:", idToVisit);
 
@@ -539,7 +540,7 @@ const Gamification = () => {
   const fetchVisits = async () => {
     setIsLoadingVisits(true);
     try {
-      const result = await actors.visitManager.getUserVisits();
+      const result = await actors.gamificationSystem.getUserVisits();
       if (result.ok) {
         setVisits(result.ok);
       } else {

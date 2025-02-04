@@ -74,7 +74,7 @@ const GamificationTab = () => {
       }
 
       const professionalId = identityResult.ok[0];
-      const result = await actors.visitManager.getProfessionalInfoSelf();
+      const result = await actors.gamificationSystem.getProfessionalInfoSelf();
 
       console.log("Service Info Result:", result);
 
@@ -86,6 +86,11 @@ const GamificationTab = () => {
           description: result.ok.description || "",
         });
       } else {
+        toast({
+          title: "Error",
+          description: "Failed to fetch professional information",
+          variant: "destructive",
+        });
         setProfessionalInfo({
           id: professionalId,
           name: "",
@@ -105,7 +110,7 @@ const GamificationTab = () => {
 
   const fetchAvailableSlots = async () => {
     try {
-      const result = await actors.visitManager.getAvailableSlotsSelf();
+      const result = await actors.gamificationSystem.getAvailableSlotsSelf();
       console.log("Available Slots Result:", result);
       if (result.ok) {
         setAvailableSlots(result.ok);
@@ -142,7 +147,7 @@ const GamificationTab = () => {
       console.log("Updating with data:", updateData);
 
       const result =
-        await actors.visitManager.updateProfessionalInfo(updateData);
+        await actors.gamificationSystem.updateProfessionalInfo(updateData);
 
       if (result.ok) {
         toast({
@@ -198,7 +203,7 @@ const GamificationTab = () => {
     try {
       const slots = generateSlotsFromRange();
       const result =
-        await actors.visitManager.addMultipleAvailabilitySlots(slots);
+        await actors.gamificationSystem.addMultipleAvailabilitySlots(slots);
       if (result.ok) {
         toast({
           title: "Success",
@@ -278,10 +283,11 @@ const GamificationTab = () => {
 
   const handleRemoveMultipleSlots = async () => {
     try {
-      const result = await actors.visitManager.removeMultipleAvailabilitySlots(
-        professionalInfo.id,
-        selectedSlots
-      );
+      const result =
+        await actors.gamificationSystem.removeMultipleAvailabilitySlots(
+          professionalInfo.id,
+          selectedSlots
+        );
       if (result.ok) {
         toast({
           title: "Success",
@@ -392,7 +398,9 @@ const GamificationTab = () => {
       }
 
       const result =
-        await actors.visitManager.addMultipleAvailabilitySlots(formattedSlots);
+        await actors.gamificationSystem.addMultipleAvailabilitySlots(
+          formattedSlots
+        );
       if (result.ok) {
         toast({
           title: "Success",
@@ -416,7 +424,7 @@ const GamificationTab = () => {
   const fetchVisits = async () => {
     setIsLoadingVisits(true);
     try {
-      const result = await actors.visitManager.getEntityVisits();
+      const result = await actors.gamificationSystem.getEntityVisits();
       if (result.ok) {
         setVisits(result.ok);
       } else {
@@ -441,7 +449,7 @@ const GamificationTab = () => {
   const fetchBookedSlots = async () => {
     setIsLoadingBookedSlots(true);
     try {
-      const result = await actors.visitManager.getBookedSlotsSelf();
+      const result = await actors.gamificationSystem.getBookedSlotsSelf();
       if (result.ok) {
         console.log(result.ok);
         setBookedSlots(result.ok);
@@ -485,10 +493,12 @@ const GamificationTab = () => {
 
   const handleCompleteVisit = async (visitId) => {
     try {
-      const result = await actors.visitManager.completeVisit(visitId);
+      const result = await actors.gamificationSystem.processVisitCompletion(
+        visitId,
+        professionalInfo.id
+      );
       if (result.ok) {
         toast({
-          title: "Success",
           description: "Visit completed successfully",
         });
         // Refresh the lists
@@ -509,7 +519,8 @@ const GamificationTab = () => {
 
   const handleRejectVisit = async (visitId) => {
     try {
-      const result = await actors.visitManager.rejectVisit(visitId);
+      const result =
+        await actors.gamificationSystem.rejectVisitAndRestoreHP(visitId);
       if (result.ok) {
         toast({
           title: "Success",

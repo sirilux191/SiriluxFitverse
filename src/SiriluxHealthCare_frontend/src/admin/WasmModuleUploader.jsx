@@ -12,6 +12,8 @@ function WasmModuleUploader({ shardType }) {
   const [wasmFile, setWasmFile] = useState(null);
   const [message, setMessage] = useState("");
   const navigate = useNavigate();
+  const [shardUpdateStatus, setShardUpdateStatus] = useState({});
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const readFile = (file) => {
     return new Promise((resolve, reject) => {
@@ -42,31 +44,23 @@ function WasmModuleUploader({ shardType }) {
       let result;
       switch (shardType) {
         case "user":
-          result = await actors.user.updateUserShardWasmModule(byteArray);
+          result = await actors.user.updateWasmModule(byteArray);
           break;
         case "professional":
-          result =
-            await actors.professional.updateProfessionalShardWasmModule(
-              byteArray
-            );
+          result = await actors.professional.updateWasmModule(byteArray);
           break;
         case "facility":
-          result =
-            await actors.facility.updateFacilityShardWasmModule(byteArray);
+          result = await actors.facility.updateWasmModule(byteArray);
           break;
         case "dataAsset":
-          result =
-            await actors.dataAsset.updateDataAssetShardWasmModule(byteArray);
+          result = await actors.dataAsset.updateWasmModule(byteArray);
           break;
         case "marketplace":
           result = await actors.marketplace.updateWasmModule(byteArray);
           break;
         case "sharedActivity":
           console.log(actors.sharedActivity);
-          result =
-            await actors.sharedActivity.updateSharedActivityShardWasmModule(
-              byteArray
-            );
+          result = await actors.sharedActivity.updateWasmModule(byteArray);
           break;
         default:
           setMessage("Unknown shard type");
@@ -80,6 +74,44 @@ function WasmModuleUploader({ shardType }) {
       }
     } catch (error) {
       setMessage(`Error: ${error.message}`);
+    }
+  };
+
+  const handleUpdateShards = async (service) => {
+    setIsUpdating(true);
+    try {
+      let result;
+      switch (service) {
+        case "facility":
+          result = await actors.facility.updateExistingShards();
+          break;
+        case "professional":
+          result = await actors.professional.updateExistingShards();
+          break;
+        case "user":
+          result = await actors.user.updateExistingShards();
+          break;
+        case "dataAsset":
+          result = await actors.dataAsset.updateExistingShards();
+          break;
+        case "sharedActivity":
+          result = await actors.sharedActivity.updateExistingShards();
+          break;
+        default:
+      }
+
+      if (result.err) {
+        setShardUpdateStatus({ status: "error", message: result.err });
+      } else {
+        setShardUpdateStatus({
+          status: "success",
+          message: "Shards updated successfully",
+        });
+      }
+    } catch (error) {
+      setShardUpdateStatus({ status: "error", message: error.message });
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -145,6 +177,45 @@ function WasmModuleUploader({ shardType }) {
             <AlertDescription>{message}</AlertDescription>
           </Alert>
         )}
+
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold mb-4">Update Existing Shards</h3>
+
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              "facility",
+              "professional",
+              "user",
+              "dataAsset",
+              "sharedActivity",
+            ].map((service) => (
+              <button
+                key={service}
+                onClick={() => handleUpdateShards(service)}
+                disabled={isUpdating}
+                className={`p-3 rounded-md ${
+                  isUpdating ? "bg-gray-300" : "bg-blue-600 hover:bg-blue-700"
+                } text-white transition-colors`}
+              >
+                {isUpdating
+                  ? "Updating..."
+                  : `Update ${service.replace(/([A-Z])/g, " $1")} Shards`}
+              </button>
+            ))}
+          </div>
+
+          {shardUpdateStatus.message && (
+            <div
+              className={`mt-4 p-3 rounded-md ${
+                shardUpdateStatus.status === "error"
+                  ? "bg-red-100 text-red-700"
+                  : "bg-green-100 text-green-700"
+              }`}
+            >
+              {shardUpdateStatus.message}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

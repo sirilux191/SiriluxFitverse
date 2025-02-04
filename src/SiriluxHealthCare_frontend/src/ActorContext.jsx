@@ -9,7 +9,6 @@ const ActorContext = React.createContext({
     identityManager: null,
     sharedActivity: null,
     gamificationSystem: null,
-    visitManager: null,
   },
   isAuthenticated: false,
   login: () => {},

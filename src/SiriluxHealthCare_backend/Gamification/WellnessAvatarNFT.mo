@@ -5,7 +5,6 @@ import D "mo:base/Debug";
 import Nat "mo:base/Nat";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
-import Time "mo:base/Time";
 import CandyTypesLib "mo:candy_0_3_0/types";
 import CertTree "mo:cert/CertTree";
 import ClassPlus "mo:class-plus";
@@ -18,7 +17,7 @@ import CanisterIDs "../Types/CanisterIDs";
 import ICRC3Default "./initial_state/icrc3";
 import ICRC37Default "./initial_state/icrc37";
 import ICRC7Default "./initial_state/icrc7";
-import GamificationTypes "GamificationTypes";
+
 shared (_init_msg) actor class WellnessAvatarNFT(
     _args : {
         icrc7_args : ?ICRC7.InitArgList;
@@ -88,7 +87,7 @@ shared (_init_msg) actor class WellnessAvatarNFT(
         ICRC3.initialState(),
         #v0_1_0(#id),
         switch (_args.icrc3_args) {
-            case (null) ICRC3Default.defaultConfig(init_msg.caller);
+            case (null) ICRC3Default.defaultConfig();
             case (?val) ?val : ICRC3.InitArgs;
         },
         init_msg.caller,
@@ -141,7 +140,7 @@ shared (_init_msg) actor class WellnessAvatarNFT(
         manager = initManager;
         initialState = icrc7_migration_state;
         args = switch (do ? { original_args.icrc7_args! }) {
-            case (null) ICRC7Default.defaultConfig(init_msg.caller);
+            case (null) ICRC7Default.defaultConfig();
             case (?val) ?val : ?ICRC7.InitArgList;
         };
         pullEnvironment = ?get_icrc7_environment;
@@ -181,7 +180,7 @@ shared (_init_msg) actor class WellnessAvatarNFT(
         manager = initManager;
         initialState = icrc37_migration_state;
         args = switch (do ? { original_args.icrc37_args! }) {
-            case (null) ICRC37Default.defaultConfig(init_msg.caller);
+            case (null) ICRC37Default.defaultConfig();
             case (?val) ?val : ?ICRC37.InitArgList;
         };
         pullEnvironment = ?get_icrc37_environment;
@@ -195,8 +194,6 @@ shared (_init_msg) actor class WellnessAvatarNFT(
             icrc37_migration_state := new_state;
         };
     });
-
-    private var canister_principal : ?Principal = null;
 
     public query func icrc7_symbol() : async Text {
         return switch (icrc7().get_ledger_info().symbol) {

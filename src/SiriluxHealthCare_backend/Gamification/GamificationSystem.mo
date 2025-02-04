@@ -85,9 +85,6 @@ actor class GamificationSystem() = this {
     // Reference to IdentityManager
     private let identityManager : IdentityManager.IdentityManager = actor (env.identityManagerCanisterID);
 
-    // Store permitted principals that can call certain functions
-    private stable var permittedPrincipals : [Principal] = [Principal.fromText(CanisterIDs.gamificationSystemCanisterID)];
-
     // Minting function with default values
     public shared ({ caller }) func mintWellnessAvatar(mintNFTPrincipal : Text, memo : ?Blob, avatarType : GamificationTypes.AvatarType, imageURL : Text) : async [SetNFTResult] {
         let currentTokenId = await wellnessAvatarNFT.icrc7_total_supply();
@@ -546,10 +543,6 @@ actor class GamificationSystem() = this {
             };
             case null (#Common, [], #Avatar, "");
         };
-    };
-
-    private func isPermittedCaller(caller : Principal) : Bool {
-        Array.find<Principal>(permittedPrincipals, func(p) { Principal.equal(p, caller) }) != null;
     };
 
     public shared ({ caller }) func updateProfessionalInfo(professionalInfo : ProfessionalInfo) : async Result.Result<Text, Text> {
@@ -1176,10 +1169,8 @@ actor class GamificationSystem() = this {
         };
     };
 
-    public shared ({ caller }) func rejectVisit(professionalPrincipal : Principal, visitId : Nat) : async Result.Result<Text, Text> {
-        if (not isPermittedCaller(caller)) {
-            return #err("Unauthorized caller");
-        };
+    private func rejectVisit(professionalPrincipal : Principal, visitId : Nat) : async Result.Result<Text, Text> {
+
         let identityResult = await identityManager.getIdentity(professionalPrincipal);
 
         switch (identityResult) {
@@ -1282,6 +1273,46 @@ actor class GamificationSystem() = this {
                     };
                     case null { #err("Visit not found") };
                 };
+            };
+        };
+    };
+
+    //  public function to reject visit and restore HP
+    public shared ({ caller }) func rejectVisitAndRestoreHP(
+        visitId : Nat
+    ) : async Result.Result<Text, Text> {
+
+        var avatarId : Nat = 0;
+        let restoreAmount : Nat = 10;
+        switch (BTree.get(visits, Nat.compare, visitId)) {
+            case (?visit) {
+                avatarId := visit.avatarId;
+            };
+            case null {
+                return #err("Visit not found");
+            };
+        };
+
+        let rejectResult = await rejectVisit(caller, visitId);
+        switch (rejectResult) {
+            case (#ok(msg)) {
+                // If rejection successful, restore HP
+                let hpResult = await wellnessAvatarNFT.icrcX_updateHP(
+                    Principal.fromText(Types.admin),
+                    avatarId,
+                    restoreAmount,
+                );
+                switch (hpResult) {
+                    case (#ok(_)) {
+                        #ok(msg # ". Successfully restored " # Nat.toText(restoreAmount) # " HP");
+                    };
+                    case (#err(e)) {
+                        #err("Visit rejected but HP restoration failed: " # e);
+                    };
+                };
+            };
+            case (#err(e)) {
+                #err(e);
             };
         };
     };

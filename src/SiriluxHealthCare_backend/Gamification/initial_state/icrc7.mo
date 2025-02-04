@@ -4,7 +4,7 @@ import ICRC7 "mo:icrc7-mo";
 import Types "../../Types";
 
 module {
-  public let defaultConfig = func(caller : Principal) : ICRC7.InitArgs {
+  public let defaultConfig = func() : ICRC7.InitArgs {
     ?{
       symbol = ?"SIRI";
       name = ?"Sirilux HealthCare";

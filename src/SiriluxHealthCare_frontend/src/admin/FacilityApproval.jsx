@@ -43,52 +43,67 @@ function FacilityApproval() {
   }, []);
 
   const fetchFacilities = async () => {
-    // Replace this with the actual API call when available
-    setFacilities([
-      {
-        id: 1,
-        name: "City Hospital",
-        registrationId: "CH001",
-        serviceName: "Emergency Care",
-        serviceDesc: "24/7 emergency medical services",
-        status: "pending",
-      },
-      {
-        id: 2,
-        name: "County Clinic",
-        registrationId: "CC002",
-        serviceName: "General Practice",
-        serviceDesc: "Primary care and routine check-ups",
-        status: "pending",
-      },
-      {
-        id: 3,
-        name: "Mind Wellness",
-        registrationId: "MW003",
-        serviceName: "Mental Health",
-        serviceDesc: "Counseling and therapy services",
-        status: "pending",
-      },
-    ]);
+    try {
+      const result = await actors.facility.getPendingFacilityRequests();
+      if (result.ok) {
+        const formattedRequests = result.ok.map(([principal, data]) => {
+          try {
+            const demographicInfo = JSON.parse(
+              new TextDecoder().decode(data.MetaData.DemographicInformation)
+            );
+            const licenseInfo = JSON.parse(
+              new TextDecoder().decode(data.MetaData.LicenseInformation)
+            );
+            const servicesInfo = JSON.parse(
+              new TextDecoder().decode(data.MetaData.ServicesOfferedInformation)
+            );
+            console.log(demographicInfo);
+            console.log(licenseInfo);
+            console.log(servicesInfo);
+            return {
+              id: principal,
+              name: demographicInfo.facilityName || "N/A",
+              registrationId: licenseInfo.registrationId || "N/A",
+              serviceName: servicesInfo.serviceName || "N/A",
+              serviceDesc: servicesInfo.serviceDesc || "N/A",
+              location: `${demographicInfo.city || ""}, ${demographicInfo.state || ""}, ${demographicInfo.country || ""}`,
+              status: "pending",
+            };
+          } catch (parseError) {
+            console.error("Error parsing facility data:", parseError);
+            return {
+              id: principal,
+              name: "Error parsing data",
+              registrationId: "Error",
+              serviceName: "Error",
+              serviceDesc: "Error",
+              location: "Error",
+              status: "pending",
+            };
+          }
+        });
+        setFacilities(formattedRequests);
+      } else {
+        console.error("Error fetching pending requests:", result.err);
+      }
+    } catch (error) {
+      console.error("Error fetching facilities:", error);
+    }
     setLoading(false);
   };
 
   const handleStatusChange = async (id, action) => {
     try {
-      // Replace this with the actual API call when available
-      // const result = await actors.facility[action === "approve" ? "approveFacilityRequest" : "rejectFacilityRequest"](id);
-
-      // Simulating API response
-      const result = { ok: true };
+      let result;
+      if (action === "approve") {
+        result = await actors.facility.approveFacilityRequest(id);
+      } else {
+        result = await actors.facility.rejectFacilityRequest(id);
+      }
 
       if (result.ok) {
-        setFacilities(
-          facilities.map((f) =>
-            f.id === id
-              ? { ...f, status: action === "approve" ? "approved" : "denied" }
-              : f,
-          ),
-        );
+        // Remove the facility from the list since it's been processed
+        setFacilities(facilities.filter((f) => f.id !== id));
       } else {
         console.error(`Error ${action}ing facility:`, result.err);
       }
@@ -233,7 +248,7 @@ function FacilityApproval() {
                       ? null
                       : flexRender(
                           header.column.columnDef.header,
-                          header.getContext(),
+                          header.getContext()
                         )}
                   </TableHead>
                 ))}
@@ -251,7 +266,7 @@ function FacilityApproval() {
                     <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
-                        cell.getContext(),
+                        cell.getContext()
                       )}
                     </TableCell>
                   ))}

@@ -13,7 +13,7 @@ import { ChevronLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import LoadingScreen from "../../LoadingScreen";
 import OnboardingBanner from "../../OnboardingBanner";
-// import * as vetkd from "ic-vetkd-utils";
+
 import { z } from "zod";
 import ActorContext from "../../ActorContext";
 

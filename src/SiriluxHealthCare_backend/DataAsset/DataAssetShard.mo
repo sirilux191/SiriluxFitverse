@@ -56,15 +56,28 @@ actor class DataAssetShard() {
 
             };
         };
-        switch (await grantAccess(asset.assetID, userPrincipal)) {
-            case (#ok(_value)) {
-                #ok(asset.assetID);
+        // Update dataAccessTP
+        switch (BTree.get(dataAccessTP, Text.compare, asset.assetID)) {
+            case null {
+                ignore BTree.insert(dataAccessTP, Text.compare, asset.assetID, [userPrincipal]);
             };
-            case (#err(error)) {
-                #err("Unable to grant access to the party" # error);
+            case (?principals) {
+                let updatedPrincipals = Array.append(principals, [userPrincipal]);
+                ignore BTree.insert(dataAccessTP, Text.compare, asset.assetID, updatedPrincipals);
             };
         };
 
+        // Update dataAccessPT
+        switch (BTree.get(dataAccessPT, Principal.compare, userPrincipal)) {
+            case null {
+                ignore BTree.insert(dataAccessPT, Principal.compare, userPrincipal, [asset.assetID]);
+            };
+            case (?assets) {
+                let updatedAssets = Array.append(assets, [asset.assetID]);
+                ignore BTree.insert(dataAccessPT, Principal.compare, userPrincipal, updatedAssets);
+            };
+        };
+        #ok(asset.assetID);
     };
 
     public shared query ({ caller }) func getDataAsset(userID : Text, timestamp : Text) : async Result.Result<Types.DataAsset, Text> {

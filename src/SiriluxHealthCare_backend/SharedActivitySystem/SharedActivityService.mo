@@ -94,7 +94,7 @@ actor class SharedActivityService() {
         };
     };
 
-    public shared func getReceivedActivities(caller : Principal) : async Result.Result<[Types.sharedActivityInfo], Text> {
+    public shared ({ caller }) func getReceivedActivities() : async Result.Result<[Types.sharedActivityInfo], Text> {
         let userIDResult = await identityManager.getIdentity(caller);
         switch (userIDResult) {
             case (#ok((userID, _))) {

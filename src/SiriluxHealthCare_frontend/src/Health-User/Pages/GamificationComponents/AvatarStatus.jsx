@@ -168,7 +168,6 @@ const AvatarStatus = ({ avatar, onLevelUp, onRestoreHP, userTokens }) => {
           <ProgressIndicator
             value={(avatar.hp / maxHP) * 100}
             className="w-full h-2.5 bg-gray-700/50"
-            indicatorClassName="bg-gradient-to-r from-red-500 to-red-400 transition-all"
           />
         </div>
 
@@ -189,7 +188,6 @@ const AvatarStatus = ({ avatar, onLevelUp, onRestoreHP, userTokens }) => {
                 <ProgressIndicator
                   value={(stat.value / stat.max) * 100}
                   className="w-full h-2 bg-gray-700/50"
-                  indicatorClassName={`${stat.color} bg-gradient-to-r transition-all`}
                 />
               </div>
             </div>

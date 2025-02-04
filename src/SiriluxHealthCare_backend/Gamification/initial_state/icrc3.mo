@@ -1,7 +1,7 @@
 import ICRC3 "mo:icrc3-mo";
 
 module {
-  public let defaultConfig = func(caller : Principal) : ICRC3.InitArgs {
+  public let defaultConfig = func() : ICRC3.InitArgs {
     ?{
       maxActiveRecords = 4000;
       settleToRecords = 2000;

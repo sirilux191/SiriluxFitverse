@@ -15,16 +15,26 @@ const ShardManagement = () => {
   ];
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab}>
+    <Tabs
+      value={activeTab}
+      onValueChange={setActiveTab}
+    >
       <TabsList>
         {shardTypes.map((type) => (
-          <TabsTrigger key={type} value={type} className="capitalize">
+          <TabsTrigger
+            key={type}
+            value={type}
+            className="capitalize"
+          >
             {type}
           </TabsTrigger>
         ))}
       </TabsList>
       {shardTypes.map((type) => (
-        <TabsContent key={type} value={type}>
+        <TabsContent
+          key={type}
+          value={type}
+        >
           <h2 className="text-2xl font-bold mb-4 capitalize">
             {type} Shard Management
           </h2>
