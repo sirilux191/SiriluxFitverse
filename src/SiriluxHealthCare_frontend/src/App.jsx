@@ -5,7 +5,7 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { ThemeProvider } from "./components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import FirstPageContent from "./onboarding/FirstPage";
@@ -20,211 +20,95 @@ import RegisteredContent3 from "./onboarding/RegisteredPage/RegisteredPage3";
 import AppRoute1 from "./Health-User/AppRoute";
 import AppRoute2 from "./Health-Professional/AppRoute";
 import AppRoute3 from "./Health-Service/AppRoute";
-import { createActor as createUserActor } from "../../declarations/User";
-import { createActor as createProfessionalActor } from "../../declarations/Professional";
-import { createActor as createFacilityActor } from "../../declarations/Facility";
-import { createActor as createDataAssetActor } from "../../declarations/DataAsset";
-import { createActor as createIdentityManagerActor } from "../../declarations/Identity_Manager";
-import { createActor as createSharedActivityActor } from "../../declarations/Shared_Activity";
-import { createActor as createGamificationSystemActor } from "../../declarations/GamificationSystem";
-
-import ActorContext from "./ActorContext";
-import { AuthClient } from "@dfinity/auth-client";
-import { HttpAgent } from "@dfinity/agent";
 
 import ConnectPage from "./onboarding/ConnectPage";
-import Dev from "./Dev";
-import AdminDashboard from "./admin/AdminDashboard";
+
+import AdminDashboard from "./Admin/AdminDashboard";
+import useActorStore from "./State/Actors/ActorStore";
 
 function App() {
-  const [actors, setActors] = useState({
-    user: null,
-    professional: null,
-    facility: null,
-    dataAsset: null,
-    identityManager: null,
-    sharedActivity: null,
-    gamificationSystem: null,
-  });
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authClient, setAuthClient] = useState(null);
+  const { initAuthClient } = useActorStore();
 
   useEffect(() => {
     initAuthClient();
-  }, []);
+  }, [initAuthClient]);
 
-  async function initAuthClient() {
-    const client = await AuthClient.create();
-    setAuthClient(client);
-    if (await client.isAuthenticated()) {
-      setIsAuthenticated(true);
-      await initializeActors(client);
-    }
-  }
-
-  async function initializeActors(client) {
-    const identity = client.getIdentity();
-    const agent = new HttpAgent({ identity });
-
-    if (process.env.DFX_NETWORK !== "ic") {
-      await agent.fetchRootKey().catch(console.error);
-    }
-
-    try {
-      const userActor = createUserActor(process.env.CANISTER_ID_USER, {
-        agent,
-      });
-      const professionalActor = createProfessionalActor(
-        process.env.CANISTER_ID_PROFESSIONAL,
-        { agent }
-      );
-      const facilityActor = createFacilityActor(
-        process.env.CANISTER_ID_FACILITY,
-        { agent }
-      );
-      const dataAssetActor = createDataAssetActor(
-        process.env.CANISTER_ID_DATAASSET,
-        { agent }
-      );
-      const identityManagerActor = createIdentityManagerActor(
-        process.env.CANISTER_ID_IDENTITY_MANAGER,
-        { agent }
-      );
-      const sharedActivityActor = createSharedActivityActor(
-        process.env.CANISTER_ID_SHARED_ACTIVITY,
-        { agent }
-      );
-      const gamificationSystemActor = createGamificationSystemActor(
-        process.env.CANISTER_ID_GAMIFICATIONSYSTEM,
-        { agent }
-      );
-
-      setActors({
-        user: userActor,
-        professional: professionalActor,
-        facility: facilityActor,
-        dataAsset: dataAssetActor,
-        identityManager: identityManagerActor,
-        sharedActivity: sharedActivityActor,
-        gamificationSystem: gamificationSystemActor,
-      });
-    } catch (error) {
-      console.error("Error initializing actors:", error);
-    }
-  }
-
-  async function login() {
-    if (authClient) {
-      await new Promise((resolve) => {
-        authClient.login({
-          identityProvider: process.env.II_URL,
-          onSuccess: resolve,
-        });
-      });
-      setIsAuthenticated(true);
-      await initializeActors(authClient);
-    }
-  }
-
-  async function logout() {
-    setActors({
-      user: null,
-      professional: null,
-      facility: null,
-      dataAsset: null,
-      identityManager: null,
-      sharedActivity: null,
-      gamificationSystem: null,
-    });
-    setIsAuthenticated(false);
-    if (authClient) {
-      await authClient.logout(); // Optional: If you want to call the logout method from the auth client
-    }
-  }
   return (
-    <ActorContext.Provider value={{ actors, isAuthenticated, login, logout }}>
-      <ThemeProvider>
-        <Toaster />
-        <Router>
-          <Routes>
-            {/* <Route path="/admin" element={<AdminDashboard />} /> */}
-            <Route
-              path="/admin"
-              element={<AdminDashboard />}
-            />
-            <Route
-              path="/dev"
-              element={<Dev />}
-            />
+    <ThemeProvider>
+      <Toaster />
+      <Router>
+        <Routes>
+          <Route
+            path="/admin"
+            element={<AdminDashboard />}
+          />
+          <Route
+            path="/"
+            element={<Navigate to="/Connect" />}
+          />
 
-            <Route
-              path="/"
-              element={<Navigate to="/Connect" />}
-            />
+          <Route
+            path="/Connect"
+            element={<ConnectPage />}
+          />
 
+          <Route
+            path="/Register"
+            element={<FirstPageContent />}
+          />
+          <Route path="/Register">
             <Route
-              path="/Connect"
-              element={<ConnectPage />}
-            />
-
-            <Route
-              path="/Register"
-              element={<FirstPageContent />}
-            />
-            <Route path="/Register">
-              <Route
-                path="Abha-Id"
-                element={<RegisterPage4Content />}
-              />
-              <Route
-                path="Abha-Id/verify"
-                element={<RegisteredContent1 />}
-              />
-              <Route
-                path="Health-User"
-                element={<RegisterPage1Content />}
-              />
-              <Route
-                path="Health-User/verify"
-                element={<RegisteredContent1 />}
-              />
-              <Route
-                path="Health-Professional"
-                element={<RegisterPage2Content />}
-              />
-              <Route
-                path="Health-Professional/verify"
-                element={<RegisteredContent2 />}
-              />
-              <Route
-                path="Health-Service"
-                element={<RegisterPage3Content />}
-              />
-              <Route
-                path="Health-Service/verify"
-                element={<RegisteredContent3 />}
-              />
-            </Route>
-            <Route
-              path="/Health-User/*"
-              element={<AppRoute1 />}
+              path="Abha-Id"
+              element={<RegisterPage4Content />}
             />
             <Route
-              path="/Health-Professional/*"
-              element={<AppRoute2 />}
+              path="Abha-Id/verify"
+              element={<RegisteredContent1 />}
             />
             <Route
-              path="/Health-Service/*"
-              element={<AppRoute3 />}
+              path="Health-User"
+              element={<RegisterPage1Content />}
             />
             <Route
-              path="*"
-              element={<NotFound />}
+              path="Health-User/verify"
+              element={<RegisteredContent1 />}
             />
-          </Routes>
-        </Router>
-      </ThemeProvider>
-    </ActorContext.Provider>
+            <Route
+              path="Health-Professional"
+              element={<RegisterPage2Content />}
+            />
+            <Route
+              path="Health-Professional/verify"
+              element={<RegisteredContent2 />}
+            />
+            <Route
+              path="Health-Service"
+              element={<RegisterPage3Content />}
+            />
+            <Route
+              path="Health-Service/verify"
+              element={<RegisteredContent3 />}
+            />
+          </Route>
+          <Route
+            path="/Health-User/*"
+            element={<AppRoute1 />}
+          />
+          <Route
+            path="/Health-Professional/*"
+            element={<AppRoute2 />}
+          />
+          <Route
+            path="/Health-Service/*"
+            element={<AppRoute3 />}
+          />
+          <Route
+            path="*"
+            element={<NotFound />}
+          />
+        </Routes>
+      </Router>
+    </ThemeProvider>
   );
 }
 

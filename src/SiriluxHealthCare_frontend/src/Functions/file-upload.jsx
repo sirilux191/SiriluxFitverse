@@ -18,7 +18,7 @@ import { CircleX } from "lucide-react";
 import lighthouse from "@lighthouse-web3/sdk";
 
 import LoadingScreen from "../LoadingScreen";
-import ActorContext from "../ActorContext";
+
 import * as vetkd from "ic-vetkd-utils";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,9 +28,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import useActorStore from "../State/Actors/ActorStore";
 
 const FileUpload = () => {
-  const { actors } = useContext(ActorContext);
+  const { actors } = useActorStore();
   const [file, setFile] = useState(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [description, setDescription] = useState("");

@@ -5,8 +5,9 @@ import ActorContext from "../ActorContext";
 import LoadingScreen from "../LoadingScreen";
 import { toast } from "@/components/ui/use-toast";
 import * as vetkd from "ic-vetkd-utils";
-
+import { useUserProfileStore } from "../State/User/UserProfile/UserProfileStore";
 function HealthAnalyticsOld() {
+  const { userProfile } = useUserProfileStore();
   const { actors } = useContext(ActorContext);
   const [loading, setLoading] = useState(false);
   const [age, setAge] = useState("");
@@ -14,111 +15,15 @@ function HealthAnalyticsOld() {
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
 
-  const aes_gcm_decrypt = async (encryptedData, rawKey) => {
-    const iv = encryptedData.slice(0, 12);
-    const ciphertext = encryptedData.slice(12);
-    const aes_key = await window.crypto.subtle.importKey(
-      "raw",
-      rawKey,
-      "AES-GCM",
-      false,
-      ["decrypt"],
-    );
-    const decrypted_buffer = await window.crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: iv },
-      aes_key,
-      ciphertext,
-    );
-    return new Uint8Array(decrypted_buffer);
-  };
-  const hex_decode = (hexString) =>
-    Uint8Array.from(
-      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)),
-    );
-
   const fetchUserData = async () => {
     setLoading(true);
 
     try {
-      const result = await actors.user.readUser();
-      if (result.ok) {
-        const { IDNum, UUID, MetaData } = result.ok;
-        const {
-          DemographicInformation,
-          BasicHealthParameters,
-          BiometricData,
-          FamilyInformation,
-        } = MetaData;
-        // Step 1: Retrieve the encrypted key using encrypted_symmetric_key_for_dataAsset
-
-        const seed = window.crypto.getRandomValues(new Uint8Array(32));
-        const tsk = new vetkd.TransportSecretKey(seed);
-        const encryptedKeyResult =
-          await actors.user.encrypted_symmetric_key_for_user(
-            Object.values(tsk.public_key()),
-          );
-
-        let encryptedKey = "";
-
-        Object.keys(encryptedKeyResult).forEach((key) => {
-          if (key === "err") {
-            alert(encryptedKeyResult[key]);
-            setLoading(false);
-            return;
-          }
-          if (key === "ok") {
-            encryptedKey = encryptedKeyResult[key];
-          }
-        });
-
-        if (!encryptedKey) {
-          setLoading(false);
-          return;
-        }
-
-        const pkBytesHex = await actors.user.symmetric_key_verification_key();
-        const principal = await actors.user.whoami();
-        console.log(pkBytesHex);
-        console.log(encryptedKey);
-        const aesGCMKey = tsk.decrypt_and_hash(
-          hex_decode(encryptedKey),
-          hex_decode(pkBytesHex),
-          new TextEncoder().encode(principal),
-          32,
-          new TextEncoder().encode("aes-256-gcm"),
-        );
-        console.log(aesGCMKey);
-        console.log(typeof DemographicInformation);
-        console.log(typeof BasicHealthParameters);
-        console.log(DemographicInformation);
-        console.log(BasicHealthParameters);
-        const decryptedDataDemo = await aes_gcm_decrypt(
-          new Uint8Array(DemographicInformation),
-          aesGCMKey,
-        );
-        const decryptedDataBasicHealth = await aes_gcm_decrypt(
-          new Uint8Array(BasicHealthParameters),
-          aesGCMKey,
-        );
-
-        const parsedDemographicInfo = JSON.parse(
-          String.fromCharCode.apply(null, decryptedDataDemo),
-        );
-        const parsedBasicHealthParams = JSON.parse(
-          String.fromCharCode.apply(null, decryptedDataBasicHealth),
-        );
-        const parsedBiometricData =
-          BiometricData.length > 0
-            ? JSON.parse(String.fromCharCode.apply(null, BiometricData))
-            : null;
-        const parsedFamilyInfo =
-          FamilyInformation.length > 0
-            ? JSON.parse(String.fromCharCode.apply(null, FamilyInformation))
-            : null;
-        setAge(calculateAge(parsedDemographicInfo.dob));
-        setHeight(parsedBasicHealthParams.height);
-        setWeight(parsedBasicHealthParams.weight);
-        setGender(parsedDemographicInfo.gender);
+      if (userProfile) {
+        setAge(calculateAge(userProfile.DemographicInformation.dob));
+        setHeight(userProfile.BasicHealthParameters.height);
+        setWeight(userProfile.BasicHealthParameters.weight);
+        setGender(userProfile.DemographicInformation.gender);
         setLoading(false);
       } else {
         toast({

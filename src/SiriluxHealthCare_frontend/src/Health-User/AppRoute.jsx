@@ -1,17 +1,17 @@
 import React, { useState } from "react";
 import { Routes, Route } from "react-router-dom";
-import Navbar from "./Navbar";
+import Navbar from "../CommonPages/Navbar";
 import Sidebar from "./Sidebar";
 import DashboardContent from "./Pages/Dashboard";
-import MarketplaceContent from "./Pages/Marketplace";
+import CryptoAsset from "@/CommonPages/CryptoAsset";
 import ProfileContent from "./Pages/Profile";
 import UploadContent from "./Pages/UploadPage";
 import AnalyticsContent from "./Pages/Analytics";
 import Gamification from "./Pages/Gamification";
-import YourRecords from "./Pages/Records/YourRecords";
-import SharedWithYou from "./Pages/Records/SharedWithYou";
-import Dev from "../Dev";
-import NotFoundPage from "./NotFoundPage";
+import YourRecords from "../CommonPages/Records/YourRecords";
+import SharedWithYou from "../CommonPages/Records/SharedWithYou";
+import ConsultAI from "./Pages/ConsultAI";
+import NotFoundPage from "../CommonPages/NotFoundPage";
 import AppBanner from "../AppBanner";
 
 export default function AppRoute1() {
@@ -60,8 +60,12 @@ export default function AppRoute1() {
               element={<UploadContent />}
             />
             <Route
-              path="/Marketplace"
-              element={<MarketplaceContent />}
+              path="/Assets"
+              element={<CryptoAsset />}
+            />
+            <Route
+              path="/ConsultAI"
+              element={<ConsultAI />}
             />
             <Route
               path="/Gamification"
@@ -71,10 +75,7 @@ export default function AppRoute1() {
               path="/Profile"
               element={<ProfileContent />}
             />
-            <Route
-              path="/minigames"
-              element={<Dev />}
-            />
+
             <Route
               path="*"
               element={<NotFoundPage />}

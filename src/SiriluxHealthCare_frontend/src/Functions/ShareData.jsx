@@ -1,5 +1,5 @@
-import React, { useState, useContext } from "react";
-import ActorContext from "../ActorContext";
+import React, { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,17 +9,18 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
+import useActorStore from "../State/Actors/ActorStore";
+import { Share, Loader2 } from "lucide-react";
 
 export function ShareDataFunc({ assetID }) {
   const [userId, setUserId] = useState("");
   const [open, setOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const { actors } = useContext(ActorContext);
+  const { actors } = useActorStore();
 
   const handleShare = async () => {
     try {
@@ -56,22 +57,31 @@ export function ShareDataFunc({ assetID }) {
     >
       <DialogTrigger asChild>
         <Button
-          variant="outline"
+          variant="default"
           onClick={() => setOpen(true)}
           disabled={sharing}
+          className="gap-2"
         >
+          {sharing ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Share className="h-4 w-4" />
+          )}
           Share
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Share your data</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Share className="h-5 w-5" />
+            Share your data
+          </DialogTitle>
           <DialogDescription>
             Enter the user ID you want to share your data with. Click share when
             you're done.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-6 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label
               htmlFor="userId"
@@ -83,7 +93,8 @@ export function ShareDataFunc({ assetID }) {
               id="userId"
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
-              className="col-span-3"
+              className="col-span-3 focus-visible:ring-indigo-500"
+              placeholder="Enter user ID..."
             />
           </div>
         </div>
@@ -91,8 +102,11 @@ export function ShareDataFunc({ assetID }) {
           <Button
             onClick={handleShare}
             disabled={sharing}
+            variant="default"
+            className="bg-indigo-600 hover:bg-indigo-700"
           >
-            Send
+            {sharing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {sharing ? "Sharing..." : "Share Data"}
           </Button>
         </DialogFooter>
       </DialogContent>

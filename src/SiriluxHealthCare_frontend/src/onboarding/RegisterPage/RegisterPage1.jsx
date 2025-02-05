@@ -1,4 +1,4 @@
-import { useState, useContext } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import LoadingScreen from "../../LoadingScreen";
 import OnboardingBanner from "../../OnboardingBanner";
 import * as vetkd from "ic-vetkd-utils";
 import { z } from "zod";
-import ActorContext from "../../ActorContext";
+import useActorStore from "../../State/Actors/ActorStore";
 
 // Define the Zod schema
 const formSchema = z.object({
@@ -48,7 +48,7 @@ const formSchema = z.object({
 export default function RegisterPage1Content() {
   const navigate = useNavigate();
 
-  const { actors, isAuthenticated, login } = useContext(ActorContext);
+  const { actors } = useActorStore();
   const [formData, setFormData] = useState({
     name: "",
     dob: "",

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import {
   User,
   Building,
@@ -16,7 +16,6 @@ import {
   Mail,
   Clock,
   AlertCircle,
-  PlusCircle,
   ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,8 +23,7 @@ import { toast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
 import AvatarStatus from "./GamificationComponents/AvatarStatus";
 import NFTCard from "./GamificationComponents/NFTCard";
-
-import ActorContext from "../../ActorContext";
+import useActorStore from "@/State/Actors/ActorStore";
 import {
   Select,
   SelectTrigger,
@@ -131,14 +129,13 @@ const NavigationMenu = ({ activeTab, setActiveTab }) => {
 };
 
 const Gamification = () => {
-  const { actors } = useContext(ActorContext);
+  const { actors } = useActorStore();
   const [userAvatars, setUserAvatars] = useState([]);
   const [professionals, setProfessionals] = useState([]);
   const [facilities, setFacilities] = useState([]);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
   const [selectedProfessional, setSelectedProfessional] = useState(null);
-  const [selectedFacility, setSelectedFacility] = useState(null);
-  const [visitDuration, setVisitDuration] = useState(30);
+
   const [availableSlots, setAvailableSlots] = useState([]);
   const [selectedAvatarForVisit, setSelectedAvatarForVisit] = useState(null);
   const [userTokens, setUserTokens] = useState(null);

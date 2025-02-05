@@ -8,16 +8,18 @@ import {
   Select,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import ActorContext from "../../ActorContext";
-import { useState, useEffect, useContext } from "react";
+import useActorStore from "../../State/Actors/ActorStore";
+import { useState, useEffect } from "react";
 import LoadingScreen from "../../LoadingScreen";
-import * as vetkd from "ic-vetkd-utils";
+
 import { toast } from "@/components/ui/use-toast";
+import { useUserProfileStore } from "../../State/User/UserProfile/UserProfileStore";
 
 export default function ProfileContent() {
-  const { actors } = useContext(ActorContext);
+  const { actors } = useActorStore();
+  const { userProfile, loading, fetchUserProfile, updateUserProfile } =
+    useUserProfileStore();
 
-  const [userData, setUserData] = useState(null);
   const [name, setName] = useState("");
   const [dob, setDob] = useState("");
   const [gender, setGender] = useState("");
@@ -28,270 +30,66 @@ export default function ProfileContent() {
   const [state, setState] = useState("");
   const [heartRate, setHeartRate] = useState("");
   const [pincode, setPincode] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const aes_gcm_encrypt = async (data, rawKey) => {
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const aes_key = await window.crypto.subtle.importKey(
-      "raw",
-      rawKey,
-      "AES-GCM",
-      false,
-      ["encrypt"]
-    );
-    const ciphertext_buffer = await window.crypto.subtle.encrypt(
-      { name: "AES-GCM", iv: iv },
-      aes_key,
-      data
-    );
-    const ciphertext = new Uint8Array(ciphertext_buffer);
-    const iv_and_ciphertext = new Uint8Array(iv.length + ciphertext.length);
-    iv_and_ciphertext.set(iv, 0);
-    iv_and_ciphertext.set(ciphertext, iv.length);
-    return iv_and_ciphertext;
-  };
-
-  const aes_gcm_decrypt = async (encryptedData, rawKey) => {
-    const iv = encryptedData.slice(0, 12);
-    const ciphertext = encryptedData.slice(12);
-    const aes_key = await window.crypto.subtle.importKey(
-      "raw",
-      rawKey,
-      "AES-GCM",
-      false,
-      ["decrypt"]
-    );
-    const decrypted_buffer = await window.crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: iv },
-      aes_key,
-      ciphertext
-    );
-    return new Uint8Array(decrypted_buffer);
-  };
-  const hex_decode = (hexString) =>
-    Uint8Array.from(
-      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
-    );
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const result = await actors.user.readUser();
-        if (result.ok) {
-          const { IDNum, UUID, MetaData } = result.ok;
-          const {
-            DemographicInformation,
-            BasicHealthParameters,
-            BiometricData,
-            FamilyInformation,
-          } = MetaData;
-          // Step 1: Retrieve the encrypted key using encrypted_symmetric_key_for_dataAsset
-
-          const seed = window.crypto.getRandomValues(new Uint8Array(32));
-          const tsk = new vetkd.TransportSecretKey(seed);
-          const encryptedKeyResult =
-            await actors.user.encrypted_symmetric_key_for_user(
-              Object.values(tsk.public_key())
-            );
-
-          let encryptedKey = "";
-
-          Object.keys(encryptedKeyResult).forEach((key) => {
-            if (key === "err") {
-              alert(encryptedKeyResult[key]);
-              setLoading(false);
-              return;
-            }
-            if (key === "ok") {
-              encryptedKey = encryptedKeyResult[key];
-            }
-          });
-
-          if (!encryptedKey) {
-            setLoading(false);
-            return;
-          }
-
-          const pkBytesHex = await actors.user.symmetric_key_verification_key();
-          const principal = await actors.user.whoami();
-          console.log(pkBytesHex);
-          console.log(encryptedKey);
-          const aesGCMKey = tsk.decrypt_and_hash(
-            hex_decode(encryptedKey),
-            hex_decode(pkBytesHex),
-            new TextEncoder().encode(principal),
-            32,
-            new TextEncoder().encode("aes-256-gcm")
-          );
-          console.log(aesGCMKey);
-          console.log(typeof DemographicInformation);
-          console.log(typeof BasicHealthParameters);
-          console.log(DemographicInformation);
-          console.log(BasicHealthParameters);
-          const decryptedDataDemo = await aes_gcm_decrypt(
-            new Uint8Array(DemographicInformation),
-            aesGCMKey
-          );
-          const decryptedDataBasicHealth = await aes_gcm_decrypt(
-            new Uint8Array(BasicHealthParameters),
-            aesGCMKey
-          );
-
-          const parsedDemographicInfo = JSON.parse(
-            String.fromCharCode.apply(null, decryptedDataDemo)
-          );
-          const parsedBasicHealthParams = JSON.parse(
-            String.fromCharCode.apply(null, decryptedDataBasicHealth)
-          );
-          const parsedBiometricData =
-            BiometricData.length > 0
-              ? JSON.parse(String.fromCharCode.apply(null, BiometricData))
-              : null;
-          const parsedFamilyInfo =
-            FamilyInformation.length > 0
-              ? JSON.parse(String.fromCharCode.apply(null, FamilyInformation))
-              : null;
-
-          setUserData({
-            IDNum,
-            UUID,
-            DemographicInformation: parsedDemographicInfo,
-            BasicHealthParameters: parsedBasicHealthParams,
-            BiometricData: parsedBiometricData,
-            FamilyInformation: parsedFamilyInfo,
-          });
-        } else {
-          alert(result.err);
-        }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-      }
-    };
-
-    fetchUserData();
-  }, [actors.user]);
 
   useEffect(() => {
-    if (userData) {
-      setName(userData.DemographicInformation.name || "");
-      setDob(userData.DemographicInformation.dob || "");
-      setGender(userData.DemographicInformation.gender || "");
-      setBloodType(userData.BasicHealthParameters.bloodType || "");
-      setHeight(userData.BasicHealthParameters.height || "");
-      setCountry(userData.DemographicInformation.country || "");
-      setWeight(userData.BasicHealthParameters.weight || "");
-      setState(userData.DemographicInformation.state || "");
-      setHeartRate(userData.BasicHealthParameters.heartRate || "");
-      setPincode(userData.DemographicInformation.pincode || "");
+    fetchUserProfile(actors);
+  }, [actors, fetchUserProfile]);
+
+  useEffect(() => {
+    if (userProfile) {
+      setName(userProfile.DemographicInformation.name || "");
+      setDob(userProfile.DemographicInformation.dob || "");
+      setGender(userProfile.DemographicInformation.gender || "");
+      setBloodType(userProfile.BasicHealthParameters.bloodType || "");
+      setHeight(userProfile.BasicHealthParameters.height || "");
+      setCountry(userProfile.DemographicInformation.country || "");
+      setWeight(userProfile.BasicHealthParameters.weight || "");
+      setState(userProfile.DemographicInformation.state || "");
+      setHeartRate(userProfile.BasicHealthParameters.heartRate || "");
+      setPincode(userProfile.DemographicInformation.pincode || "");
     }
-  }, [userData]);
+  }, [userProfile]);
 
   const handleUpdateUser = async (event) => {
     event.preventDefault();
-    setLoading(true);
-    try {
-      const demoInfo = {
-        name,
-        dob,
-        gender,
-        country,
-        state,
-        pincode,
-      };
 
-      const basicHealthPara = {
-        bloodType,
-        height,
-        heartRate,
-        weight,
-      };
-      // Convert demoInfo and basicHealthPara objects to JSON strings
-      const demoInfoJson = JSON.stringify(demoInfo);
-      const basicHealthParaJson = JSON.stringify(basicHealthPara);
+    const demoInfo = {
+      name,
+      dob,
+      gender,
+      country,
+      state,
+      pincode,
+    };
 
-      // Convert JSON strings to Uint8Array
-      const demoInfoArray = new TextEncoder().encode(demoInfoJson);
-      const basicHealthParaArray = new TextEncoder().encode(
-        basicHealthParaJson
-      );
+    const basicHealthPara = {
+      bloodType,
+      height,
+      heartRate,
+      weight,
+    };
 
-      // Step 2: Fetch the encrypted key using encrypted_symmetric_key_for_dataAsset
-      const seed = window.crypto.getRandomValues(new Uint8Array(32));
-      const tsk = new vetkd.TransportSecretKey(seed);
-      const encryptedKeyResult =
-        await actors.user.encrypted_symmetric_key_for_user(
-          Object.values(tsk.public_key())
-        );
+    const result = await updateUserProfile(actors, demoInfo, basicHealthPara);
 
-      let encryptedKey = "";
-
-      Object.keys(encryptedKeyResult).forEach((key) => {
-        if (key === "err") {
-          alert(encryptedKeyResult[key]);
-          setLoading(false);
-          return;
-        }
-        if (key === "ok") {
-          encryptedKey = encryptedKeyResult[key];
-        }
+    if (result.success) {
+      toast({
+        title: "Success",
+        description: result.message,
+        variant: "success",
       });
-
-      if (!encryptedKey) {
-        setLoading(false);
-        return;
-      }
-
-      const pkBytesHex = await actors.user.symmetric_key_verification_key();
-      const principal = await actors.user.whoami();
-      console.log(pkBytesHex);
-      console.log(encryptedKey);
-      const aesGCMKey = tsk.decrypt_and_hash(
-        hex_decode(encryptedKey),
-        hex_decode(pkBytesHex),
-        new TextEncoder().encode(principal),
-        32,
-        new TextEncoder().encode("aes-256-gcm")
-      );
-      console.log(aesGCMKey);
-
-      const encryptedDataDemo = await aes_gcm_encrypt(demoInfoArray, aesGCMKey);
-      const encryptedDataBasicHealth = await aes_gcm_encrypt(
-        basicHealthParaArray,
-        aesGCMKey
-      );
-      const result = await actors.user.updateUser({
-        DemographicInformation: Object.values(encryptedDataDemo),
-        BasicHealthParameters: Object.values(encryptedDataBasicHealth),
-        BiometricData: [],
-        FamilyInformation: [],
+    } else {
+      toast({
+        title: "Error",
+        description: result.message,
+        variant: "destructive",
       });
-      Object.keys(result).forEach((key) => {
-        if (key == "err") {
-          //alert(result[key]);
-          toast({
-            title: "Error",
-            description: result[key],
-            variant: "destructive",
-          });
-          setLoading(false);
-        }
-        if (key == "ok") {
-          //alert(result[key]);
-          toast({
-            title: "Success",
-            description: result[key],
-            variant: "success",
-          });
-          setLoading(false);
-        }
-      });
-    } catch (error) {
-      console.error("Error updating user data:", error);
     }
   };
+
   if (loading) {
     return <LoadingScreen />;
   }
-  if (!userData) {
+  if (!userProfile) {
     return <LoadingScreen />;
   }
   return (
@@ -319,8 +117,8 @@ export default function ProfileContent() {
                 </Avatar>
 
                 <div className="flex space-x-2 py-4">
-                  <p>ID Number:- {userData.IDNum}</p>
-                  <p>UUID:- {userData.UUID}</p>
+                  <p>ID Number:- {userProfile.IDNum}</p>
+                  <p>UUID:- {userProfile.UUID}</p>
                 </div>
               </div>
               <div className="mt-6 grid grid-cols-2 gap-y-6 gap-x-4 ">

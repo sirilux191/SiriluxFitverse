@@ -8,13 +8,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useLocation, useNavigate } from "react-router-dom"; // Import useNavigate
-import ActorContext from "@/ActorContext"; // Import the context
+import useActorStore from "@/State/Actors/ActorStore";
 import { toast } from "@/components/ui/use-toast"; // Ensure toast is imported
 
 const Navbar = ({ toggleSidebar }) => {
   const location = useLocation();
   const navigate = useNavigate(); // Initialize useNavigate
-  const { logout, actors } = useContext(ActorContext); // Get the logout function and actors
+  const { actors, logout } = useActorStore(); // Get the logout function and actors
   const [principalId, setPrincipalId] = useState(null);
 
   const getCurrentPageName = () => {

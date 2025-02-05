@@ -259,8 +259,7 @@ export default function UploadContent() {
     iv_and_ciphertext.set(ciphertext, iv.length);
     return iv_and_ciphertext;
   };
-  // const hex_encode = (bytes) =>
-  //   bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, "0"), "");
+
   const hex_decode = (hexString) =>
     Uint8Array.from(
       hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))

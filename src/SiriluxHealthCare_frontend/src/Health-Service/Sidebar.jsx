@@ -53,7 +53,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     },
     { to: "/Health-Service/Upload", icon: <Upload />, text: "Upload" },
     {
-      to: "/Health-Service/Marketplace",
+      to: "/Health-Service/CryptoAsset",
       icon: <ShoppingCart />,
       text: "Marketplace",
     },

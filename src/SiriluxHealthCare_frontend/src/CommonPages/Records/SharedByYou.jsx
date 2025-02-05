@@ -1,6 +1,4 @@
-"use client";
-
-import React, { useEffect, useState, useContext } from "react";
+import React from "react";
 import {
   flexRender,
   getCoreRowModel,
@@ -12,7 +10,7 @@ import {
 import { ChevronDown } from "lucide-react";
 import formatDate from "date-fns/format";
 import { Button } from "@/components/ui/button";
-
+import LoadingScreen from "../../LoadingScreen";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -28,57 +26,36 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { SellDataFunc } from "@/Functions/SellData";
-import { ShareDataFunc } from "@/Functions/ShareData";
-import DownloadFile from "../../Functions/DownloadFile";
+import { useEffect, useState } from "react";
 import ActorContext from "../../ActorContext";
-import LoadingScreen from "../../LoadingScreen";
+
 const columns = [
   {
-    accessorKey: "title",
-    header: "Title",
+    accessorKey: "assetID",
+    header: "Asset ID",
   },
   {
-    accessorKey: "description",
-    header: "Description",
+    accessorKey: "usedSharedTo",
+    header: "User Shared To",
   },
   {
-    accessorKey: "timestamp",
+    accessorKey: "time",
     header: "Date",
     cell: ({ getValue }) => {
-      const date = new Date(getValue() / 1000000); // Convert nanoseconds to milliseconds
+      const date = new Date(Number(getValue()) / 1000000);
       return formatDate(date, "yyyy-MM-dd HH:mm:ss");
     },
   },
   {
-    accessorKey: "format",
-    header: "File Format",
-  },
-  {
-    id: "download",
-    header: "",
-    cell: ({ row }) => (
-      <DownloadFile
-        data={row.original.data}
-        uniqueID={row.original.assetid}
-        title={row.original.title}
-        format={row.original.format}
-      />
-    ),
-  },
-  {
-    id: "share",
-    header: "",
-    cell: ({ row }) => <ShareDataFunc assetID={row.original.assetid} />,
-  },
-  {
-    id: "sell",
-    header: "",
-    cell: ({ row }) => <SellDataFunc assetID={row.original.timestamp} />,
+    accessorKey: "sharedType",
+    header: "Sharing Type",
+    cell: ({ getValue }) => {
+      return Object.keys(getValue())[0];
+    },
   },
 ];
 
-export function ShareSellTable() {
+function RecentActivityTable() {
   const [sorting, setSorting] = useState([]);
   const [columnFilters, setColumnFilters] = useState([]);
   const [columnVisibility, setColumnVisibility] = useState({});
@@ -88,32 +65,24 @@ export function ShareSellTable() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUserDataAssets = async () => {
+    const fetchSharedFilesList = async () => {
       try {
-        const result = await actors.dataAsset.getUserDataAssets();
+        const result = await actors.sharedActivity.getSharedActivities();
         console.log(result);
         if (result.ok) {
-          const dataAssets = result.ok.map(([timestamp, asset]) => ({
-            assetid: asset.assetID,
-            timestamp,
-            title: asset.title,
-            description: asset.description,
-            format: asset.metadata.format,
-            data: asset.data,
-          }));
-          setData(dataAssets);
+          setData(result.ok);
           setLoading(false);
         } else {
-          console.error("Error fetching user data assets:", result.err);
+          console.error("Error fetching shared files list:", result.err);
           setLoading(false);
         }
       } catch (error) {
-        console.error("Error fetching user data assets:", error);
+        console.error("Error fetching shared files list:", error);
         setLoading(false);
       }
     };
 
-    fetchUserDataAssets();
+    fetchSharedFilesList();
   }, [actors]);
 
   const table = useReactTable({
@@ -141,16 +110,16 @@ export function ShareSellTable() {
     <div>
       <div className="flex items-center py-4">
         <Input
-          placeholder="Filter names..."
+          placeholder="Filter documents..."
           value={
-            (table.getColumn("title") &&
-              table.getColumn("title").getFilterValue()) ||
+            (table.getColumn("assetID") &&
+              table.getColumn("assetID").getFilterValue()) ||
             ""
           }
           onChange={(event) =>
-            table.getColumn("title")?.setFilterValue(event.target.value)
+            table.getColumn("assetID")?.setFilterValue(event.target.value)
           }
-          className="w-full mr-2"
+          className="max-w-4xl mr-2"
         />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -257,3 +226,5 @@ export function ShareSellTable() {
     </div>
   );
 }
+
+export default RecentActivityTable;

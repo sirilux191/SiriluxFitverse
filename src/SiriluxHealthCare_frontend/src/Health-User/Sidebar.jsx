@@ -4,7 +4,6 @@ import {
   BookText,
   Heart,
   LayoutDashboard,
-  ShoppingCart,
   User,
   ChevronLeft,
   ChevronRight,
@@ -14,7 +13,8 @@ import {
   Share2,
   ChevronDown,
   ChevronUp,
-  LandPlot,
+  Wallet2Icon,
+  MessageCircleQuestionIcon,
 } from "lucide-react";
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -51,16 +51,21 @@ const Sidebar = ({ isOpen, onClose }) => {
     { to: "/Health-User/Upload", icon: <Upload />, text: "Upload" },
     { to: "/Health-User/Analytics", icon: <Heart />, text: "Analytics" },
     {
-      to: "/Health-User/Marketplace",
-      icon: <ShoppingCart />,
-      text: "Marketplace",
+      to: "/Health-User/Assets",
+      icon: <Wallet2Icon />,
+      text: "Assets",
+    },
+    {
+      to: "/Health-User/ConsultAI",
+      icon: <MessageCircleQuestionIcon />,
+      text: "Consult AI",
     },
     {
       to: "/Health-User/Gamification",
       icon: <Gamepad2 />,
       text: "Gamification",
     },
-    { to: "/Health-User/minigames", icon: <LandPlot />, text: "Minigames" },
+
     { to: "/Health-User/Profile", icon: <User />, text: "Profile" },
   ];
 

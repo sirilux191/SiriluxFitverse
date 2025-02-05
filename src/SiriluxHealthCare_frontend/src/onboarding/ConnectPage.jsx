@@ -1,16 +1,16 @@
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/use-toast";
-import { useState, useContext, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import OnboardingBanner from "../OnboardingBanner";
-import ActorContext from "../ActorContext";
 import LoadingScreen from "../LoadingScreen";
+import useActorStore from "../State/Actors/ActorStore";
 
 export default function ConnectPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const navigate = useNavigate();
-  const { actors, isAuthenticated, login } = useContext(ActorContext);
+  const { actors, isAuthenticated, login } = useActorStore();
 
   useEffect(() => {
     const checkRegistration = async () => {

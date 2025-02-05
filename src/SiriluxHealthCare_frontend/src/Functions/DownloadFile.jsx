@@ -1,14 +1,18 @@
 import React from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import ActorContext from "../ActorContext";
+import {
+  hex_decode,
+  aes_gcm_decrypt,
+} from "../Functions/VETKey/VetKeyFunctions";
 import * as vetkd from "ic-vetkd-utils";
-import { useState, useContext } from "react";
+import { useState } from "react";
+import useActorStore from "../State/Actors/ActorStore";
 
 // Helper to download file from Lighthouse
 const downloadFromLighthouse = async (hash) => {
   const response = await fetch(
-    `https://gateway.lighthouse.storage/ipfs/${hash}`,
+    `https://gateway.lighthouse.storage/ipfs/${hash}`
   );
   console.log(response);
   if (!response) {
@@ -19,7 +23,7 @@ const downloadFromLighthouse = async (hash) => {
 };
 
 const DownloadFile = ({ data, uniqueID, format, title }) => {
-  const { actors } = useContext(ActorContext);
+  const { actors } = useActorStore();
   const [downloading, setDownloading] = useState(false);
 
   function downloadData(file) {
@@ -30,29 +34,6 @@ const DownloadFile = ({ data, uniqueID, format, title }) => {
     link.click();
     URL.revokeObjectURL(url);
   }
-
-  const hex_decode = (hexString) =>
-    Uint8Array.from(
-      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)),
-    );
-
-  const aes_gcm_decrypt = async (encryptedData, rawKey) => {
-    const iv = encryptedData.slice(0, 12);
-    const ciphertext = encryptedData.slice(12);
-    const aes_key = await window.crypto.subtle.importKey(
-      "raw",
-      rawKey,
-      "AES-GCM",
-      false,
-      ["decrypt"],
-    );
-    const decrypted_buffer = await window.crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: iv },
-      aes_key,
-      ciphertext,
-    );
-    return new Uint8Array(decrypted_buffer);
-  };
 
   const downloadFile = async () => {
     try {
@@ -68,7 +49,7 @@ const DownloadFile = ({ data, uniqueID, format, title }) => {
       const encryptedKeyResult =
         await actors.dataAsset.getEncryptedSymmetricKeyForAsset(
           uniqueID,
-          Object.values(tsk.public_key()),
+          Object.values(tsk.public_key())
         );
 
       let encryptedKey = "";
@@ -110,7 +91,7 @@ const DownloadFile = ({ data, uniqueID, format, title }) => {
         hex_decode(symmetricVerificiationKey),
         new TextEncoder().encode(uniqueID),
         32,
-        new TextEncoder().encode("aes-256-gcm"),
+        new TextEncoder().encode("aes-256-gcm")
       );
 
       // Step 4: Decrypt the file data using the AES-GCM key
