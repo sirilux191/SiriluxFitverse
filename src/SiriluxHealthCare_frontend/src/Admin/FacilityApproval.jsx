@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import {
   flexRender,
   getCoreRowModel,
@@ -26,10 +26,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import ActorContext from "../ActorContext";
+import useActorStore from "../State/Actors/ActorStore";
 
 function FacilityApproval() {
-  const { actors } = useContext(ActorContext);
+  const { actors } = useActorStore();
   const [facilities, setFacilities] = useState([]);
   const [loading, setLoading] = useState(true);
 

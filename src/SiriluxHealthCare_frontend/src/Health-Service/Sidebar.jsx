@@ -2,9 +2,8 @@ import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   BookText,
-  Heart,
   LayoutDashboard,
-  ShoppingCart,
+  Wallet2Icon,
   User,
   ChevronLeft,
   ChevronRight,
@@ -53,9 +52,9 @@ const Sidebar = ({ isOpen, onClose }) => {
     },
     { to: "/Health-Service/Upload", icon: <Upload />, text: "Upload" },
     {
-      to: "/Health-Service/CryptoAsset",
-      icon: <ShoppingCart />,
-      text: "Marketplace",
+      to: "/Health-Service/Assets",
+      icon: <Wallet2Icon />,
+      text: "Assets",
     },
     {
       to: "/Health-Service/Gamification",

@@ -210,7 +210,9 @@ actor class GamificationSystem() = this {
             case (# Ok(_block_number)) {
                 return await wellnessAvatarNFT.icrcX_updateHP(Principal.fromText(Types.admin), tokenId, amount);
             };
-            case (#Err(_e)) { return #err("Error transferring funds") };
+            case (#Err(e)) {
+                return #err("Error transferring funds" # debug_show e);
+            };
         };
 
     };
@@ -273,21 +275,21 @@ actor class GamificationSystem() = this {
         };
 
         // Calculate required tokens
-        // let cost = GamificationTypes.getUpgradeCost(currentQuality);
-        // let result = await icrcLedger.icrc2_transfer_from({
-        //     from = { owner = caller; subaccount = null };
-        //     spender_subaccount = null;
-        //     to = { owner = Principal.fromActor(this); subaccount = null };
-        //     amount = cost * 100_000_000; // 8 decimals
-        //     fee = null;
-        //     memo = null;
-        //     created_at_time = null;
-        // });
+        let cost = GamificationTypes.getUpgradeCost(currentQuality);
+        let result = await icrcLedger.icrc2_transfer_from({
+            from = { owner = caller; subaccount = null };
+            spender_subaccount = null;
+            to = { owner = Principal.fromActor(this); subaccount = null };
+            amount = cost * 100_000_000; // 8 decimals
+            fee = null;
+            memo = null;
+            created_at_time = null;
+        });
 
-        // switch (result) {
-        //     case (#Err(_)) return #err("Insufficient balance for upgrade");
-        //     case _ {};
-        // };
+        switch (result) {
+            case (#Err(e)) return #err("Error transferring funds" # debug_show e # " " # debug_show cost);
+            case _ {};
+        };
 
         // Determine next quality level
         let newQuality = switch (currentQuality) {

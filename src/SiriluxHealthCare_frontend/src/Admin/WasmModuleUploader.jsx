@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useNavigate } from "react-router-dom";
-import ActorContext from "../ActorContext";
+import useActorStore from "../State/Actors/ActorStore";
 
 function WasmModuleUploader({ shardType }) {
-  const { actors, login, logout } = useContext(ActorContext);
+  const { actors, login, logout } = useActorStore();
   const [wasmFile, setWasmFile] = useState(null);
   const [message, setMessage] = useState("");
   const navigate = useNavigate();

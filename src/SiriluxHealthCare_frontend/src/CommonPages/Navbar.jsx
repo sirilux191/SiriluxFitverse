@@ -1,4 +1,3 @@
-import React, { useState, useContext } from "react";
 import { Menu, User } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { Button } from "@/components/ui/button";
@@ -15,7 +14,6 @@ const Navbar = ({ toggleSidebar }) => {
   const location = useLocation();
   const navigate = useNavigate(); // Initialize useNavigate
   const { actors, logout } = useActorStore(); // Get the logout function and actors
-  const [principalId, setPrincipalId] = useState(null);
 
   const getCurrentPageName = () => {
     const path = location.pathname.split("/").pop();
@@ -30,7 +28,7 @@ const Navbar = ({ toggleSidebar }) => {
   const getPrincipalId = async () => {
     try {
       const principal = await actors.gamificationSystem.whoami();
-      setPrincipalId(principal);
+
       await navigator.clipboard.writeText(principal);
       toast({
         title: "Principal ID Copied",
@@ -74,8 +72,8 @@ const Navbar = ({ toggleSidebar }) => {
                   size="sm"
                   className="text-xs md:text-sm"
                 >
-                  <User className="h-4 w-4 mr-2" />
-                  Account
+                  <User className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Account</span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-40 p-2">

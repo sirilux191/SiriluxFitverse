@@ -9,7 +9,8 @@ import { createActor as createDataAssetActor } from "../../../../declarations/Da
 import { createActor as createIdentityManagerActor } from "../../../../declarations/Identity_Manager";
 import { createActor as createSharedActivityActor } from "../../../../declarations/Shared_Activity";
 import { createActor as createGamificationSystemActor } from "../../../../declarations/GamificationSystem";
-
+import { createActor as createTokenActor } from "../../../../declarations/icrc_ledger_canister";
+import { createActor as createIcrcIndexActor } from "../../../../declarations/icrc_index_canister";
 const useActorStore = create(
   persist(
     (set, get) => ({
@@ -21,6 +22,8 @@ const useActorStore = create(
         identityManager: null,
         sharedActivity: null,
         gamificationSystem: null,
+        token: null,
+        icrcIndex: null,
       },
       isAuthenticated: false,
       authClient: null,
@@ -73,6 +76,11 @@ const useActorStore = create(
                 process.env.CANISTER_ID_GAMIFICATIONSYSTEM,
                 { agent }
               ),
+              token: createTokenActor(process.env.CANISTER_ID_TOKEN, { agent }),
+              icrcIndex: createIcrcIndexActor(
+                process.env.CANISTER_ID_ICRC_INDEX_CANISTER,
+                { agent }
+              ),
             },
           });
         } catch (error) {
@@ -105,13 +113,15 @@ const useActorStore = create(
             identityManager: null,
             sharedActivity: null,
             gamificationSystem: null,
+            token: null,
+            icrcIndex: null,
           },
           isAuthenticated: false,
           authClient: null,
           initializationStatus: "uninitialized",
         });
         console.log("logout");
-        window.localStorage.removeItem("actor-storage");
+        window.localStorage.clear();
         if (authClient) {
           await authClient.logout();
         }

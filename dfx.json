@@ -11,6 +11,11 @@
       },
       "frontend": {}
     },
+    "icrc_index_canister": {
+      "type": "custom",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/fb162931586aeea5f21cb19ec6c73382f5fa4fd6/rs/ledger_suite/icrc1/index-ng/index-ng.did",
+      "wasm": "https://download.dfinity.systems/ic/fb162931586aeea5f21cb19ec6c73382f5fa4fd6/canisters/ic-icrc1-index-ng.wasm.gz"
+    },
     "icrc_ledger_canister": {
       "type": "custom",
       "candid": "https://github.com/dfinity/ic/releases/download/ledger-suite-icrc-2024-11-28/ledger.did",

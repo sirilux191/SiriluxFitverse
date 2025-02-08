@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import useActorStore from "../../State/Actors/ActorStore";
 import { useState, useEffect } from "react";
 import LoadingScreen from "../../LoadingScreen";
-
 import { toast } from "@/components/ui/use-toast";
 import { useUserProfileStore } from "../../State/User/UserProfile/UserProfileStore";
 
@@ -110,10 +109,12 @@ export default function ProfileContent() {
               <div className="flex flex-col items-center">
                 <Avatar className="-z-10 w-36 h-36">
                   <AvatarImage
-                    alt="John Lenon"
+                    alt=""
                     src=""
                   />
-                  <AvatarFallback className="text-4xl">JL</AvatarFallback>
+                  <AvatarFallback className="text-4xl">
+                    {name.charAt(0)}
+                  </AvatarFallback>
                 </Avatar>
 
                 <div className="flex space-x-2 py-4">

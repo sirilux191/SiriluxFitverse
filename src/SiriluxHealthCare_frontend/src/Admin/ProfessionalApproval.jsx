@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import {
   flexRender,
   getCoreRowModel,
@@ -33,10 +33,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import LoadingScreen from "../LoadingScreen";
-import ActorContext from "../ActorContext";
+import useActorStore from "../State/Actors/ActorStore";
 
 function ProfessionalApproval() {
-  const { actors } = useContext(ActorContext);
+  const { actors } = useActorStore();
   const [professionals, setProfessionals] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,16 +51,16 @@ function ProfessionalApproval() {
         const formattedRequests = result.ok.map(([principal, data]) => ({
           id: principal,
           name: JSON.parse(
-            new TextDecoder().decode(data.MetaData.DemographicInformation),
+            new TextDecoder().decode(data.MetaData.DemographicInformation)
           ).name,
           occupation: JSON.parse(
-            new TextDecoder().decode(data.MetaData.OccupationInformation),
+            new TextDecoder().decode(data.MetaData.OccupationInformation)
           ).occupation,
           certificationId: JSON.parse(
-            new TextDecoder().decode(data.MetaData.CertificationInformation),
+            new TextDecoder().decode(data.MetaData.CertificationInformation)
           ).certificationId,
           company: JSON.parse(
-            new TextDecoder().decode(data.MetaData.OccupationInformation),
+            new TextDecoder().decode(data.MetaData.OccupationInformation)
           ).company,
           status: "pending",
         }));
@@ -221,7 +221,10 @@ function ProfessionalApproval() {
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto">
+            <Button
+              variant="outline"
+              className="ml-auto"
+            >
               Columns <ChevronDown className="ml-2 h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -253,7 +256,7 @@ function ProfessionalApproval() {
                       ? null
                       : flexRender(
                           header.column.columnDef.header,
-                          header.getContext(),
+                          header.getContext()
                         )}
                   </TableHead>
                 ))}
@@ -271,7 +274,7 @@ function ProfessionalApproval() {
                     <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
-                        cell.getContext(),
+                        cell.getContext()
                       )}
                     </TableCell>
                   ))}

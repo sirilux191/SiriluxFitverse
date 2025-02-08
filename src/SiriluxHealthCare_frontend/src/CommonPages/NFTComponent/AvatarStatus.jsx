@@ -1,6 +1,9 @@
 import React from "react";
 import { ProgressIndicator } from "@/components/ui/progressIndicator";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
+import useActorStore from "@/State/Actors/ActorStore";
+import useNFTStore, { getUpgradeCost } from "@/State/CryptoAssets/NFTStore";
 import {
   User,
   Badge,
@@ -15,7 +18,29 @@ import {
   Briefcase,
 } from "lucide-react";
 
-const AvatarStatus = ({ avatar, onLevelUp, onRestoreHP, userTokens }) => {
+const AvatarStatus = ({ avatar }) => {
+  const { actors } = useActorStore();
+  const { levelUpNFT, restoreHP } = useNFTStore();
+  const { toast } = useToast();
+
+  const handleLevelUp = async () => {
+    const result = await levelUpNFT(actors, avatar.id, avatar.quality);
+    toast({
+      title: result.success ? "Success" : "Error",
+      description: result.message,
+      variant: result.success ? "default" : "destructive",
+    });
+  };
+
+  const handleRestoreHP = async (amount) => {
+    const result = await restoreHP(actors, avatar.id, amount);
+    toast({
+      title: result.success ? "Success" : "Error",
+      description: result.message,
+      variant: result.success ? "default" : "destructive",
+    });
+  };
+
   // Configure stats based on NFT type
   const getStats = () => {
     switch (avatar.type) {
@@ -124,12 +149,12 @@ const AvatarStatus = ({ avatar, onLevelUp, onRestoreHP, userTokens }) => {
   };
 
   return (
-    <div className="bg-gray-800/40 border-4 border-gray-700 text-white rounded-lg shadow-md mb-6 max-h-[80vh] overflow-y-auto">
-      <div className="flex items-center text-blue-400 text-xl font-bold p-4 sticky top-0 bg-gray-800/40 border-b border-gray-700 z-10">
+    <div className="bg-gray-800 border-4 border-gray-700 text-white rounded-lg shadow-md mb-6 max-h-[80vh] overflow-y-auto">
+      <div className="flex items-center text-blue-400 text-xl font-bold p-4 sticky top-0 bg-gray-900/95 backdrop-blur-sm border-b border-gray-700 z-10">
         {getTypeIcon()} {getTypeTitle()}
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4 bg-gray-800">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="relative aspect-square">
             <img
@@ -162,11 +187,11 @@ const AvatarStatus = ({ avatar, onLevelUp, onRestoreHP, userTokens }) => {
               <span className="text-xs text-gray-400">HP</span>
             </div>
             <span className="text-lg font-bold">
-              {avatar.hp} / {maxHP}
+              {avatar.HP} / {maxHP}
             </span>
           </div>
           <ProgressIndicator
-            value={(avatar.hp / maxHP) * 100}
+            value={(avatar.HP / maxHP) * 100}
             className="w-full h-2.5 bg-gray-700/50"
           />
         </div>
@@ -210,21 +235,20 @@ const AvatarStatus = ({ avatar, onLevelUp, onRestoreHP, userTokens }) => {
         )}
       </div>
 
-      <div className="border-t border-gray-700 p-4 sticky bottom-0 bg-gray-800/40 z-10">
+      <div className="border-t border-gray-700 p-4 sticky bottom-0 bg-gray-900/95 backdrop-blur-sm z-10">
         <div className="flex flex-col sm:flex-row gap-2">
           <Button
-            onClick={() => onRestoreHP(10)}
-            disabled={userTokens < 10 || avatar.hp >= maxHP}
+            onClick={() => handleRestoreHP(10)}
+            disabled={avatar.HP >= maxHP}
             className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
           >
             Restore 10 HP (10 Tokens)
           </Button>
           <Button
-            onClick={onLevelUp}
-            disabled={userTokens < avatar.level * 100}
+            onClick={handleLevelUp}
             className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
           >
-            Level Up ({avatar.level * 100} Tokens)
+            Level Up ({getUpgradeCost(avatar.quality)} Tokens)
           </Button>
         </div>
       </div>

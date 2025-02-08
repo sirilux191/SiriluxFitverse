@@ -13,7 +13,7 @@ import RegisterPage1Content from "./onboarding/RegisterPage/RegisterPage1";
 import RegisterPage2Content from "./onboarding/RegisterPage/RegisterPage2";
 import RegisterPage3Content from "./onboarding/RegisterPage/RegisterPage3";
 import RegisterPage4Content from "./onboarding/RegisterPage/RegisterPage4";
-import NotFound from "./NotFound";
+import NotFoundPage from "@/CommonPages/NotFoundPage";
 import RegisteredContent1 from "./onboarding/RegisteredPage/RegisteredPage1";
 import RegisteredContent2 from "./onboarding/RegisteredPage/RegisteredPage2";
 import RegisteredContent3 from "./onboarding/RegisteredPage/RegisteredPage3";
@@ -104,7 +104,7 @@ function App() {
           />
           <Route
             path="*"
-            element={<NotFound />}
+            element={<NotFoundPage />}
           />
         </Routes>
       </Router>

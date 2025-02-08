@@ -2,9 +2,7 @@ import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   BookText,
-  Heart,
   LayoutDashboard,
-  ShoppingCart,
   User,
   ChevronLeft,
   ChevronRight,
@@ -14,6 +12,7 @@ import {
   Share2,
   ChevronDown,
   ChevronUp,
+  Wallet2Icon,
 } from "lucide-react";
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -53,9 +52,9 @@ const Sidebar = ({ isOpen, onClose }) => {
     },
     { to: "/Health-Professional/Upload", icon: <Upload />, text: "Upload" },
     {
-      to: "/Health-Professional/Marketplace",
-      icon: <ShoppingCart />,
-      text: "Marketplace",
+      to: "/Health-Professional/Assets",
+      icon: <Wallet2Icon />,
+      text: "Assets",
     },
     {
       to: "/Health-Professional/Gamification",

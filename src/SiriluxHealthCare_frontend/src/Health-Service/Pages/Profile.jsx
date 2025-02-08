@@ -2,13 +2,14 @@ import { AvatarImage, AvatarFallback, Avatar } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-import ActorContext from "../../ActorContext";
 import { useState, useEffect, useContext } from "react";
 import LoadingScreen from "../../LoadingScreen";
-import * as vetkd from "ic-vetkd-utils";
+
 import { toast } from "@/components/ui/use-toast";
+import useActorStore from "../../State/Actors/ActorStore";
+
 export default function ProfileContent() {
-  const { actors } = useContext(ActorContext);
+  const { actors } = useActorStore();
   const [facilityData, setFacilityData] = useState(null);
   const [facultyName, setFacultyName] = useState("");
   const [registrationId, setRegistrationId] = useState("");
@@ -212,10 +213,10 @@ export default function ProfileContent() {
       );
       const licenseInfoArray = new TextEncoder().encode(licenseInfoJson);
 
-      const result = await lyfelynkMVP_backend.updateFacility(
-        Object.values(encryptedDataDemo),
-        Object.values(encryptedDataService),
-        Object.values(encryptedDataLicense)
+      const result = await actors.facility.updateFacility(
+        Object.values(demoInfoArray),
+        Object.values(servicesOfferedInfoArray),
+        Object.values(licenseInfoArray)
       );
       Object.keys(result).forEach((key) => {
         if (key == "err") {

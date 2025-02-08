@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
+
 import { toast } from "@/components/ui/use-toast";
 import { CircleX } from "lucide-react";
 import lighthouse from "@lighthouse-web3/sdk";
@@ -79,7 +79,7 @@ const FileUpload = () => {
   };
 
   const validateFile = (file) => {
-    const supportedFormats = ["pdf", "csv", "xml", "jpg", "jpeg", "png"];
+    const supportedFormats = ["pdf", "csv", "xml", "jpg", "jpeg", "png", "txt"];
     const fileType = file.type.split("/")[1];
     const fileSizeMB = file.size / (1024 * 1024);
     if (!supportedFormats.includes(fileType)) {

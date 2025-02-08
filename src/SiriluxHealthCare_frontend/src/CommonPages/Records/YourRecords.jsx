@@ -23,8 +23,15 @@ import { SellDataFunc } from "@/Functions/SellData";
 import { ShareDataFunc } from "@/Functions/ShareData";
 import DownloadFile from "@/Functions/DownloadFile";
 import { Button } from "@/components/ui/button";
+import OpenAI from "openai";
 
 import useActorStore from "@/State/Actors/ActorStore";
+
+// Initialize OpenAI client (make sure to add VITE_OPENAI_API_KEY to your .env)
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true,
+});
 
 export default function YourRecords() {
   const [activeTab, setActiveTab] = useState("all");
@@ -33,6 +40,9 @@ export default function YourRecords() {
   const { actors } = useActorStore();
   const [loading, setLoading] = useState(true);
   const [expandedCard, setExpandedCard] = useState(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [aiSummary, setAiSummary] = useState("");
 
   // Function to get icon based on category
   const getIconByCategory = (category) => {
@@ -156,6 +166,9 @@ export default function YourRecords() {
 
     return filtered;
   }, [activeTab, searchTerm, records]);
+
+  // Update the generateAISummary function
+  const generateAISummary = async (fileName, recordId) => {};
 
   if (loading) {
     return <LoadingScreen />;
@@ -360,6 +373,35 @@ export default function YourRecords() {
                             }
                           </span>
                         </div>
+
+                        <div>
+                          <h4 className="text-gray-400 mb-2.5 font-medium">
+                            AI Medical Summary
+                          </h4>
+                          {errorMessage && (
+                            <p className="text-red-400 text-sm mb-2">
+                              {errorMessage}
+                            </p>
+                          )}
+                          {aiSummary ? (
+                            <div className="text-white text-sm whitespace-pre-wrap prose prose-invert">
+                              {aiSummary.split("\n").map((line, i) => (
+                                <p
+                                  key={i}
+                                  className="m-0"
+                                >
+                                  {line}
+                                </p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-400 text-sm">
+                              {isGeneratingSummary
+                                ? "Analyzing with AI..."
+                                : "Click 'AI Summary' to generate"}
+                            </p>
+                          )}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
@@ -403,6 +445,23 @@ export default function YourRecords() {
                             >
                               <DollarSign size={16} />
                               Sell
+                            </Button>
+
+                            <Button
+                              onClick={() => {
+                                const record = records.find(
+                                  (r) => r.id === expandedCard
+                                );
+                                if (record) {
+                                  generateAISummary(record.title, record.id);
+                                }
+                              }}
+                              disabled={isGeneratingSummary}
+                              className="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                            >
+                              {isGeneratingSummary
+                                ? "Analyzing..."
+                                : "AI Summary"}
                             </Button>
                           </>
                         )}

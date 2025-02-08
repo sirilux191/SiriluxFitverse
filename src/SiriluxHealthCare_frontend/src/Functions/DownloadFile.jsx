@@ -26,12 +26,42 @@ const DownloadFile = ({ data, uniqueID, format, title }) => {
   const { actors } = useActorStore();
   const [downloading, setDownloading] = useState(false);
 
-  function downloadData(file) {
+  function downloadData(file, uniqueID) {
     const url = URL.createObjectURL(file);
     const link = document.createElement("a");
     link.href = url;
     link.download = file.name;
     link.click();
+
+    // Read file and store in localStorage as part of an array
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      // Get existing files array or initialize new one
+      const existingFiles = JSON.parse(
+        localStorage.getItem("downloadedFiles") || "[]"
+      );
+
+      // Create new file entry
+      const fileEntry = {
+        id: uniqueID,
+        name: file.name,
+        data: reader.result,
+        timestamp: new Date().toISOString(),
+      };
+
+      // Add new file to array, replace if exists
+      const index = existingFiles.findIndex((f) => f.id === uniqueID);
+      if (index !== -1) {
+        existingFiles[index] = fileEntry;
+      } else {
+        existingFiles.push(fileEntry);
+      }
+
+      // Store updated array back in localStorage
+      localStorage.setItem("downloadedFiles", JSON.stringify(existingFiles));
+    };
+    reader.readAsDataURL(file);
+
     URL.revokeObjectURL(url);
   }
 
@@ -106,7 +136,7 @@ const DownloadFile = ({ data, uniqueID, format, title }) => {
       });
 
       // Step 6: Download the decrypted file
-      downloadData(decryptedFile);
+      downloadData(decryptedFile, uniqueID);
       setDownloading(false);
     } catch (error) {
       console.error("Error downloading file:", error);

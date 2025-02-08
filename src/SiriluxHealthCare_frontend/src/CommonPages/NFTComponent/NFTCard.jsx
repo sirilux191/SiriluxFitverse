@@ -28,16 +28,14 @@ import {
   Target,
   Star,
 } from "lucide-react";
-import { toast } from "@/components/ui/use-toast";
+import { useToast } from "@/components/ui/use-toast";
+import useActorStore from "@/State/Actors/ActorStore";
+import useNFTStore from "@/State/CryptoAssets/NFTStore";
 
-const NFTCard = ({
-  nft,
-  onVisit,
-  isPending,
-  showManage = false,
-  onManage,
-  onTransfer,
-}) => {
+const NFTCard = ({ nft, onVisit, isPending, showManage = false, onManage }) => {
+  const { actors } = useActorStore();
+  const { transferNFT } = useNFTStore();
+  const { toast } = useToast();
   const QUALITY_TIERS = {
     Common: {
       bg: "bg-gray-400",
@@ -154,18 +152,15 @@ const NFTCard = ({
 
     setIsTransferring(true);
     try {
-      await onTransfer(nft.id, principalAddress);
-      setIsTransferOpen(false);
-      setPrincipalAddress("");
+      const result = await transferNFT(actors, nft.id, principalAddress);
+      if (result.success) {
+        setIsTransferOpen(false);
+        setPrincipalAddress("");
+      }
       toast({
-        title: "Success",
-        description: "NFT transferred successfully!",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to transfer NFT. Please try again.",
-        variant: "destructive",
+        title: result.success ? "Success" : "Error",
+        description: result.message,
+        variant: result.success ? "default" : "destructive",
       });
     } finally {
       setIsTransferring(false);
@@ -183,42 +178,48 @@ const NFTCard = ({
       className={`
       bg-gray-900/95 text-white rounded-lg shadow-xl transition-all duration-300
       hover:shadow-2xl relative overflow-hidden w-full max-w-[500px]
-      border-2 ${qualityStyles.border} ${currentType.theme}
+      border-[1px] sm:border-2 ${qualityStyles.border} ${currentType.theme}
     `}
     >
       <div className="relative z-10">
         {/* Header Section */}
-        <CardHeader className="space-y-2 p-4">
-          <div className="flex justify-between items-start">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold">{currentType.title}</h2>
-                <span className="text-sm text-gray-400">#{nft.id}</span>
+        <CardHeader className="space-y-1 sm:space-y-2 p-2 sm:p-3 md:p-4">
+          <div className="flex justify-between items-start gap-1">
+            <div className="space-y-0.5 sm:space-y-1 min-w-0 flex-1">
+              <div className="flex items-center gap-1 sm:gap-2">
+                <h2 className="text-sm sm:text-base md:text-lg font-bold truncate">
+                  {currentType.title}
+                </h2>
+                <span className="text-[10px] sm:text-xs md:text-sm text-gray-400 shrink-0">
+                  #{nft.id}
+                </span>
               </div>
-              <Badge className={`${qualityStyles.bg} ${qualityStyles.text}`}>
+              <Badge
+                className={`text-[10px] sm:text-xs md:text-sm px-1 sm:px-2 ${qualityStyles.bg} ${qualityStyles.text}`}
+              >
                 {nft.quality}
               </Badge>
             </div>
             <Badge
               variant="outline"
-              className="capitalize"
+              className="capitalize text-[10px] sm:text-xs md:text-sm px-1 sm:px-2 shrink-0"
             >
               {nft.type}
             </Badge>
           </div>
-          <p className="text-sm text-gray-400">
-            {nft.avatarType || nft.specialization || nft.facilityType}
+          <p className="text-[10px] sm:text-xs md:text-sm text-gray-400 truncate">
+            {nft.avatarType || nft.specialization || nft.services}
           </p>
         </CardHeader>
 
         {/* Image Section */}
-        <CardContent className="space-y-4 p-4">
-          <div className="relative w-full aspect-square mb-4 rounded-lg overflow-hidden bg-gray-800/50">
+        <CardContent className="space-y-2 sm:space-y-3 md:space-y-4 p-2 sm:p-3 md:p-4">
+          <div className="relative w-full aspect-square mb-2 sm:mb-4 rounded-lg overflow-hidden bg-gray-800/50">
             <div className="absolute inset-0 flex items-center justify-center">
               <img
                 src={getAvatarImage()}
                 alt={`${nft.type} NFT`}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
                 onError={(e) => {
                   e.target.src = "/assets/default-placeholder.png";
                 }}
@@ -227,40 +228,54 @@ const NFTCard = ({
           </div>
 
           {/* Level and HP Row */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-800/50 rounded-lg p-3">
+          <div className="grid grid-cols-2 gap-1 sm:gap-2 md:gap-3">
+            <div className="bg-gray-800/50 rounded-lg p-1.5 sm:p-2 md:p-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Target className="w-4 h-4 text-yellow-500" />
-                  <span className="text-sm text-gray-400">LEVEL</span>
+                <div className="flex items-center gap-0.5 sm:gap-1 md:gap-2">
+                  <Target className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 text-yellow-500" />
+                  <span className="text-[10px] sm:text-xs md:text-sm text-gray-400">
+                    LEVEL
+                  </span>
                 </div>
-                <span className="text-lg font-bold">{nft.level}</span>
+                <span className="text-xs sm:text-sm md:text-lg font-bold">
+                  {nft.level}
+                </span>
               </div>
             </div>
-            <div className="bg-gray-800/50 rounded-lg p-3">
+            <div className="bg-gray-800/50 rounded-lg p-1.5 sm:p-2 md:p-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Heart className="w-4 h-4 text-red-500" />
-                  <span className="text-sm text-gray-400">HP</span>
+                <div className="flex items-center gap-0.5 sm:gap-1 md:gap-2">
+                  <Heart className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 text-red-500" />
+                  <span className="text-[10px] sm:text-xs md:text-sm text-gray-400">
+                    HP
+                  </span>
                 </div>
-                <span className="text-lg font-bold">{nft.hp}</span>
+                <span className="text-xs sm:text-sm md:text-lg font-bold">
+                  {nft.HP}
+                </span>
               </div>
             </div>
           </div>
 
           {/* Attributes Grid */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-1 sm:gap-2 md:gap-3">
             {currentType.attributes.map((attr) => (
               <div
                 key={attr.label}
-                className="bg-gray-800/50 rounded-lg p-3"
+                className="bg-gray-800/50 rounded-lg p-1.5 sm:p-2 md:p-3"
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {attr.icon}
-                    <span className="text-sm text-gray-400">{attr.label}</span>
+                  <div className="flex items-center gap-0.5 sm:gap-1 md:gap-2">
+                    {React.cloneElement(attr.icon, {
+                      className: `w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 ${attr.icon.props.className}`,
+                    })}
+                    <span className="text-[10px] sm:text-xs md:text-sm text-gray-400">
+                      {attr.label}
+                    </span>
                   </div>
-                  <span className="text-lg font-bold">{attr.value}</span>
+                  <span className="text-xs sm:text-sm md:text-lg font-bold">
+                    {attr.value}
+                  </span>
                 </div>
               </div>
             ))}
@@ -268,16 +283,20 @@ const NFTCard = ({
 
           {/* Specialization/Services Section */}
           {currentType.specialization && (
-            <div className="bg-gray-800/50 rounded-lg p-3">
+            <div className="bg-gray-800/50 rounded-lg p-1.5 sm:p-2 md:p-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-400">SPECIALIZATION</span>
-                <span className="text-sm font-medium">
+                <span className="text-[10px] sm:text-xs md:text-sm text-gray-400">
+                  SPECIALIZATION
+                </span>
+                <span className="text-[10px] sm:text-xs md:text-sm font-medium truncate max-w-[50%]">
                   {nft.specialization}
                 </span>
               </div>
-              <div className="flex items-center justify-between mt-2">
-                <span className="text-sm text-gray-400">VISITS</span>
-                <span className="text-sm font-medium">
+              <div className="flex items-center justify-between mt-1 sm:mt-2">
+                <span className="text-[10px] sm:text-xs md:text-sm text-gray-400">
+                  VISITS
+                </span>
+                <span className="text-[10px] sm:text-xs md:text-sm font-medium">
                   {nft.visitCount || 0}
                 </span>
               </div>
@@ -285,14 +304,20 @@ const NFTCard = ({
           )}
 
           {currentType.services && (
-            <div className="bg-gray-800/50 rounded-lg p-3">
+            <div className="bg-gray-800/50 rounded-lg p-1.5 sm:p-2 md:p-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-400">SERVICES</span>
-                <span className="text-sm font-medium">{nft.services}</span>
+                <span className="text-[10px] sm:text-xs md:text-sm text-gray-400">
+                  SERVICES
+                </span>
+                <span className="text-[10px] sm:text-xs md:text-sm font-medium">
+                  {nft.services}
+                </span>
               </div>
-              <div className="flex items-center justify-between mt-2">
-                <span className="text-sm text-gray-400">VISITS</span>
-                <span className="text-sm font-medium">
+              <div className="flex items-center justify-between mt-1 sm:mt-2">
+                <span className="text-[10px] sm:text-xs md:text-sm text-gray-400">
+                  VISITS
+                </span>
+                <span className="text-[10px] sm:text-xs md:text-sm font-medium">
                   {nft.visitCount || 0}
                 </span>
               </div>
@@ -302,18 +327,20 @@ const NFTCard = ({
           {/* Visit Counter for Avatars */}
           {nft.type === "avatar" && (
             <div className="flex items-center justify-end text-gray-400">
-              <Eye className="w-3 h-3 mr-1" />
-              <span className="text-xs">Visits: {nft.visitCount || 0}</span>
+              <Eye className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" />
+              <span className="text-[10px] sm:text-xs">
+                Visits: {nft.visitCount || 0}
+              </span>
             </div>
           )}
         </CardContent>
 
         {/* Footer Section */}
-        <CardFooter className="p-4 pt-0 flex gap-3">
+        <CardFooter className="p-2 sm:p-3 md:p-4 pt-0 flex gap-1 sm:gap-2 md:gap-3">
           {showManage ? (
             <>
               <Button
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-[10px] sm:text-xs md:text-sm py-1 sm:py-2 h-7 sm:h-8 md:h-10"
                 onClick={() => onManage(nft)}
               >
                 Manage
@@ -323,7 +350,7 @@ const NFTCard = ({
                 onOpenChange={setIsTransferOpen}
               >
                 <DialogTrigger asChild>
-                  <Button className="flex-1 bg-blue-600 hover:bg-blue-700">
+                  <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-[10px] sm:text-xs md:text-sm py-1 sm:py-2 h-7 sm:h-8 md:h-10">
                     Transfer
                   </Button>
                 </DialogTrigger>
@@ -361,7 +388,7 @@ const NFTCard = ({
             </>
           ) : (
             <Button
-              className="w-full bg-blue-600 hover:bg-blue-700"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-[10px] sm:text-xs md:text-sm py-1 sm:py-2 h-7 sm:h-8 md:h-10"
               onClick={() => onVisit(nft)}
               disabled={isPending}
             >

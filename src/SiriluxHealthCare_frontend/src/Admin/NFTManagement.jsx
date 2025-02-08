@@ -10,11 +10,12 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import ActorContext from "../ActorContext";
+
 import { toast } from "@/components/ui/use-toast";
+import useActorStore from "../State/Actors/ActorStore";
 
 function NFTManagement() {
-  const { actors } = useContext(ActorContext);
+  const { actors } = useActorStore();
   const [userPrincipal, setUserPrincipal] = useState("");
   const [avatarType, setAvatarType] = useState("");
   const [professionalType, setProfessionalType] = useState("");

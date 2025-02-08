@@ -1,16 +1,17 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Routes, Route } from "react-router-dom";
-import Navbar from "./Navbar";
+import Navbar from "@/CommonPages/Navbar";
 import Sidebar from "./Sidebar";
 import DashboardContent from "./Pages/Dashboard";
 
 import ProfileContent from "./Pages/Profile";
 import UploadContent from "./Pages/UploadPage";
-import YourRecords from "./Pages/Records/YourRecords";
-import SharedWithYou from "./Pages/Records/SharedWithYou";
+import YourRecords from "@/CommonPages/Records/YourRecords";
+import SharedWithYou from "@/CommonPages/Records/SharedWithYou";
 import GamificationTab from "./Pages/GamificationTab";
+import CryptoAsset from "@/CommonPages/CryptoAsset";
 
-import NotFoundPage from "./NotFoundPage";
+import NotFoundPage from "@/CommonPages/NotFoundPage";
 import AppBanner from "../AppBanner";
 
 export default function AppRoute1() {
@@ -54,7 +55,10 @@ export default function AppRoute1() {
               path="/Upload"
               element={<UploadContent />}
             />
-
+            <Route
+              path="/Assets"
+              element={<CryptoAsset />}
+            />
             <Route
               path="/Profile"
               element={<ProfileContent />}

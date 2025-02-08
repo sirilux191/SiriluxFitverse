@@ -42,38 +42,48 @@ export default defineConfig({
   define: {
     "process.env.DFX_NETWORK": JSON.stringify(process.env.DFX_NETWORK),
     "process.env.CANISTER_ID_INTERNET_IDENTITY": JSON.stringify(
-      process.env.CANISTER_ID_INTERNET_IDENTITY,
+      process.env.CANISTER_ID_INTERNET_IDENTITY
     ),
     "process.env.CANISTER_ID_USER": JSON.stringify(
-      process.env.CANISTER_ID_USER,
+      process.env.CANISTER_ID_USER
     ),
     "process.env.CANISTER_ID_PROFESSIONAL": JSON.stringify(
-      process.env.CANISTER_ID_PROFESSIONAL,
+      process.env.CANISTER_ID_PROFESSIONAL
     ),
     "process.env.CANISTER_ID_FACILITY": JSON.stringify(
-      process.env.CANISTER_ID_FACILITY,
+      process.env.CANISTER_ID_FACILITY
     ),
     "process.env.CANISTER_ID_DATAASSET": JSON.stringify(
-      process.env.CANISTER_ID_DATAASSET,
+      process.env.CANISTER_ID_DATAASSET
     ),
     "process.env.CANISTER_ID_IDENTITY_MANAGER": JSON.stringify(
-      process.env.CANISTER_ID_IDENTITY_MANAGER,
+      process.env.CANISTER_ID_IDENTITY_MANAGER
     ),
     "process.env.CANISTER_ID_SHARED_ACTIVITY": JSON.stringify(
-      process.env.CANISTER_ID_SHARED_ACTIVITY,
+      process.env.CANISTER_ID_SHARED_ACTIVITY
     ),
     "process.env.CANISTER_ID_GAMIFICATIONSYSTEM": JSON.stringify(
-      process.env.CANISTER_ID_GAMIFICATIONSYSTEM,
+      process.env.CANISTER_ID_GAMIFICATIONSYSTEM
     ),
     "process.env.CANISTER_ID_VISITMANAGER": JSON.stringify(
-      process.env.CANISTER_ID_VISITMANAGER,
+      process.env.CANISTER_ID_VISITMANAGER
+    ),
+    "process.env.CANISTER_ID_TOKEN": JSON.stringify(
+      process.env.CANISTER_ID_ICRC_LEDGER_CANISTER
+    ),
+    "process.env.CANISTER_ID_ICRC_INDEX_CANISTER": JSON.stringify(
+      process.env.CANISTER_ID_ICRC_INDEX_CANISTER
     ),
     "process.env.II_URL": JSON.stringify(
       process.env.DFX_NETWORK === "local"
         ? `http://${process.env.CANISTER_ID_INTERNET_IDENTITY}.localhost:4943/`
-        : "https://identity.ic0.app/",
+        : "https://identity.ic0.app/"
     ),
     "process.env.LIGHTHOUSEAPI": JSON.stringify(process.env.LIGHTHOUSEAPI),
+    "process.env.OPENAI_API_KEY": JSON.stringify(process.env.OPENAI_API_KEY),
+    "process.env.OPENAI_ASSISTANT_ID": JSON.stringify(
+      process.env.OPENAI_ASSISTANT_ID
+    ),
   },
   resolve: {
     alias: [

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Routes, Route } from "react-router-dom";
-import Navbar from "../CommonPages/Navbar";
+import Navbar from "@/CommonPages/Navbar";
 import Sidebar from "./Sidebar";
 import DashboardContent from "./Pages/Dashboard";
 import CryptoAsset from "@/CommonPages/CryptoAsset";
@@ -8,10 +8,10 @@ import ProfileContent from "./Pages/Profile";
 import UploadContent from "./Pages/UploadPage";
 import AnalyticsContent from "./Pages/Analytics";
 import Gamification from "./Pages/Gamification";
-import YourRecords from "../CommonPages/Records/YourRecords";
-import SharedWithYou from "../CommonPages/Records/SharedWithYou";
+import YourRecords from "@/CommonPages/Records/YourRecords";
+import SharedWithYou from "@/CommonPages/Records/SharedWithYou";
 import ConsultAI from "./Pages/ConsultAI";
-import NotFoundPage from "../CommonPages/NotFoundPage";
+import NotFoundPage from "@/CommonPages/NotFoundPage";
 import AppBanner from "../AppBanner";
 
 export default function AppRoute1() {

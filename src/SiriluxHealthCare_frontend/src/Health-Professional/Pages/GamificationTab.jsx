@@ -1,20 +1,12 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
+import useActorStore from "../../State/Actors/ActorStore";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import ActorContext from "../../ActorContext";
-import {
-  CalendarIcon,
   PlusIcon,
   TrashIcon,
   ArrowPathIcon,
@@ -24,7 +16,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Pagination,
   PaginationContent,
-  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
@@ -32,9 +23,11 @@ import {
 } from "@/components/ui/pagination";
 import { Loader2Icon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import useNFTStore from "../../State/CryptoAssets/NFTStore";
 
 const GamificationTab = () => {
-  const { actors } = useContext(ActorContext);
+  const { actors } = useActorStore();
+  const { nfts, loading: nftsLoading, fetchNFTs } = useNFTStore();
   const [professionalInfo, setProfessionalInfo] = useState({
     id: "",
     name: "",
@@ -60,6 +53,7 @@ const GamificationTab = () => {
   const [bookedSlots, setBookedSlots] = useState([]);
   const [isLoadingVisits, setIsLoadingVisits] = useState(false);
   const [isLoadingBookedSlots, setIsLoadingBookedSlots] = useState(false);
+  const [selectedAvatarId, setSelectedAvatarId] = useState(null);
 
   useEffect(() => {
     fetchProfessionalInfo();
@@ -492,10 +486,19 @@ const GamificationTab = () => {
   };
 
   const handleCompleteVisit = async (visitId) => {
+    if (!selectedAvatarId) {
+      toast({
+        title: "Error",
+        description: "Please select an avatar to complete the visit",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const result = await actors.gamificationSystem.processVisitCompletion(
         visitId,
-        professionalInfo.id
+        selectedAvatarId
       );
       if (result.ok) {
         toast({
@@ -504,6 +507,7 @@ const GamificationTab = () => {
         // Refresh the lists
         fetchVisits();
         fetchBookedSlots();
+        setSelectedAvatarId(null);
       } else {
         throw new Error(result.err);
       }
@@ -540,6 +544,12 @@ const GamificationTab = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleRefreshNFTs = async () => {
+    console.log("Current NFTs:", nfts);
+    await fetchNFTs(actors);
+    console.log("Refreshed NFTs:", nfts);
   };
 
   return (
@@ -981,6 +991,68 @@ const GamificationTab = () => {
           <div className="grid gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Select NFT</CardTitle>
+                <Button
+                  variant="outline"
+                  onClick={handleRefreshNFTs}
+                  disabled={nftsLoading}
+                >
+                  {nftsLoading ? (
+                    <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <ArrowPathIcon className="h-4 w-4 mr-2" />
+                  )}
+                  Refresh NFTs
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {nftsLoading ? (
+                    <p className="text-sm text-muted-foreground">
+                      Loading NFTs...
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-4">
+                      {nfts.map((nft) => (
+                        <div
+                          key={nft.id}
+                          className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                            selectedAvatarId === nft.id
+                              ? "border-primary bg-accent"
+                              : "hover:bg-accent/50"
+                          }`}
+                          onClick={() => setSelectedAvatarId(nft.id)}
+                        >
+                          <div className="flex items-center gap-4">
+                            {nft.image && (
+                              <img
+                                src={nft.image}
+                                alt={nft.name}
+                                className="w-12 h-12 rounded"
+                              />
+                            )}
+                            <div>
+                              <p className="font-medium">{nft.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Type: {nft.type} • ID: {nft.id}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!nftsLoading && nfts.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center">
+                      No NFTs available in your wallet
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Pending Visits</CardTitle>
                 <Button
                   variant="outline"
@@ -1009,30 +1081,30 @@ const GamificationTab = () => {
                     {bookedSlots.map((slot, index) => (
                       <div
                         key={index}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                        className="flex flex-col p-4 border rounded-lg hover:bg-accent/50 transition-colors"
                       >
-                        <div>
-                          <p className="font-medium">
-                            {new Date(
-                              Number(slot.start) / 1000000
-                            ).toLocaleDateString(undefined, {
-                              weekday: "long",
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {new Date(
-                              Number(slot.start) / 1000000
-                            ).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="text-right mr-4">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <p className="font-medium">
+                              {new Date(
+                                Number(slot.start) / 1000000
+                              ).toLocaleDateString(undefined, {
+                                weekday: "long",
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              })}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(
+                                Number(slot.start) / 1000000
+                              ).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                          </div>
+                          <div className="text-right">
                             <p className="text-sm font-medium">
                               Visit ID: {Number(slot.visitId)}
                             </p>
@@ -1040,22 +1112,27 @@ const GamificationTab = () => {
                               Capacity: {Number(slot.capacity)}
                             </p>
                           </div>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="default"
-                              size="sm"
-                              onClick={() => handleCompleteVisit(slot.visitId)}
-                            >
-                              Complete
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleRejectVisit(slot.visitId)}
-                            >
-                              Reject
-                            </Button>
-                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleCompleteVisit(slot.visitId)}
+                            disabled={!selectedAvatarId}
+                            className="flex items-center gap-2"
+                          >
+                            {selectedAvatarId
+                              ? `Complete with ${nfts.find((a) => a.id === selectedAvatarId)?.name}`
+                              : "Select an avatar above"}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleRejectVisit(slot.visitId)}
+                          >
+                            Reject
+                          </Button>
                         </div>
                       </div>
                     ))}
