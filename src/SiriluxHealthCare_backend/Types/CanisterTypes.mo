@@ -1,3 +1,5 @@
+import Result "mo:base/Result";
+
 import IdentityManager "../IdentityManager/IdentityManager";
 import CanisterIDs "CanisterIDs";
 
@@ -20,7 +22,12 @@ module CanisterTypes {
         }) -> async ({ encrypted_key : Blob });
     };
 
+    public type DataService = actor {
+        updateDataStorageUsedMap : (Principal, Int) -> async Result.Result<(), Text>;
+
+    };
+
     public let identityManager : IdentityManager.IdentityManager = actor (CanisterIDs.identityManagerCanisterID);
     public let vetkd_system_api : VETKD_SYSTEM_API = actor (CanisterIDs.vetkdSystemCanisterID);
-
+    public let dataStorageService : DataService = actor (CanisterIDs.dataAssetCanisterID);
 };

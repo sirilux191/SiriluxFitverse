@@ -3,6 +3,8 @@ import Result "mo:base/Result";
 import Text "mo:base/Text";
 import BTree "mo:stableheapbtreemap/BTree";
 
+import CanisterIDs "../Types/CanisterIDs";
+
 actor class IdentityManager() {
 
     private stable var admin : Text = ("");
@@ -11,7 +13,29 @@ actor class IdentityManager() {
     private stable var identityMap : BTree.BTree<Principal, (Text, Text)> = BTree.init<Principal, (Text, Text)>(null);
     private stable var reverseIdentityMap : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
 
-    public func registerIdentity(principal : Principal, id : Text, userType : Text) : async Result.Result<(), Text> {
+    private stable var permittedPrincipals : [Principal] = [
+        Principal.fromText(CanisterIDs.userServiceCanisterID),
+        Principal.fromText(CanisterIDs.professionalServiceCanisterID),
+        Principal.fromText(CanisterIDs.facilityServiceCanisterID),
+        Principal.fromText(CanisterIDs.dataAssetCanisterID),
+        Principal.fromText(CanisterIDs.sharedActivityCanisterID),
+        Principal.fromText(CanisterIDs.gamificationSystemCanisterID),
+    ];
+
+    ///Permitted Principal Bind to @instituteName, For Example :- BTree Principal <-> @FortisHospital
+
+    public shared ({ caller }) func registerIdentity(principal : Principal, id : Text, userType : Text) : async Result.Result<(), Text> {
+        if (not isPermitted(caller)) {
+            return #err("Unauthorized");
+        };
+        switch (BTree.has(reverseIdentityMap, Text.compare, id)) {
+            case (true) {
+                return #err(
+                    "This ID is Already Registered Please Choose Different One"
+                );
+            };
+            case (false) {};
+        };
         ignore BTree.insert(identityMap, Principal.compare, principal, (id, userType));
         ignore BTree.insert(reverseIdentityMap, Text.compare, id, principal);
         #ok(());
@@ -57,7 +81,10 @@ actor class IdentityManager() {
         };
     };
 
-    public shared func removeIdentity(id : Text) : async Result.Result<(), Text> {
+    public shared ({ caller }) func removeIdentity(id : Text) : async Result.Result<(), Text> {
+        if (not isPermitted(caller)) {
+            return #err("Unauthorized");
+        };
         switch (BTree.get(reverseIdentityMap, Text.compare, id)) {
             case (?principal) {
                 ignore BTree.delete(identityMap, Principal.compare, principal);
@@ -92,6 +119,14 @@ actor class IdentityManager() {
         return caller;
     };
 
+    private func isPermitted(principal : Principal) : Bool {
+        for (permittedPrincipal in permittedPrincipals.vals()) {
+            if (permittedPrincipal == principal) {
+                return true;
+            };
+        };
+        return false;
+    };
     //Should Not Be Query Function Due To Security Concerns
     public func returnAdmin() : async Text {
         return admin;

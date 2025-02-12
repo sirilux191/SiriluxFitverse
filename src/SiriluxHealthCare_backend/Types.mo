@@ -1,8 +1,8 @@
 import Blob "mo:base/Blob";
 import Nat "mo:base/Nat";
 import Text "mo:base/Text";
+import Time "mo:base/Time";
 import env "mo:env";
-
 module Types {
 
     public type SharedType = {
@@ -79,24 +79,17 @@ module Types {
         userSharedToID : Text;
     };
 
-    public type Listing = {
-        id : Text;
-        title : Text;
-        description : Text;
-        price : Nat;
-        category : Text;
-        seller : Text;
-        assetID : Text;
-        timestamp : Text;
+    public type TimeRemaining = {
+        seconds : Float;
+        minutes : Float;
+        hours : Float;
+        days : Float;
     };
 
-    public type purchasedInfo = {
-        title : Text;
-        listingID : Text;
-        price : Nat;
-        assetID : Text;
-        time : Nat;
-        seller : Text;
+    public type Balance = {
+        tokens : Nat;
+        dataMB : Nat;
+        lastUpdateTime : Time.Time;
     };
 
     public type TokenRequestAmounts = {

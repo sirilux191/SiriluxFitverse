@@ -202,7 +202,7 @@ actor class GamificationSystem() = this {
             to = { owner = Principal.fromActor(this); subaccount = null };
             amount = amount * 100_000_000;
             fee = null;
-            memo = null;
+            memo = ?Text.encodeUtf8("RESTORE_HP TokenId: " # debug_show tokenId # " Amount: " # debug_show amount);
             created_at_time = null;
         });
 
@@ -282,7 +282,7 @@ actor class GamificationSystem() = this {
             to = { owner = Principal.fromActor(this); subaccount = null };
             amount = cost * 100_000_000; // 8 decimals
             fee = null;
-            memo = null;
+            memo = ?Text.encodeUtf8("LEVEL_UP TokenId: " # debug_show tokenId # " Cost: " # debug_show cost);
             created_at_time = null;
         });
 

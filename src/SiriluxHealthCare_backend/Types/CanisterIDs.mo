@@ -18,7 +18,5 @@ module {
     public let sharedActivityCanisterID : Text = (env.sharedActivityCanisterID);
 
     public let gamificationSystemCanisterID : Text = (env.gamificationSystemCanisterID);
-    public let visitManagerCanisterID : Text = (env.visitManagerCanisterID);
-    // public let marketplaceShardManagerCanisterID : Text = (env.marketplaceShardManagerCanisterID);
 
 };

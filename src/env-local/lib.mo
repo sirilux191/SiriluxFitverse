@@ -15,6 +15,5 @@ module {
     public let sharedActivityCanisterID : Text = ("a3shf-5eaaa-aaaaa-qaafa-cai");
 
     public let gamificationSystemCanisterID : Text = ("bw4dl-smaaa-aaaaa-qaacq-cai");
-    public let visitManagerCanisterID : Text = ("cuj6u-c4aaa-aaaaa-qaajq-cai");
-    // public let marketplaceShardManagerCanisterID : Text = ("c2lt4-zmaaa-aaaaa-qaaiq-cai");
+
 };
