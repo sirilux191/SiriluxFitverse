@@ -50,13 +50,13 @@ actor class DataAssetService() = this {
     private stable let shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
     private stable let dataStorageShards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
 
-    private stable var userShardMap : BTree.BTree<Text, [Text]> = BTree.init<Text, [Text]>(null);
-    private stable var principalTimerMap : BTree.BTree<Principal, Nat> = BTree.init<Principal, Nat>(null);
+    private stable var userShardMap : BTree.BTree<Text, [Text]> = BTree.init<Text, [Text]>(?128);
+    private stable var principalTimerMap : BTree.BTree<Principal, Nat> = BTree.init<Principal, Nat>(?128);
 
     private stable var dataAssetShardWasmModule : [Nat8] = [];
     private stable var dataStorageShardWasmModule : [Nat8] = [];
 
-    private stable var subScriberMap : BTree.BTree<Principal, Types.Balance> = BTree.init<Principal, Types.Balance>(null);
+    private stable var subScriberMap : BTree.BTree<Principal, Types.Balance> = BTree.init<Principal, Types.Balance>(?128);
 
     private let IC = "aaaaa-aa";
     private let ic : Interface.Self = actor (IC);
@@ -838,7 +838,7 @@ actor class DataAssetService() = this {
 
                         {
                             tokens = (30 * 24 * 60 * 60) * 100; // 30 days free storage 100MB
-                            dataMB = 0; // 0MB Current Storage Used
+                            dataMB = 0; // 0 MB Current Storage Used
                             lastUpdateTime = currentTime;
                         };
                     };
@@ -883,8 +883,9 @@ actor class DataAssetService() = this {
                     //Less than 1 Days
                     return #err("Remaining time after updating storage is less than 1 Days Add Tokens or Update Storage");
                 } else {
+                    let triggerAfter : Nat = Int.abs(Float.toInt(remainingSeconds));
                     let id = Timer.setTimer<system>(
-                        #seconds 0,
+                        #seconds triggerAfter,
                         func() : async () {
                             await deleteAllDataForPrincipal(principal);
                         },
@@ -936,19 +937,36 @@ actor class DataAssetService() = this {
         };
     };
 
-    // public shared ({ caller }) func getDataStorageUsedMap() : async Result.Result<[(Principal, Nat)], Text> {
-    //     if (not (await isAdmin(caller))) {
-    //         return #err("You are not Admin, only admin can perform this action");
-    //     };
-    //     #ok(BTree.toArray(dataStorageUsedMap));
-    // };
+    public shared ({ caller }) func getDataStorageUsedMap(page : Nat) : async Result.Result<[(Principal, Types.Balance)], Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("You are not Admin, only admin can perform this action");
+        };
 
-    // private func _getTotalDataStorageUsedForPrincipal(principal : Principal) : async Nat {
-    //     switch (BTree.get(dataStorageUsedMap, Principal.compare, principal)) {
-    //         case (?used) { used };
-    //         case null { 0 };
-    //     };
-    // };
+        let pageSize = 500;
+        let allEntries = BTree.toArray(subScriberMap);
+        let startIndex = page * pageSize;
+
+        if (startIndex >= allEntries.size()) {
+            return #ok([]);
+        };
+
+        let endIndex = Nat.min(startIndex + pageSize, allEntries.size());
+        let pageEntries = Array.tabulate<(Principal, Types.Balance)>(
+            endIndex - startIndex,
+            func(i) = allEntries[startIndex + i],
+        );
+
+        #ok(pageEntries);
+    };
+
+    public shared query ({ caller }) func getTotalDataBalanceForPrincipal() : async Result.Result<Types.Balance, Text> {
+        switch (BTree.get(subScriberMap, Principal.compare, caller)) {
+            case (?balance) { #ok(balance) };
+            case null {
+                #err(" You are not subscriber");
+            };
+        };
+    };
 
     // Add helper function to get remaining time for a principal
     public shared query func getRemainingStorageTime(principal : Principal) : async Result.Result<Types.TimeRemaining, Text> {
@@ -979,51 +997,53 @@ actor class DataAssetService() = this {
     };
 
     // Add method to add tokens to a principal's balance
-    // public shared ({ caller }) func addTokensToBalance(tokens : Nat) : async Result.Result<(), Text> {
-    //     if (not (await isAdmin(caller))) {
-    //         return #err("Only admin can add tokens");
-    //     };
+    public shared ({ caller }) func addTokensToBalance(amount : Nat) : async Result.Result<(), Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("Only admin can add tokens");
+        };
 
-    //     let result = await icrcLedger.icrc2_transfer_from({
-    //         from = { owner = caller; subaccount = null };
-    //         spender_subaccount = null;
-    //         to = { owner = Principal.fromActor(this); subaccount = null };
-    //         amount = tokens * 100_000_000;
-    //         fee = null;
-    //         memo = ?Text.encodeUtf8(" Add Tokens to Subscriber Balance: " # debug_show tokens);
-    //         created_at_time = null;
-    //     });
+        let result = await icrcLedger.icrc2_transfer_from({
+            from = { owner = caller; subaccount = null };
+            spender_subaccount = null;
+            to = { owner = Principal.fromActor(this); subaccount = null };
+            amount = amount * 100_000_000;
+            fee = null;
+            memo = ?Text.encodeUtf8(" Add Tokens to Subscriber Balance: " # debug_show amount);
+            created_at_time = null;
+        });
 
-    //     switch (result) {
-    //         case (#Ok(_value)) {
+        switch (result) {
+            case (#Ok(_value)) {
 
-    //         };
-    //         case (#Err(error)) {
-    //             return #err(debug_show error);
-    //         };
-    //     };
+            };
+            case (#Err(error)) {
+                return #err(debug_show error);
+            };
+        };
 
-    //     switch (BTree.get(subScriberMap, Principal.compare, caller)) {
-    //         case (?balance) {
-    //             let updatedBalance = {
-    //                 tokens = balance.tokens + Float.fromInt(tokens);
-    //                 dataGB = balance.dataMB;
-    //                 lastUpdateTime = balance.lastUpdateTime;
-    //             };
-    //             ignore BTree.insert(subScriberMap, Principal.compare, caller, updatedBalance);
-    //             #ok(());
-    //         };
-    //         case null {
-    //             let newBalance = {
-    //                 tokens = Float.fromInt(tokens);
-    //                 dataGB = 0.1; // Initialize with 100MB
-    //                 lastUpdateTime = Time.now();
-    //             };
-    //             ignore BTree.insert(subScriberMap, Principal.compare, caller, newBalance);
-    //             #ok(());
-    //         };
-    //     };
-    // };
+        let tokensToadd = Int.abs(Float.toInt((Float.fromInt(amount) * 24 * 60 * 60 * 30) / 100));
+
+        switch (BTree.get(subScriberMap, Principal.compare, caller)) {
+            case (?balance) {
+                let updatedBalance = {
+                    tokens = balance.tokens + tokensToadd;
+                    dataMB = balance.dataMB;
+                    lastUpdateTime = balance.lastUpdateTime;
+                };
+                ignore BTree.insert(subScriberMap, Principal.compare, caller, updatedBalance);
+                #ok(());
+            };
+            case null {
+                let newBalance = {
+                    tokens = (tokensToadd);
+                    dataMB = 0; // Initialize with 100MB
+                    lastUpdateTime = Time.now();
+                };
+                ignore BTree.insert(subScriberMap, Principal.compare, caller, newBalance);
+                #ok(());
+            };
+        };
+    };
 
     public shared ({ caller }) func deleteDataAsset(assetID : Text) : async Result.Result<(), Text> {
         let userIDResult = await getUserID(caller);
