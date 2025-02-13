@@ -36,7 +36,7 @@ actor class SharedActivityService() {
         let senderIDResult = await identityManager.getIdentity(caller);
         switch (senderIDResult) {
             case (#ok((senderID, _))) {
-                let activityIDResult = await getNextActivityID(senderID, recipientID);
+                let activityIDResult = await getNextActivityID(senderID);
                 switch (activityIDResult) {
                     case (#ok(activityID)) {
                         let activity : Types.sharedActivityInfo = {
@@ -308,20 +308,16 @@ actor class SharedActivityService() {
         };
     };
 
-    public func getNextActivityID(userID : Text, recipientID : Text) : async Result.Result<Text, Text> {
+    public func getNextActivityID(userID : Text) : async Result.Result<Text, Text> {
         totalActivityCount += 1;
         let activityID = Nat.toText(totalActivityCount);
         let updateResult = await updateUserShardMap(userID, activityID);
-        let updateResult2 = await updateUserShardMap(recipientID, activityID);
-        switch (updateResult, updateResult2) {
-            case (#ok(_), #ok(_)) {
+        switch (updateResult) {
+            case (#ok(_)) {
                 #ok(activityID);
             };
-            case (#err(e), _) {
+            case (#err(e)) {
                 #err("Failed to update user shard map: " # e);
-            };
-            case (_, #err(e)) {
-                #err("Failed to update recipient shard map: " # e);
             };
         };
     };

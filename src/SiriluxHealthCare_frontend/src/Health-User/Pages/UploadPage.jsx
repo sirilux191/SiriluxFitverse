@@ -28,10 +28,9 @@ import { useState, useContext } from "react";
 
 import LoadingScreen from "../../LoadingScreen";
 import * as vetkd from "ic-vetkd-utils";
-
-import useActorStore from "../../State/Actors/ActorStore";
+import ActorContext from "../../ActorContext";
 export default function UploadContent() {
-  const { actors } = useActorStore();
+  const { actors } = useContext(ActorContext);
   const [formData, setFormData] = useState({
     dateOfCheckup: "",
     typeOfCheckup: "",

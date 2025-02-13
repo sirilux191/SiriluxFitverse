@@ -23,7 +23,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   optimizeDeps: {
-    include: ["date-fns", "pdfjs-dist/build/pdf.worker.mjs"],
+    include: ["date-fns"],
     esbuildOptions: {
       define: {
         global: "globalThis",

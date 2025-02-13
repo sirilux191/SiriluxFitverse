@@ -39,6 +39,7 @@ const FileUpload = () => {
   const [category, setCategory] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [csvData, setCsvData] = useState(null); // State to store CSV data
 
   const handleFileInputChange = (event) => {
     if (event.target.files && event.target.files.length > 0) {
@@ -330,6 +331,59 @@ const FileUpload = () => {
     setCsvData(null);
   };
 
+  const handleCallCloudFunction = async () => {
+    if (!file) {
+      alert("Please upload a file first!");
+      return;
+    }
+
+    setLoading(true);
+
+    const formData = new FormData();
+    formData.append("image", file.file);
+
+    try {
+      const response = await axios.post(
+        "https://us-central1-document-416209.cloudfunctions.net/function-1",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+          responseType: "blob",
+        }
+      );
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+
+      // Parse CSV data using papaparse
+      Papa.parse(url, {
+        download: true,
+        complete: function (results) {
+          // Set CSV data to state
+          setCsvData(results.data);
+        },
+      });
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const convertCsvToPdf = () => {
+    const doc = new jsPDF();
+    const fileName = `${file.file.name.split(".")[0]}_analyzed.pdf`; // Generate file name based on the original file name
+
+    doc.autoTable({
+      head: [Object.keys(csvData[0])],
+      body: csvData.slice(1),
+    });
+
+    // Save the PDF file
+    doc.save(fileName);
+  };
+
   // Utility function for error handling
   const handleError = (error) => {
     console.error("Error:", error);
@@ -590,10 +644,47 @@ const FileUpload = () => {
           >
             Upload
           </Button>
+          <CloudFunctionCallButton
+            handleCallCloudFunction={handleCallCloudFunction}
+          />
         </>
+      )}
+
+      {csvData && (
+        <Button
+          onClick={convertCsvToPdf}
+          className="my-2 mr-2"
+        >
+          Download Analyzed File
+        </Button>
+      )}
+
+      {csvData && (
+        <div className="overflow-x-auto bg-muted rounded-lg p-2 ">
+          <table>
+            <tbody>
+              {csvData.map((row, rowIndex) => (
+                <tr key={rowIndex}>
+                  {row.map((cell, cellIndex) => (
+                    <td key={cellIndex}>{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
 };
+
+const CloudFunctionCallButton = ({ handleCallCloudFunction }) => (
+  <Button
+    variant="outline"
+    onClick={handleCallCloudFunction}
+  >
+    Run Analytics
+  </Button>
+);
 
 export default FileUpload;

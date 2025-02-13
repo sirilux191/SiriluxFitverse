@@ -26,19 +26,12 @@ import { Button } from "@/components/ui/button";
 import OpenAI from "openai";
 
 import useActorStore from "@/State/Actors/ActorStore";
-import * as pdfjs from "pdfjs-dist";
 
 // Initialize OpenAI client (make sure to add VITE_OPENAI_API_KEY to your .env)
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   dangerouslyAllowBrowser: true,
 });
-
-// Set worker path directly
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.mjs",
-  import.meta.url
-).toString();
 
 export default function YourRecords() {
   const [activeTab, setActiveTab] = useState("all");
@@ -175,153 +168,7 @@ export default function YourRecords() {
   }, [activeTab, searchTerm, records]);
 
   // Update the generateAISummary function
-  const generateAISummary = async (recordId) => {
-    try {
-      setIsGeneratingSummary(true);
-      setErrorMessage("");
-
-      const downloadedFiles = JSON.parse(
-        localStorage.getItem("downloadedFiles") || "[]"
-      );
-      const file = downloadedFiles.find((f) => f.id === recordId);
-
-      if (!file) {
-        throw new Error(
-          "Please download the file first before generating summary"
-        );
-      }
-
-      // Convert base64 to Uint8Array
-      const base64Data = file.data.split(",")[1];
-      const binaryData = atob(base64Data);
-      const bytes = new Uint8Array(binaryData.length);
-      for (let i = 0; i < binaryData.length; i++) {
-        bytes[i] = binaryData.charCodeAt(i);
-      }
-
-      // Load and parse PDF
-      const pdf = await pdfjs.getDocument({ data: bytes }).promise;
-      let textContent = "";
-
-      // Extract text from each page
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        textContent += content.items.map((item) => item.str).join(" ") + "\n";
-      }
-
-      // Clean up the text (remove extra whitespace, etc.)
-      textContent = textContent.replace(/\s+/g, " ").trim();
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert medical document analyzer. Analyze medical documents and provide structured summaries focusing on:
-            1. Patient Information (if available)
-            2. Key Diagnoses
-            3. Vital Signs & Lab Results
-            4. Medications & Treatments
-            5. Recommendations & Follow-up
-            6. Critical Findings or Concerns`,
-          },
-          {
-            role: "user",
-            content: `Please analyze this medical document and provide a structured summary: ${textContent}`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 1000,
-      });
-
-      setAiSummary(response.choices[0].message.content);
-    } catch (error) {
-      console.error("Error generating summary:", error);
-      setErrorMessage(error.message || "Failed to generate summary");
-    } finally {
-      setIsGeneratingSummary(false);
-    }
-  };
-
-  // Add new function to summarize all PDFs
-  const generateAllPDFsSummary = async () => {
-    try {
-      setIsGeneratingSummary(true);
-      setErrorMessage("");
-
-      const downloadedFiles = JSON.parse(
-        localStorage.getItem("downloadedFiles") || "[]"
-      );
-      const pdfFiles = downloadedFiles.filter((file) =>
-        file.name.toLowerCase().endsWith(".pdf")
-      );
-
-      if (pdfFiles.length === 0) {
-        throw new Error("No PDF files found in downloads");
-      }
-
-      // Process all PDFs
-      const processedPDFs = await Promise.all(
-        pdfFiles.map(async (file) => {
-          const base64Data = file.data.split(",")[1];
-          const binaryData = atob(base64Data);
-          const bytes = new Uint8Array(binaryData.length);
-          for (let i = 0; i < binaryData.length; i++) {
-            bytes[i] = binaryData.charCodeAt(i);
-          }
-
-          const pdf = await pdfjs.getDocument({ data: bytes }).promise;
-          let textContent = "";
-
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const content = await page.getTextContent();
-            textContent +=
-              content.items.map((item) => item.str).join(" ") + "\n";
-          }
-
-          return {
-            name: file.name,
-            content: textContent.replace(/\s+/g, " ").trim(),
-          };
-        })
-      );
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert medical document analyzer reviewing multiple medical documents. Provide a comprehensive analysis that:
-            1. Summarizes each document briefly
-            2. Identifies patterns and trends across documents
-            3. Highlights key medical findings and their progression
-            4. Notes any contradictions or inconsistencies
-            5. Provides a timeline of medical events
-            6. Flags critical information requiring attention`,
-          },
-          {
-            role: "user",
-            content: `Please analyze these medical documents and provide a comprehensive summary:\n\n${processedPDFs
-              .map(
-                (pdf) => `Document: ${pdf.name}\nContent: ${pdf.content}\n---`
-              )
-              .join("\n")}`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 1500,
-      });
-
-      setAiSummary(response.choices[0].message.content);
-    } catch (error) {
-      console.error("Error generating summary:", error);
-      setErrorMessage(error.message || "Failed to generate summary");
-    } finally {
-      setIsGeneratingSummary(false);
-    }
-  };
+  const generateAISummary = async (fileName, recordId) => {};
 
   if (loading) {
     return <LoadingScreen />;
@@ -537,47 +384,15 @@ export default function YourRecords() {
                             </p>
                           )}
                           {aiSummary ? (
-                            <div className="text-white text-sm whitespace-pre-wrap prose prose-invert max-w-none">
-                              {aiSummary.split("\n").map((line, i) => {
-                                if (line.startsWith("###")) {
-                                  return (
-                                    <h3
-                                      key={i}
-                                      className="text-xl font-bold mt-6 mb-4"
-                                    >
-                                      {line.replace("###", "")}
-                                    </h3>
-                                  );
-                                }
-                                if (line.startsWith("####")) {
-                                  return (
-                                    <h4
-                                      key={i}
-                                      className="text-lg font-semibold mt-4 mb-2"
-                                    >
-                                      {line.replace("####", "")}
-                                    </h4>
-                                  );
-                                }
-                                if (line.startsWith("-")) {
-                                  return (
-                                    <p
-                                      key={i}
-                                      className="ml-4 mb-1"
-                                    >
-                                      {line}
-                                    </p>
-                                  );
-                                }
-                                return (
-                                  <p
-                                    key={i}
-                                    className="mb-1"
-                                  >
-                                    {line}
-                                  </p>
-                                );
-                              })}
+                            <div className="text-white text-sm whitespace-pre-wrap prose prose-invert">
+                              {aiSummary.split("\n").map((line, i) => (
+                                <p
+                                  key={i}
+                                  className="m-0"
+                                >
+                                  {line}
+                                </p>
+                              ))}
                             </div>
                           ) : (
                             <p className="text-gray-400 text-sm">
@@ -638,7 +453,7 @@ export default function YourRecords() {
                                   (r) => r.id === expandedCard
                                 );
                                 if (record) {
-                                  generateAISummary(record.id);
+                                  generateAISummary(record.title, record.id);
                                 }
                               }}
                               disabled={isGeneratingSummary}
@@ -647,16 +462,6 @@ export default function YourRecords() {
                               {isGeneratingSummary
                                 ? "Analyzing..."
                                 : "AI Summary"}
-                            </Button>
-
-                            <Button
-                              onClick={generateAllPDFsSummary}
-                              disabled={isGeneratingSummary}
-                              className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium col-span-full"
-                            >
-                              {isGeneratingSummary
-                                ? "Analyzing All PDFs..."
-                                : "Summarize All PDFs"}
                             </Button>
                           </>
                         )}
