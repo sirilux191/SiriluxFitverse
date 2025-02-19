@@ -27,6 +27,7 @@ import OpenAI from "openai";
 
 import useActorStore from "@/State/Actors/ActorStore";
 import * as pdfjs from "pdfjs-dist";
+import EditFile from "@/Functions/EditFile";
 
 // Initialize OpenAI client (make sure to add VITE_OPENAI_API_KEY to your .env)
 const openai = new OpenAI({
@@ -607,7 +608,25 @@ export default function YourRecords() {
                                 records.find((r) => r.id === expandedCard)
                                   ?.format
                               }
+                              accessLevel={"owned"}
                               className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                            />
+
+                            <EditFile
+                              data={
+                                records.find((r) => r.id === expandedCard)?.data
+                              }
+                              uniqueID={
+                                records.find((r) => r.id === expandedCard)?.id
+                              }
+                              title={
+                                records.find((r) => r.id === expandedCard)
+                                  ?.title
+                              }
+                              format={
+                                records.find((r) => r.id === expandedCard)
+                                  ?.format
+                              }
                             />
 
                             <ShareDataFunc

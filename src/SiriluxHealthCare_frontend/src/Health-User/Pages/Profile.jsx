@@ -13,11 +13,14 @@ import { useState, useEffect } from "react";
 import LoadingScreen from "../../LoadingScreen";
 import { toast } from "@/components/ui/use-toast";
 import { useUserProfileStore } from "../../State/User/UserProfile/UserProfileStore";
+import { Progress } from "@/components/ui/progress";
+import { useToastProgressStore } from "../../State/ProgressStore/ToastProgressStore";
 
 export default function ProfileContent() {
   const { actors } = useActorStore();
   const { userProfile, loading, fetchUserProfile, updateUserProfile } =
     useUserProfileStore();
+  const { progress, setProgress } = useToastProgressStore();
 
   const [name, setName] = useState("");
   const [dob, setDob] = useState("");
@@ -33,6 +36,34 @@ export default function ProfileContent() {
   useEffect(() => {
     fetchUserProfile(actors);
   }, [actors, fetchUserProfile]);
+
+  useEffect(() => {
+    const toastId = "profile-loading-toast";
+
+    if (loading) {
+      toast({
+        id: toastId,
+        title: "Loading Profile",
+        description: (
+          <div className="w-full space-y-2">
+            <Progress
+              value={progress.value}
+              className="w-full"
+            />
+            <p className="text-sm text-gray-500">{progress.message}</p>
+          </div>
+        ),
+        duration: Infinity,
+      });
+    } else if (progress.value === 100) {
+      toast({
+        id: toastId,
+        title: "Profile Loaded",
+        description: "Profile data loaded successfully!",
+        duration: 2000,
+      });
+    }
+  }, [progress, loading]);
 
   useEffect(() => {
     if (userProfile) {
@@ -51,36 +82,56 @@ export default function ProfileContent() {
 
   const handleUpdateUser = async (event) => {
     event.preventDefault();
+    const toastId = "profile-update-toast";
 
-    const demoInfo = {
-      name,
-      dob,
-      gender,
-      country,
-      state,
-      pincode,
-    };
-
-    const basicHealthPara = {
-      bloodType,
-      height,
-      heartRate,
-      weight,
-    };
-
-    const result = await updateUserProfile(actors, demoInfo, basicHealthPara);
-
-    if (result.success) {
+    try {
       toast({
-        title: "Success",
-        description: result.message,
-        variant: "success",
+        id: toastId,
+        title: "Updating Profile",
+        description: (
+          <div className="w-full space-y-2">
+            <Progress
+              value={progress.value}
+              className="w-full"
+            />
+            <p className="text-sm text-gray-500">{progress.message}</p>
+          </div>
+        ),
+        duration: Infinity,
       });
-    } else {
+
+      const demoInfo = {
+        name,
+        dob,
+        gender,
+        country,
+        state,
+        pincode,
+      };
+
+      const basicHealthPara = {
+        bloodType,
+        height,
+        heartRate,
+        weight,
+      };
+
+      const result = await updateUserProfile(actors, demoInfo, basicHealthPara);
+
       toast({
-        title: "Error",
+        id: toastId,
+        title: result.success ? "Success" : "Error",
         description: result.message,
+        variant: result.success ? "success" : "destructive",
+        duration: 3000,
+      });
+    } catch (error) {
+      toast({
+        id: toastId,
+        title: "Error",
+        description: "Failed to update profile",
         variant: "destructive",
+        duration: 3000,
       });
     }
   };

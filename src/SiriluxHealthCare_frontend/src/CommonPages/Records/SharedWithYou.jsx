@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import {
   FileText,
@@ -233,6 +233,7 @@ export default function SharedWithYou() {
                           uniqueID={selectedActivity?.assetID}
                           title={selectedAsset.title}
                           format={selectedAsset.format}
+                          accessLevel={"shared"}
                           className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
                         />
                       </div>

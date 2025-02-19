@@ -11,6 +11,8 @@ import { createActor as createSharedActivityActor } from "../../../../declaratio
 import { createActor as createGamificationSystemActor } from "../../../../declarations/GamificationSystem";
 import { createActor as createTokenActor } from "../../../../declarations/icrc_ledger_canister";
 import { createActor as createIcrcIndexActor } from "../../../../declarations/icrc_index_canister";
+import { createActor as createStorageShardActor } from "../../../../declarations/DataStorageShard";
+
 const useActorStore = create(
   persist(
     (set, get) => ({
@@ -24,6 +26,7 @@ const useActorStore = create(
         gamificationSystem: null,
         token: null,
         icrcIndex: null,
+        storageShard: null,
       },
       isAuthenticated: false,
       authClient: null,
@@ -115,6 +118,7 @@ const useActorStore = create(
             gamificationSystem: null,
             token: null,
             icrcIndex: null,
+            storageShard: null,
           },
           isAuthenticated: false,
           authClient: null,
@@ -125,6 +129,20 @@ const useActorStore = create(
         if (authClient) {
           await authClient.logout();
         }
+      },
+
+      createStorageShardActorExternal: (storagePrincipal) => {
+        const { authClient } = get();
+        if (!authClient) return null;
+
+        const identity = authClient.getIdentity();
+        const agent = new HttpAgent({ identity });
+
+        if (process.env.DFX_NETWORK !== "ic") {
+          agent.fetchRootKey().catch(console.error);
+        }
+
+        return createStorageShardActor(storagePrincipal, { agent });
       },
     }),
     {

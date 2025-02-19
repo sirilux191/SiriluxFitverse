@@ -1,13 +1,15 @@
 import Array "mo:base/Array";
 import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
-import Map "mo:base/HashMap";
+import Debug "mo:base/Debug";
 import Int "mo:base/Int";
+import Nat "mo:base/Nat";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
 import BTree "mo:stableheapbtreemap/BTree";
 
+import CanisterIDs "../Types/CanisterIDs";
 import CanisterTypes "../Types/CanisterTypes";
 
 actor class DataStorageShard() {
@@ -22,9 +24,9 @@ actor class DataStorageShard() {
     // Main storage map for completed data
     private stable var dataStore : BTree.BTree<Text, Blob> = BTree.init<Text, Blob>(null);
     // Temporary storage for chunks being uploaded
-    private let chunksInProgress = Map.HashMap<Text, ChunkData>(0, Text.equal, Text.hash);
+    private let chunksInProgress : BTree.BTree<Text, ChunkData> = BTree.init<Text, ChunkData>(null);
     //Permitted Principal List
-    private stable var permittedPrincipals : [Principal] = [];
+    private stable var permittedPrincipals : [Principal] = [Principal.fromText(CanisterIDs.dataAssetCanisterID)];
 
     public shared ({ caller }) func grantAccess(principal : Principal, id : Text) : async Result.Result<Text, Text> {
         if (not isPermitted(caller)) {
@@ -65,7 +67,7 @@ actor class DataStorageShard() {
                 // let newDataSize : Int = data.size();
                 let totalSize : Int = existingDataSize - dataSize;
                 switch (await dataStorageService.updateDataStorageUsedMap(caller, totalSize)) {
-                    case (#ok()) {
+                    case (#ok(_timeRemaining)) {
                         ignore BTree.insert(dataStore, Text.compare, id, data);
                         return #ok("Data inserted");
                     };
@@ -80,7 +82,7 @@ actor class DataStorageShard() {
         };
 
         switch (await dataStorageService.updateDataStorageUsedMap(caller, dataSize)) {
-            case (#ok()) {
+            case (#ok(_)) {
                 ignore BTree.insert(dataStore, Text.compare, id, data);
                 return #ok("Data inserted");
             };
@@ -103,33 +105,35 @@ actor class DataStorageShard() {
             };
         };
 
-        // switch (BTree.get(dataStore, Text.compare, id)) {
-        //     case (?existingData) {
-        //         let existingDataSize : Int = existingData.size();
-        //         let newDataSize : Int = totalChunks * 2_000_000;
-        //         let totalSize : Int = existingDataSize - newDataSize;
-        //         Check Only Don't Update
-        //         switch (await dataStorageService.checkDataStorageUsedMap(caller, totalSize)) {
-        //             case (#ok()) {
+        switch (BTree.get(dataStore, Text.compare, id)) {
+            case (?existingData) {
+                let existingDataSize : Int = existingData.size();
+                let newDataSize : Int = totalChunks * 2_000_000;
+                let totalSize : Int = newDataSize - existingDataSize;
+                // Check Only Don't Update
+                switch (await dataStorageService.checkDataStorageUsedMap(caller, totalSize)) {
+                    case (#ok(_)) {
 
-        //             };
-        //             case (#err(err)) {
-        //                 return #err(err);
-        //             };
-        //         };
-        //     };
-        //     case null {
+                    };
+                    case (#err(err)) {
+                        return #err(err);
+                    };
+                };
+            };
+            case null {
 
-        //     };
-        // };
+            };
+        };
 
-        switch (chunksInProgress.get(id)) {
+        switch (BTree.get(chunksInProgress, Text.compare, id)) {
             case (?_) {
                 return #err("Upload already in progress for this ID");
             };
             case null {
                 let chunkBuffer = Buffer.Buffer<Blob>(totalChunks);
-                chunksInProgress.put(
+                ignore BTree.insert(
+                    chunksInProgress,
+                    Text.compare,
                     id,
                     {
                         chunks = chunkBuffer;
@@ -154,26 +158,32 @@ actor class DataStorageShard() {
             };
         };
 
-        switch (chunksInProgress.get(id)) {
+        switch (BTree.get(chunksInProgress, Text.compare, id)) {
             case (?uploadData) {
                 if (chunkIndex >= uploadData.totalChunks) {
                     return #err("Invalid chunk index");
                 };
                 uploadData.chunks.add(chunk);
+                Debug.print("Chunk Index: " # Nat.toText(chunkIndex));
+                Debug.print("Total Chunks: " # Nat.toText(uploadData.totalChunks));
 
                 // If all chunks received, combine and store
                 if (uploadData.chunks.size() == uploadData.totalChunks) {
                     let completeData = concatenateChunks(uploadData.chunks);
 
+                    Debug.print("Complete Data: " # Nat.toText(completeData.size()));
                     switch (BTree.get(dataStore, Text.compare, id)) {
+
                         case (?existingData) {
+                            Debug.print("Existing Data: " # Nat.toText(existingData.size()));
                             let existingDataSize : Int = existingData.size();
 
-                            let totalSize : Int = existingDataSize - completeData.size();
+                            let totalSize : Int = completeData.size() - existingDataSize;
+                            Debug.print("Total Size: " # Nat.toText(Int.abs(totalSize)));
                             switch (await dataStorageService.updateDataStorageUsedMap(caller, totalSize)) {
-                                case (#ok()) {
+                                case (#ok(_)) {
                                     ignore BTree.insert(dataStore, Text.compare, id, completeData);
-                                    chunksInProgress.delete(id);
+                                    ignore BTree.delete(chunksInProgress, Text.compare, id);
                                     return #ok("Chunk uploaded");
                                 };
                                 case (#err(err)) {
@@ -185,11 +195,12 @@ actor class DataStorageShard() {
 
                         };
                     };
-
+                    Debug.print("Test 1");
                     switch (await dataStorageService.updateDataStorageUsedMap(caller, completeData.size())) {
-                        case (#ok()) {
+                        case (#ok(_)) {
+                            Debug.print("Test 2");
                             ignore BTree.insert(dataStore, Text.compare, id, completeData);
-                            chunksInProgress.delete(id);
+                            ignore BTree.delete(chunksInProgress, Text.compare, id);
                             return #ok("Chunk uploaded");
                         };
                         case (#err(err)) {
@@ -302,7 +313,7 @@ actor class DataStorageShard() {
         switch (BTree.get(dataStore, Text.compare, id)) {
             case (?data) {
                 switch (await dataStorageService.updateDataStorageUsedMap(caller, -data.size())) {
-                    case (#ok()) {
+                    case (#ok(_)) {
                         ignore BTree.delete(dataStore, Text.compare, id);
                         return #ok("Data deleted");
                     };

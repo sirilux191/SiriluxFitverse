@@ -10,6 +10,7 @@ import Types "../Types";
 import CanisterIDs "../Types/CanisterIDs";
 import CanisterTypes "../Types/CanisterTypes";
 import Hex "../utility/Hex";
+
 actor class DataAssetShard() {
     private stable var dataAssetStorage = BTree.init<Text, BTree.BTree<Text, Types.DataAsset>>(null);
     private stable var dataAccessTP = BTree.init<Text, [Principal]>(null);
@@ -80,20 +81,31 @@ actor class DataAssetShard() {
         #ok(asset.assetID);
     };
 
-    public shared query ({ caller }) func getDataAsset(userID : Text, timestamp : Text) : async Result.Result<Types.DataAsset, Text> {
+    public shared ({ caller }) func getDataAsset(callerPrincipal : Principal, assetID : Text, userID : Text, timestamp : Text) : async Result.Result<Types.DataAsset, Text> {
         if (not isPermitted(caller)) {
             return #err("You are not permitted to perform this operation");
         };
 
-        switch (BTree.get(dataAssetStorage, Text.compare, userID)) {
-            case null { #err("User not found") };
-            case (?userAssets) {
-                switch (BTree.get(userAssets, Text.compare, timestamp)) {
-                    case null { #err("Data asset not found") };
-                    case (?asset) { #ok(asset) };
+        let hasAccessResult = await hasAccess(callerPrincipal, assetID);
+
+        switch (hasAccessResult) {
+            case (true) {
+
+                switch (BTree.get(dataAssetStorage, Text.compare, userID)) {
+                    case null { #err("User not found") };
+                    case (?userAssets) {
+                        switch (BTree.get(userAssets, Text.compare, timestamp)) {
+                            case null { #err("Data asset not found") };
+                            case (?asset) { #ok(asset) };
+                        };
+                    };
                 };
             };
+            case (false) {
+                return #err("Caller does not have access to this asset");
+            };
         };
+
     };
 
     public shared query ({ caller }) func getUserDataAssets(userID : Text) : async Result.Result<[(Text, Types.DataAsset)], Text> {
@@ -113,7 +125,7 @@ actor class DataAssetShard() {
         };
     };
 
-    public shared ({ caller }) func updateDataAsset(userID : Text, timestamp : Text, updatedAsset : Types.DataAsset) : async Result.Result<(), Text> {
+    public shared ({ caller }) func updateDataAsset(userID : Text, timestamp : Text, metadata : Types.Metadata) : async Result.Result<Text, Text> {
         if (not isPermitted(caller)) {
             return #err("You are not permitted to perform this operation");
         };
@@ -125,12 +137,11 @@ actor class DataAssetShard() {
                     case null { #err("Data asset not found") };
                     case (?asset) {
                         let newupdatedAsset = {
-                            updatedAsset with
-                            assetID = asset.assetID;
+                            asset with
+                            metadata = metadata;
                         };
                         ignore BTree.insert(userAssets, Text.compare, timestamp, newupdatedAsset);
-                        ignore BTree.insert(dataAssetStorage, Text.compare, userID, userAssets);
-                        #ok(());
+                        #ok("Asset updated successfully");
                     };
                 };
 
@@ -139,16 +150,46 @@ actor class DataAssetShard() {
     };
 
     public shared ({ caller }) func deleteDataAsset(userID : Text, timestamp : Text) : async Result.Result<(), Text> {
+
         if (not isPermitted(caller)) {
             return #err("You are not permitted to perform this operation");
         };
 
         switch (BTree.get(dataAssetStorage, Text.compare, userID)) {
-            case null { #err("User not found") };
+            case null {
+                #err("User not found");
+            };
             case (?userAssets) {
-                ignore BTree.delete(userAssets, Text.compare, timestamp);
+                // Get the asset before deleting it to access its assetID
+                switch (BTree.get(userAssets, Text.compare, timestamp)) {
+                    case null { #err("Data asset not found") };
+                    case (?asset) {
+                        let assetID = asset.assetID;
 
-                #ok(());
+                        // Remove from dataAccessTP and get the principals that had access
+                        switch (BTree.delete(dataAccessTP, Text.compare, assetID)) {
+                            case (?principals) {
+                                // Update only the affected principals in dataAccessPT
+                                for (principal in principals.vals()) {
+                                    switch (BTree.get(dataAccessPT, Principal.compare, principal)) {
+                                        case (?assets) {
+                                            let updatedAssets = Array.filter(assets, func(a : Text) : Bool { a != assetID });
+                                            ignore BTree.insert(dataAccessPT, Principal.compare, principal, updatedAssets);
+                                        };
+                                        case null {
+                                            /* Skip if principal not found */
+                                        };
+                                    };
+                                };
+                            };
+                            case null { /* No principals had access */ };
+                        };
+
+                        // Delete the asset
+                        ignore BTree.delete(userAssets, Text.compare, timestamp);
+                        #ok(());
+                    };
+                };
             };
         };
     };

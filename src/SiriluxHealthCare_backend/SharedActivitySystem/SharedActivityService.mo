@@ -20,7 +20,7 @@ actor class SharedActivityService() {
 
     private stable var totalActivityCount : Nat = 0;
     private stable var shardCount : Nat = 0;
-    private let ACTIVITIES_PER_SHARD : Nat = 200_000;
+    private let ACTIVITIES_PER_SHARD : Nat = 2_000_000;
 
     private stable let shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
     private stable var userShardMap : BTree.BTree<Text, [Text]> = BTree.init<Text, [Text]>(null);
@@ -32,40 +32,36 @@ actor class SharedActivityService() {
 
     private let identityManager : IdentityManager.IdentityManager = actor (CanisterIDs.identityManagerCanisterID); // Replace with actual canister ID
 
-    public shared func recordSharedActivity(caller : Principal, assetID : Text, recipientID : Text, sharedType : Types.SharedType) : async Result.Result<(), Text> {
-        let senderIDResult = await identityManager.getIdentity(caller);
-        switch (senderIDResult) {
-            case (#ok((senderID, _))) {
-                let activityIDResult = await getNextActivityID(senderID, recipientID);
-                switch (activityIDResult) {
-                    case (#ok(activityID)) {
-                        let activity : Types.sharedActivityInfo = {
-                            activityID = activityID;
-                            assetID = assetID;
-                            usedSharedTo = recipientID;
-                            time = Int.abs(Time.now());
-                            sharedType = sharedType;
-                        };
+    public shared func recordSharedActivity(assetID : Text, recipientID : Text, sharedType : Types.SharedType, senderID : Text) : async Result.Result<(), Text> {
 
-                        let shardResult = await getShard(activityID);
-                        switch (shardResult) {
-                            case (#ok(shard)) {
-                                let result = await shard.insertActivity(activity);
-                                switch (result) {
-                                    case (#ok(_)) {
-                                        #ok(());
-                                    };
-                                    case (#err(e)) { #err(e) };
-                                };
+        let activityIDResult = await getNextActivityID(senderID, recipientID);
+        switch (activityIDResult) {
+            case (#ok(activityID)) {
+                let activity : Types.sharedActivityInfo = {
+                    activityID = activityID;
+                    assetID = assetID;
+                    usedSharedTo = recipientID;
+                    time = Int.abs(Time.now());
+                    sharedType = sharedType;
+                };
+
+                let shardResult = await getShard(activityID);
+                switch (shardResult) {
+                    case (#ok(shard)) {
+                        let result = await shard.insertActivity(activity);
+                        switch (result) {
+                            case (#ok(_)) {
+                                #ok(());
                             };
                             case (#err(e)) { #err(e) };
                         };
                     };
-                    case (#err(e)) { #err("Error getting activity ID: " # e) };
+                    case (#err(e)) { #err(e) };
                 };
             };
-            case (#err(e)) { #err("Error getting sender ID: " # e) };
+            case (#err(e)) { #err("Error getting activity ID: " # e) };
         };
+
     };
 
     public shared ({ caller }) func getSharedActivities() : async Result.Result<[Types.sharedActivityInfo], Text> {
@@ -333,6 +329,47 @@ actor class SharedActivityService() {
             true;
         } else {
             false;
+        };
+    };
+
+    public shared func deleteActivitiesForAsset(assetID : Text) : async Result.Result<(), Text> {
+        let parts = Text.split(assetID, #text("-"));
+        switch (parts.next(), parts.next(), parts.next()) {
+            case (?_assetNum, ?userID, ?_timestamp) {
+                // Get user's shards from userShardMap
+                switch (BTree.get(userShardMap, Text.compare, userID)) {
+                    case (?userShards) {
+                        var errorCount = 0;
+
+                        // Iterate through user's shards only
+                        for (shardID in userShards.vals()) {
+                            switch (BTree.get(shards, Text.compare, shardID)) {
+                                case (?principal) {
+                                    let shard : SharedActivityShard.SharedActivityShard = actor (Principal.toText(principal));
+                                    let result = await shard.deleteActivitiesForAsset(assetID);
+                                    switch (result) {
+                                        case (#err(_)) { errorCount += 1 };
+                                        case (#ok(_)) {};
+                                    };
+                                };
+                                case (null) { errorCount += 1 };
+                            };
+                        };
+
+                        if (errorCount > 0) {
+                            #err("Failed to delete activities in " # Nat.toText(errorCount) # " shards");
+                        } else {
+                            #ok(());
+                        };
+                    };
+                    case (null) {
+                        #err("No shards found for user ID: " # userID);
+                    };
+                };
+            };
+            case _ {
+                #err("Invalid asset ID format");
+            };
         };
     };
 
