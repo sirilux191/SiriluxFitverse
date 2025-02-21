@@ -1,145 +1,144 @@
 import Array "mo:base/Array";
+import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
 import BTree "mo:stableheapbtreemap/BTree";
 
 import Types "../Types";
+import CanisterIDs "../Types/CanisterIDs";
 actor class SharedActivityShard() {
-    private var activityMap : BTree.BTree<Text, Types.sharedActivityInfo> = BTree.init<Text, Types.sharedActivityInfo>(null);
-    private var userSharedMap : BTree.BTree<Text, [Text]> = BTree.init<Text, [Text]>(null);
-    private var userReceivedMap : BTree.BTree<Text, [Text]> = BTree.init<Text, [Text]>(null);
 
-    public shared func insertActivity(activity : Types.sharedActivityInfo) : async Result.Result<(), Text> {
+    private stable var activityMap : BTree.BTree<Text, Types.sharedActivityInfo> = BTree.init<Text, Types.sharedActivityInfo>(null);
+    private stable var userSharedMap : BTree.BTree<Text, BTree.BTree<Text, ()>> = BTree.init<Text, BTree.BTree<Text, ()>>(null);
+    private stable var userReceivedMap : BTree.BTree<Text, BTree.BTree<Text, ()>> = BTree.init<Text, BTree.BTree<Text, ()>>(null);
+    private stable var callerPrincipalUserIDMap = BTree.init<Principal, Text>(?24); // CallerPrincipalUserIDMap is a BTree of caller principal to userID
+
+    // List of permitted principals (e.g., DataAssetService)
+    private stable var permittedPrincipals : [Principal] = [Principal.fromText(CanisterIDs.dataAssetCanisterID)]; // Add permitted principals here
+
+    public shared ({ caller }) func insertActivity(userPrincipal : Principal, recipientPrincipal : Principal, activity : Types.sharedActivityInfo) : async Result.Result<(), Text> {
+
+        if (not isPermitted(caller)) {
+            return #err("You are not permitted to perform this operation");
+        };
+
         ignore BTree.insert(activityMap, Text.compare, activity.activityID, activity);
 
-        let parts = Text.split(activity.assetID, #text("-"));
-        switch (parts.next(), parts.next(), parts.next()) {
-            case (?_, ?userID, ?_) {
-                // Update userSharedMap
-                switch (BTree.get(userSharedMap, Text.compare, userID)) {
-                    case null {
-                        ignore BTree.insert(userSharedMap, Text.compare, userID, [activity.activityID]);
-                    };
-                    case (?existingActivities) {
-                        ignore BTree.insert(userSharedMap, Text.compare, userID, Array.append(existingActivities, [activity.activityID]));
-                    };
-                };
+        // Update userSharedMap
+        switch (BTree.get(userSharedMap, Text.compare, activity.usedSharedBy)) {
+            case null {
+                let newMap = BTree.init<Text, ()>(null);
+                ignore BTree.insert(newMap, Text.compare, activity.activityID, ());
+                ignore BTree.insert(userSharedMap, Text.compare, activity.usedSharedBy, newMap);
             };
-            case _ {
-                return #err("Invalid assetID format");
+            case (?existingActivities) {
+                ignore BTree.insert(existingActivities, Text.compare, activity.activityID, ());
             };
         };
+
+        ignore BTree.insert(callerPrincipalUserIDMap, Principal.compare, userPrincipal, activity.usedSharedBy);
 
         // Update userReceivedMap
         switch (BTree.get(userReceivedMap, Text.compare, activity.usedSharedTo)) {
             case null {
-                ignore BTree.insert(userReceivedMap, Text.compare, activity.usedSharedTo, [activity.activityID]);
+                let newMap = BTree.init<Text, ()>(null);
+                ignore BTree.insert(newMap, Text.compare, activity.activityID, ());
+                ignore BTree.insert(userReceivedMap, Text.compare, activity.usedSharedTo, newMap);
             };
             case (?existingActivities) {
-                ignore BTree.insert(userReceivedMap, Text.compare, activity.usedSharedTo, Array.append(existingActivities, [activity.activityID]));
+                ignore BTree.insert(existingActivities, Text.compare, activity.activityID, ());
             };
         };
+
+        ignore BTree.insert(callerPrincipalUserIDMap, Principal.compare, recipientPrincipal, activity.usedSharedTo);
 
         #ok(());
     };
 
-    public shared query func getActivity(activityID : Text) : async Result.Result<Types.sharedActivityInfo, Text> {
+    public shared query ({ caller }) func getActivity(activityID : Text) : async Result.Result<Types.sharedActivityInfo, Text> {
+
+        let userID = getUserID(caller);
+
         switch (BTree.get(activityMap, Text.compare, activityID)) {
-            case (?activity) { #ok(activity) };
+            case (?activity) {
+                if (activity.usedSharedTo == userID or activity.usedSharedBy == userID) {
+                    #ok(activity);
+                } else {
+                    #err("You are not permitted to access this activity");
+                };
+            };
             case null { #err("Activity not found") };
         };
     };
 
-    public shared query func getUserSharedActivities(userID : Text) : async Result.Result<[Types.sharedActivityInfo], Text> {
+    public shared query ({ caller }) func getUserSharedActivities() : async Result.Result<[Types.sharedActivityInfo], Text> {
+        let userID = getUserID(caller);
+
         switch (BTree.get(userSharedMap, Text.compare, userID)) {
             case (?activityIDs) {
-                let activities = Array.mapFilter<Text, Types.sharedActivityInfo>(
-                    activityIDs,
-                    func(id) {
-                        BTree.get(activityMap, Text.compare, id);
-                    },
-                );
+                var activities : [Types.sharedActivityInfo] = [];
+                for ((activityID, _) in BTree.entries(activityIDs)) {
+                    let activity = BTree.get(activityMap, Text.compare, activityID);
+                    switch (activity) {
+                        case (?activity) {
+                            activities := Array.append(activities, [activity]);
+                        };
+                        case null {};
+                    };
+                };
                 #ok(activities);
             };
             case null { #ok([]) };
         };
     };
 
-    public shared query func getUserReceivedActivities(userID : Text) : async Result.Result<[Types.sharedActivityInfo], Text> {
+    public shared query ({ caller }) func getUserReceivedActivities() : async Result.Result<[Types.sharedActivityInfo], Text> {
+        let userID = getUserID(caller);
+
         switch (BTree.get(userReceivedMap, Text.compare, userID)) {
             case (?activityIDs) {
-                let activities = Array.mapFilter<Text, Types.sharedActivityInfo>(
-                    activityIDs,
-                    func(id) {
-                        BTree.get(activityMap, Text.compare, id);
-                    },
-                );
+                var activities : [Types.sharedActivityInfo] = [];
+                for ((activityID, _) in BTree.entries(activityIDs)) {
+                    let activity = BTree.get(activityMap, Text.compare, activityID);
+                    switch (activity) {
+                        case (?activity) {
+                            activities := Array.append(activities, [activity]);
+                        };
+                        case null {};
+                    };
+                };
                 #ok(activities);
             };
             case null { #ok([]) };
         };
     };
 
-    public shared func deleteActivitiesForAsset(assetID : Text) : async Result.Result<(), Text> {
-        let parts = Text.split(assetID, #text("-"));
-        switch (parts.next(), parts.next(), parts.next()) {
-            case (?_, ?userID, ?_) {
-                // Get activities shared by this user
-                switch (BTree.get(userSharedMap, Text.compare, userID)) {
-                    case (?activities) {
-                        // Create buffers for activities to keep and delete
-                        var activitiesToKeep : [Text] = [];
-                        var activitiesToDelete : [Text] = [];
+    // Helper functions to check if caller is permitted to perform an operation
 
-                        // Separate activities into keep and delete buffers
-                        for (activityID in activities.vals()) {
-                            switch (BTree.get(activityMap, Text.compare, activityID)) {
-                                case (?activity) {
-                                    if (activity.assetID == assetID) {
-                                        activitiesToDelete := Array.append(activitiesToDelete, [activityID]);
-                                    } else {
-                                        activitiesToKeep := Array.append(activitiesToKeep, [activityID]);
-                                    };
-                                };
-                                case null {
-                                    activitiesToKeep := Array.append(activitiesToKeep, [activityID]);
-                                };
-                            };
-                        };
-
-                        // Update userSharedMap with activities to keep
-                        ignore BTree.insert(userSharedMap, Text.compare, userID, activitiesToKeep);
-
-                        // Process activities to delete
-                        for (activityID in activitiesToDelete.vals()) {
-                            switch (BTree.get(activityMap, Text.compare, activityID)) {
-                                case (?activity) {
-                                    // Remove from userReceivedMap
-                                    switch (BTree.get(userReceivedMap, Text.compare, activity.usedSharedTo)) {
-                                        case (?receivedActivities) {
-                                            let updatedReceivedActivities = Array.filter<Text>(
-                                                receivedActivities,
-                                                func(id) { id != activityID },
-                                            );
-                                            ignore BTree.insert(userReceivedMap, Text.compare, activity.usedSharedTo, updatedReceivedActivities);
-                                        };
-                                        case null {};
-                                    };
-
-                                    // Remove from activityMap
-                                    ignore BTree.delete(activityMap, Text.compare, activityID);
-                                };
-                                case null {};
-                            };
-                        };
-                        #ok(());
-                    };
-                    case null { #ok(()) }; // No activities found for this user
-                };
-            };
-            case _ { #err("Invalid asset ID format") };
+    private func getUserID(caller : Principal) : Text {
+        switch (BTree.get(callerPrincipalUserIDMap, Principal.compare, caller)) {
+            case (?userID) { userID };
+            case null { return "" };
         };
     };
 
-    // Other necessary functions...
+    private func isPermitted(caller : Principal) : Bool {
+        Array.find<Principal>(permittedPrincipals, func(p) { p == caller }) != null;
+    };
+
+    public shared ({ caller }) func addPermittedPrincipal(principal : Principal) : async Result.Result<(), Text> {
+        if (not isPermitted(caller)) {
+            return #err("You are not permitted to perform this operation");
+        };
+        permittedPrincipals := Array.append(permittedPrincipals, [principal]);
+        #ok(());
+    };
+
+    public shared ({ caller }) func removePermittedPrincipal(principal : Principal) : async Result.Result<(), Text> {
+        if (not isPermitted(caller)) {
+            return #err("You are not permitted to perform this operation");
+        };
+        permittedPrincipals := Array.filter(permittedPrincipals, func(p : Principal) : Bool { p != principal });
+        #ok(());
+    };
 };

@@ -7,6 +7,7 @@ import Nat "mo:base/Nat";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
+import Time "mo:base/Time";
 import BTree "mo:stableheapbtreemap/BTree";
 
 import CanisterIDs "../Types/CanisterIDs";
@@ -20,7 +21,7 @@ actor class DataStorageShard() {
     };
     private let dataStorageService = CanisterTypes.dataStorageService;
     private stable var dataStoreAccess : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
-    private stable var dataReadPermittedPrincipals : BTree.BTree<Text, BTree.BTree<Principal, Int>> = BTree.init<Text, BTree.BTree<Principal, Int>>(null);
+    private stable var dataReadPermittedPrincipals : BTree.BTree<Text, BTree.BTree<Principal, Time.Time>> = BTree.init<Text, BTree.BTree<Principal, Time.Time>>(null);
     // Main storage map for completed data
     private stable var dataStore : BTree.BTree<Text, Blob> = BTree.init<Text, Blob>(null);
     // Temporary storage for chunks being uploaded
@@ -361,13 +362,23 @@ actor class DataStorageShard() {
     };
 
     public shared ({ caller }) func grantReadPermission(id : Text, principal : Principal, time : Int) : async Result.Result<Text, Text> {
-
         if (not isPermitted(caller)) {
             return #err("Not permitted");
         };
-        let tempPermittedPrincipals = BTree.init<Principal, Int>(null);
-        ignore BTree.insert(tempPermittedPrincipals, Principal.compare, principal, time);
-        ignore BTree.insert(dataReadPermittedPrincipals, Text.compare, id, tempPermittedPrincipals);
+
+        // Get or create the BTree for this asset's permissions
+        let permittedPrincipals = switch (BTree.get(dataReadPermittedPrincipals, Text.compare, id)) {
+            case (?existing) { existing };
+            case null {
+                let newTree = BTree.init<Principal, Time.Time>(null);
+                ignore BTree.insert(dataReadPermittedPrincipals, Text.compare, id, newTree);
+                newTree;
+            };
+        };
+
+        // Add or update the permission for this principal
+        ignore BTree.insert(permittedPrincipals, Principal.compare, principal, time);
+
         return #ok("Read permission granted");
     };
 
@@ -392,7 +403,10 @@ actor class DataStorageShard() {
             case (?value) {
                 let tempPermittedPrincipals = BTree.get(value, Principal.compare, caller);
                 switch (tempPermittedPrincipals) {
-                    case (?_time) {
+                    case (?time) {
+                        if (Time.now() > time) {
+                            return #err("Read permission expired");
+                        };
                         switch (BTree.get(dataStore, Text.compare, id)) {
                             case (?data) { return #ok(data) };
                             case null { return #err("Data not found") };
@@ -414,7 +428,10 @@ actor class DataStorageShard() {
             case (?value) {
                 let tempPermittedPrincipals = BTree.get(value, Principal.compare, caller);
                 switch (tempPermittedPrincipals) {
-                    case (?_time) {
+                    case (?time) {
+                        if (Time.now() > time) {
+                            return #err("Read permission expired");
+                        };
                         switch (BTree.get(dataStore, Text.compare, id)) {
                             case (?data) {
                                 let dataArray = Blob.toArray(data);
@@ -436,12 +453,12 @@ actor class DataStorageShard() {
                         };
                     };
                     case null {
-                        return #err("Read permission not found");
+                        return #err("Read permission not found test 1");
                     };
                 };
             };
             case null {
-                return #err("Read permission not found");
+                return #err("Read permission not found test 2");
             };
         };
     };

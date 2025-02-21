@@ -54,7 +54,8 @@ module Types {
     public type DataAsset = {
         assetID : Text;
         title : Text;
-        data : Text;
+        dataAssetShardPrincipal : Text;
+        dataStorageShardPrincipal : Text;
         metadata : Metadata;
     };
 
@@ -67,9 +68,12 @@ module Types {
     public type sharedActivityInfo = {
         activityID : Text;
         assetID : Text;
+        assetShardPrincipal : Text;
+        activityShardPrincipal : Text;
         usedSharedTo : Text;
-        time : Nat;
-        sharedType : SharedType;
+        usedSharedBy : Text;
+        sharedAt : Time.Time;
+        sharedTill : Time.Time;
     };
 
     public type IdenitySharedInfo = {
@@ -123,4 +127,12 @@ module Types {
         lastResetTime : Int;
     };
 
+    public type ServiceLimit = {
+        maxShares : Nat;
+        usedShares : Nat;
+        maxUploads : Nat;
+        usedUploads : Nat;
+        maxDeletes : Nat;
+        usedDeletes : Nat;
+    };
 };

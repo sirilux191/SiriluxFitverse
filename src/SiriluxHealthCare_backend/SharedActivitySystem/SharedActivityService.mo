@@ -1,376 +1,360 @@
-import Array "mo:base/Array";
-import Buffer "mo:base/Buffer";
-import Error "mo:base/Error";
-import Cycles "mo:base/ExperimentalCycles";
-import Int "mo:base/Int";
-import Nat "mo:base/Nat";
-import Principal "mo:base/Principal";
-import Result "mo:base/Result";
-import Text "mo:base/Text";
-import Time "mo:base/Time";
-import BTree "mo:stableheapbtreemap/BTree";
+// import Array "mo:base/Array";
+// import Buffer "mo:base/Buffer";
+// import Error "mo:base/Error";
+// import Cycles "mo:base/ExperimentalCycles";
+// import Int "mo:base/Int";
+// import Nat "mo:base/Nat";
+// import Principal "mo:base/Principal";
+// import Result "mo:base/Result";
+// import Text "mo:base/Text";
+// import Time "mo:base/Time";
+// import BTree "mo:stableheapbtreemap/BTree";
 
-import IdentityManager "../IdentityManager/IdentityManager";
-import Types "../Types";
-import CanisterIDs "../Types/CanisterIDs";
-import Interface "../utility/ic-management-interface";
-import SharedActivityShard "SharedActivityShard";
+// import IdentityManager "../IdentityManager/IdentityManager";
+// import Types "../Types";
+// import CanisterIDs "../Types/CanisterIDs";
+// import Interface "../utility/ic-management-interface";
+// import SharedActivityShard "SharedActivityShard";
 
-actor class SharedActivityService() {
+// actor class SharedActivityService() {
 
-    private stable var totalActivityCount : Nat = 0;
-    private stable var shardCount : Nat = 0;
-    private let ACTIVITIES_PER_SHARD : Nat = 2_000_000;
+//     private stable var totalSharedActivityCount : Nat = 0;
+//     private stable var sharedActivityShardCount : Nat = 0;
+//     private let SHARED_ACTIVITY_PER_SHARD : Nat = 2_000_000;
 
-    private stable let shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
-    private stable var userShardMap : BTree.BTree<Text, [Text]> = BTree.init<Text, [Text]>(null);
+//     private stable let sharedActivityShards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
+//     private stable var userSharedActivityShardMap : BTree.BTree<Text, [Text]> = BTree.init<Text, [Text]>(null);
 
-    private stable var sharedActivityShardWasmModule : [Nat8] = [];
+//     private stable var sharedActivityShardWasmModule : [Nat8] = [];
 
-    private let IC = "aaaaa-aa";
-    private let ic : Interface.Self = actor (IC);
+//     private let IC = "aaaaa-aa";
+//     private let ic : Interface.Self = actor (IC);
 
-    private let identityManager : IdentityManager.IdentityManager = actor (CanisterIDs.identityManagerCanisterID); // Replace with actual canister ID
+//     private let identityManager : IdentityManager.IdentityManager = actor (CanisterIDs.identityManagerCanisterID); // Replace with actual canister ID
 
-    public shared func recordSharedActivity(assetID : Text, recipientID : Text, sharedType : Types.SharedType, senderID : Text) : async Result.Result<(), Text> {
+//     public shared func recordSharedActivity(assetID : Text, recipientID : Text, sharedType : Types.SharedType, senderID : Text, assetShardPrincipal : Text) : async Result.Result<(), Text> {
 
-        let activityIDResult = await getNextActivityID(senderID, recipientID);
-        switch (activityIDResult) {
-            case (#ok(activityID)) {
-                let activity : Types.sharedActivityInfo = {
-                    activityID = activityID;
-                    assetID = assetID;
-                    usedSharedTo = recipientID;
-                    time = Int.abs(Time.now());
-                    sharedType = sharedType;
-                };
+//         let activityIDResult = await getNextSharedActivityID(senderID, recipientID);
+//         switch (activityIDResult) {
+//             case (#ok(activityID)) {
+//                 let activity : Types.sharedActivityInfo = {
+//                     activityID = activityID;
+//                     assetID = assetID;
+//                     usedSharedTo = recipientID;
+//                     time = Int.abs(Time.now());
+//                     sharedType = sharedType;
+//                     assetShardPrincipal = assetShardPrincipal;
+//                     activityShardPrincipal = activityShardPrincipal;
+//                 };
 
-                let shardResult = await getShard(activityID);
-                switch (shardResult) {
-                    case (#ok(shard)) {
-                        let result = await shard.insertActivity(activity);
-                        switch (result) {
-                            case (#ok(_)) {
-                                #ok(());
-                            };
-                            case (#err(e)) { #err(e) };
-                        };
-                    };
-                    case (#err(e)) { #err(e) };
-                };
-            };
-            case (#err(e)) { #err("Error getting activity ID: " # e) };
-        };
+//                 let shardResult = await getSharedActivityShard(activityID);
+//                 switch (shardResult) {
+//                     case (#ok(shard)) {
+//                         let result = await shard.insertActivity(activity);
+//                         switch (result) {
+//                             case (#ok(_)) {
+//                                 #ok(());
+//                             };
+//                             case (#err(e)) { #err(e) };
+//                         };
+//                     };
+//                     case (#err(e)) { #err(e) };
+//                 };
+//             };
+//             case (#err(e)) { #err("Error getting activity ID: " # e) };
+//         };
 
-    };
+//     };
 
-    public shared ({ caller }) func getSharedActivities() : async Result.Result<[Types.sharedActivityInfo], Text> {
-        let userIDResult = await identityManager.getIdentity(caller);
-        switch (userIDResult) {
-            case (#ok((userID, _))) {
-                let userShardsResult = await getUserShards(userID);
-                switch (userShardsResult) {
-                    case (#ok(userShards)) {
-                        var allActivities : [Types.sharedActivityInfo] = [];
-                        for (shard in userShards.vals()) {
-                            let activitiesResult = await shard.getUserSharedActivities(userID);
-                            switch (activitiesResult) {
-                                case (#ok(activities)) {
-                                    allActivities := Array.append(allActivities, activities);
-                                };
-                                case (#err(_)) {}; // Skip if error
-                            };
-                        };
-                        #ok(allActivities);
-                    };
-                    case (#err(e)) { #err("Error getting user shards: " # e) };
-                };
-            };
-            case (#err(e)) { #err("Error getting user ID: " # e) };
-        };
-    };
+//     public shared ({ caller }) func getSharedActivities() : async Result.Result<[Types.sharedActivityInfo], Text> {
+//         let userIDResult = await identityManager.getIdentity(caller);
+//         switch (userIDResult) {
+//             case (#ok((userID, _))) {
+//                 let userShardsResult = await getUserSharedActivityShards(userID);
+//                 switch (userShardsResult) {
+//                     case (#ok(userShards)) {
+//                         var allActivities : [Types.sharedActivityInfo] = [];
+//                         for (shard in userShards.vals()) {
+//                             let activitiesResult = await shard.getUserSharedActivities(userID);
+//                             switch (activitiesResult) {
+//                                 case (#ok(activities)) {
+//                                     allActivities := Array.append(allActivities, activities);
+//                                 };
+//                                 case (#err(_)) {}; // Skip if error
+//                             };
+//                         };
+//                         #ok(allActivities);
+//                     };
+//                     case (#err(e)) { #err("Error getting user shards: " # e) };
+//                 };
+//             };
+//             case (#err(e)) { #err("Error getting user ID: " # e) };
+//         };
+//     };
 
-    public shared ({ caller }) func getReceivedActivities() : async Result.Result<[Types.sharedActivityInfo], Text> {
-        let userIDResult = await identityManager.getIdentity(caller);
-        switch (userIDResult) {
-            case (#ok((userID, _))) {
-                let userShardsResult = await getUserShards(userID);
-                switch (userShardsResult) {
-                    case (#ok(userShards)) {
-                        var allActivities : [Types.sharedActivityInfo] = [];
-                        for (shard in userShards.vals()) {
-                            let activitiesResult = await shard.getUserReceivedActivities(userID);
-                            switch (activitiesResult) {
-                                case (#ok(activities)) {
-                                    allActivities := Array.append(allActivities, activities);
-                                };
-                                case (#err(_)) {}; // Skip if error
-                            };
-                        };
-                        #ok(allActivities);
-                    };
-                    case (#err(e)) { #err("Error getting user shards: " # e) };
-                };
-            };
-            case (#err(e)) { #err("Error getting user ID: " # e) };
-        };
-    };
+//     public shared ({ caller }) func getReceivedActivities() : async Result.Result<[Types.sharedActivityInfo], Text> {
+//         let userIDResult = await identityManager.getIdentity(caller);
+//         switch (userIDResult) {
+//             case (#ok((userID, _))) {
+//                 let userShardsResult = await getUserSharedActivityShards(userID);
+//                 switch (userShardsResult) {
+//                     case (#ok(userShards)) {
+//                         var allActivities : [Types.sharedActivityInfo] = [];
+//                         for (shard in userShards.vals()) {
+//                             let activitiesResult = await shard.getUserReceivedActivities(userID);
+//                             switch (activitiesResult) {
+//                                 case (#ok(activities)) {
+//                                     allActivities := Array.append(allActivities, activities);
+//                                 };
+//                                 case (#err(_)) {}; // Skip if error
+//                             };
+//                         };
+//                         #ok(allActivities);
+//                     };
+//                     case (#err(e)) { #err("Error getting user shards: " # e) };
+//                 };
+//             };
+//             case (#err(e)) { #err("Error getting user ID: " # e) };
+//         };
+//     };
 
-    public shared func getSharedActivity(activityID : Text) : async Result.Result<Types.sharedActivityInfo, Text> {
-        let shardResult = await getShard(activityID);
-        switch (shardResult) {
-            case (#ok(shard)) {
-                await shard.getActivity(activityID);
-            };
-            case (#err(e)) { #err("Error getting shard: " # e) };
-        };
-    };
+//     public shared func getSharedActivity(activityID : Text) : async Result.Result<Types.sharedActivityInfo, Text> {
+//         let shardResult = await getSharedActivityShard(activityID);
+//         switch (shardResult) {
+//             case (#ok(shard)) {
+//                 await shard.getActivity(activityID);
+//             };
+//             case (#err(e)) { #err("Error getting shard: " # e) };
+//         };
+//     };
 
-    public shared ({ caller }) func updateSharedActivityShardWasmModule(wasmModule : [Nat8]) : async Result.Result<Text, Text> {
-        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
-            // Call the updateWasmModule function of the FacilityShardManager
-            let result = await updateWasmModule(wasmModule);
+//     public func getSharedActivityShard(activityID : Text) : async Result.Result<SharedActivityShard.SharedActivityShard, Text> {
+//         let shardID = getSharedActivityShardID(activityID);
+//         switch (BTree.get(sharedActivityShards, Text.compare, shardID)) {
+//             case (?principal) {
+//                 #ok(actor (Principal.toText(principal)) : SharedActivityShard.SharedActivityShard);
+//             };
+//             case null {
+//                 let newShardResult = await createSharedActivityShard();
+//                 switch (newShardResult) {
+//                     case (#ok(newShardPrincipal)) {
+//                         ignore BTree.insert(sharedActivityShards, Text.compare, shardID, newShardPrincipal);
+//                         sharedActivityShardCount += 1;
+//                         #ok(actor (Principal.toText(newShardPrincipal)) : SharedActivityShard.SharedActivityShard);
+//                     };
+//                     case (#err(e)) {
+//                         #err(e);
+//                     };
+//                 };
+//             };
+//         };
+//     };
 
-            switch (result) {
-                case (#ok(())) {
-                    #ok("()");
-                };
-                case (#err(e)) {
-                    #err("Failed to update WASM module: " # e);
-                };
-            };
-        } else {
-            #err("You don't have permission to perform this action");
-        };
-    };
+//     private func getSharedActivityShardID(activityID : Text) : Text {
+//         let activityNum = Nat.fromText(activityID);
+//         switch (activityNum) {
+//             case (?num) {
+//                 let shardIndex = num / SHARED_ACTIVITY_PER_SHARD;
+//                 "shard-" # Nat.toText(shardIndex + 1);
+//             };
+//             case null { "shard-0" }; // Default to first shard if invalid activity ID
+//         };
+//     };
 
-    public func getShard(activityID : Text) : async Result.Result<SharedActivityShard.SharedActivityShard, Text> {
-        let shardID = getShardID(activityID);
-        switch (BTree.get(shards, Text.compare, shardID)) {
-            case (?principal) {
-                #ok(actor (Principal.toText(principal)) : SharedActivityShard.SharedActivityShard);
-            };
-            case null {
-                let newShardResult = await createShard();
-                switch (newShardResult) {
-                    case (#ok(newShardPrincipal)) {
-                        ignore BTree.insert(shards, Text.compare, shardID, newShardPrincipal);
-                        shardCount += 1;
-                        #ok(actor (Principal.toText(newShardPrincipal)) : SharedActivityShard.SharedActivityShard);
-                    };
-                    case (#err(e)) {
-                        #err(e);
-                    };
-                };
-            };
-        };
-    };
+//     public func createSharedActivityShard() : async Result.Result<Principal, Text> {
+//         if (Array.size(sharedActivityShardWasmModule) == 0) {
+//             return #err("Wasm module not set. Please update the Wasm module first.");
+//         };
 
-    private func getShardID(activityID : Text) : Text {
-        let activityNum = Nat.fromText(activityID);
-        switch (activityNum) {
-            case (?num) {
-                let shardIndex = num / ACTIVITIES_PER_SHARD;
-                "shard-" # Nat.toText(shardIndex + 1);
-            };
-            case null { "shard-0" }; // Default to first shard if invalid activity ID
-        };
-    };
+//         try {
+//             let cycles = 1_000_000_000_000;
+//             Cycles.add<system>(cycles);
+//             let newCanister = await ic.create_canister({ settings = null });
+//             let canisterPrincipal = newCanister.canister_id;
 
-    public func createShard() : async Result.Result<Principal, Text> {
-        if (Array.size(sharedActivityShardWasmModule) == 0) {
-            return #err("Wasm module not set. Please update the Wasm module first.");
-        };
+//             let _installResult = await ic.install_code({
+//                 arg = [];
+//                 wasm_module = sharedActivityShardWasmModule;
+//                 mode = #install;
+//                 canister_id = canisterPrincipal;
+//             });
 
-        try {
-            let cycles = 1_000_000_000_000;
-            Cycles.add<system>(cycles);
-            let newCanister = await ic.create_canister({ settings = null });
-            let canisterPrincipal = newCanister.canister_id;
+//             #ok(canisterPrincipal);
 
-            let _installResult = await ic.install_code({
-                arg = [];
-                wasm_module = sharedActivityShardWasmModule;
-                mode = #install;
-                canister_id = canisterPrincipal;
-            });
+//         } catch (e) {
+//             #err("Failed to create shard: " # Error.message(e));
+//         };
+//     };
 
-            #ok(canisterPrincipal);
+//     private func upgradeCodeOnSharedActivityShard(canisterPrincipal : Principal) : async Result.Result<(), Text> {
+//         try {
+//             await ic.install_code({
+//                 arg = [];
+//                 wasm_module = sharedActivityShardWasmModule;
+//                 mode = #upgrade;
+//                 canister_id = canisterPrincipal;
+//             });
+//             #ok(());
+//         } catch (e) {
+//             #err("Failed to upgrade code on shard: " # Error.message(e));
+//         };
+//     };
 
-        } catch (e) {
-            #err("Failed to create shard: " # Error.message(e));
-        };
-    };
+//     // Function to update the WASM module
+//     public shared ({ caller }) func updateSharedActivityShardWasmModule(wasmModule : [Nat8]) : async Result.Result<(), Text> {
 
-    private func upgradeCodeOnShard(canisterPrincipal : Principal) : async Result.Result<(), Text> {
-        try {
-            await ic.install_code({
-                arg = [];
-                wasm_module = sharedActivityShardWasmModule;
-                mode = #upgrade;
-                canister_id = canisterPrincipal;
-            });
-            #ok(());
-        } catch (e) {
-            #err("Failed to upgrade code on shard: " # Error.message(e));
-        };
-    };
+//         if (not (await isAdmin(caller))) {
+//             return #err("You are not Admin, only admin can perform this action");
+//         };
 
-    // Function to update the WASM module
-    public shared ({ caller }) func updateWasmModule(wasmModule : [Nat8]) : async Result.Result<(), Text> {
+//         if (Array.size(wasmModule) < 8) {
+//             return #err("Invalid WASM module: too small");
+//         };
 
-        if (not (await isAdmin(caller))) {
-            return #err("You are not Admin, only admin can perform this action");
-        };
+//         sharedActivityShardWasmModule := wasmModule;
+//         #ok(());
+//     };
 
-        if (Array.size(wasmModule) < 8) {
-            return #err("Invalid WASM module: too small");
-        };
+//     public shared ({ caller }) func updateExistingSharedActivityShards() : async Result.Result<(), Text> {
 
-        sharedActivityShardWasmModule := wasmModule;
-        #ok(());
-    };
+//         if (not (await isAdmin(caller))) {
+//             return #err("You are not Admin, only admin can perform this action");
+//         };
 
-    public shared ({ caller }) func updateExistingShards() : async Result.Result<(), Text> {
+//         if (Array.size(sharedActivityShardWasmModule) == 0) {
+//             return #err("Wasm module not set. Please update the Wasm module first.");
+//         };
 
-        if (not (await isAdmin(caller))) {
-            return #err("You are not Admin, only admin can perform this action");
-        };
+//         var updatedCount = 0;
+//         var errorCount = 0;
 
-        if (Array.size(sharedActivityShardWasmModule) == 0) {
-            return #err("Wasm module not set. Please update the Wasm module first.");
-        };
+//         for ((shardID, principal) in BTree.entries(sharedActivityShards)) {
+//             let installResult = await upgradeCodeOnSharedActivityShard(principal);
+//             switch (installResult) {
+//                 case (#ok(())) {
+//                     updatedCount += 1;
+//                 };
+//                 case (#err(_)) {
+//                     errorCount += 1;
+//                 };
+//             };
+//         };
 
-        var updatedCount = 0;
-        var errorCount = 0;
+//         if (errorCount > 0) {
+//             #err("Updated " # Nat.toText(updatedCount) # " shards, but encountered errors in " # Nat.toText(errorCount) # " shards");
+//         } else {
+//             #ok(());
+//         };
+//     };
 
-        for ((shardID, principal) in BTree.entries(shards)) {
-            let installResult = await upgradeCodeOnShard(principal);
-            switch (installResult) {
-                case (#ok(())) {
-                    updatedCount += 1;
-                };
-                case (#err(_)) {
-                    errorCount += 1;
-                };
-            };
-        };
+//     public func updateUserSharedActivityShardMap(userID : Text, activityID : Text) : async Result.Result<(), Text> {
+//         let shardID = getSharedActivityShardID(activityID);
+//         switch (BTree.get(userSharedActivityShardMap, Text.compare, userID)) {
+//             case (?shardIDs) {
+//                 switch (Array.find<Text>(shardIDs, func(id) { id == shardID })) {
+//                     case (null) {
+//                         let updatedShardIDs = Array.append<Text>(shardIDs, [shardID]);
+//                         ignore BTree.insert(userSharedActivityShardMap, Text.compare, userID, updatedShardIDs);
+//                     };
+//                     case (_) {}; // Shard already exists, do nothing
+//                 };
+//             };
+//             case null {
+//                 ignore BTree.insert(userSharedActivityShardMap, Text.compare, userID, [shardID]);
+//             };
+//         };
+//         #ok(());
+//     };
 
-        if (errorCount > 0) {
-            #err("Updated " # Nat.toText(updatedCount) # " shards, but encountered errors in " # Nat.toText(errorCount) # " shards");
-        } else {
-            #ok(());
-        };
-    };
+//     public func getUserSharedActivityShards(userID : Text) : async Result.Result<[SharedActivityShard.SharedActivityShard], Text> {
+//         switch (BTree.get(userSharedActivityShardMap, Text.compare, userID)) {
+//             case (?shardIDs) {
+//                 let shardBuffer = Buffer.Buffer<SharedActivityShard.SharedActivityShard>(0);
+//                 for (shardID in shardIDs.vals()) {
+//                     switch (BTree.get(sharedActivityShards, Text.compare, shardID)) {
+//                         case (?principal) {
+//                             shardBuffer.add(actor (Principal.toText(principal)) : SharedActivityShard.SharedActivityShard);
+//                         };
+//                         case null {
+//                             // Skip if shard not found
+//                         };
+//                     };
+//                 };
+//                 #ok(Buffer.toArray(shardBuffer));
+//             };
+//             case null {
+//                 #err("No shards found for user ID: " # userID);
+//             };
+//         };
+//     };
 
-    public func updateUserShardMap(userID : Text, activityID : Text) : async Result.Result<(), Text> {
-        let shardID = getShardID(activityID);
-        switch (BTree.get(userShardMap, Text.compare, userID)) {
-            case (?shardIDs) {
-                switch (Array.find<Text>(shardIDs, func(id) { id == shardID })) {
-                    case (null) {
-                        let updatedShardIDs = Array.append<Text>(shardIDs, [shardID]);
-                        ignore BTree.insert(userShardMap, Text.compare, userID, updatedShardIDs);
-                    };
-                    case (_) {}; // Shard already exists, do nothing
-                };
-            };
-            case null {
-                ignore BTree.insert(userShardMap, Text.compare, userID, [shardID]);
-            };
-        };
-        #ok(());
-    };
+//     public func getNextSharedActivityID(userID : Text, recipientID : Text) : async Result.Result<Text, Text> {
+//         totalSharedActivityCount += 1;
+//         let activityID = Nat.toText(totalSharedActivityCount);
+//         let updateResult = await updateUserSharedActivityShardMap(userID, activityID);
+//         let updateResult2 = await updateUserSharedActivityShardMap(recipientID, activityID);
+//         switch (updateResult, updateResult2) {
+//             case (#ok(_), #ok(_)) {
+//                 #ok(activityID);
+//             };
+//             case (#err(e), _) {
+//                 #err("Failed to update user shard map: " # e);
+//             };
+//             case (_, #err(e)) {
+//                 #err("Failed to update recipient shard map: " # e);
+//             };
+//         };
+//     };
 
-    public func getUserShards(userID : Text) : async Result.Result<[SharedActivityShard.SharedActivityShard], Text> {
-        switch (BTree.get(userShardMap, Text.compare, userID)) {
-            case (?shardIDs) {
-                let shardBuffer = Buffer.Buffer<SharedActivityShard.SharedActivityShard>(0);
-                for (shardID in shardIDs.vals()) {
-                    switch (BTree.get(shards, Text.compare, shardID)) {
-                        case (?principal) {
-                            shardBuffer.add(actor (Principal.toText(principal)) : SharedActivityShard.SharedActivityShard);
-                        };
-                        case null {
-                            // Skip if shard not found
-                        };
-                    };
-                };
-                #ok(Buffer.toArray(shardBuffer));
-            };
-            case null {
-                #err("No shards found for user ID: " # userID);
-            };
-        };
-    };
+//     // Other necessary functions...
 
-    public func getNextActivityID(userID : Text, recipientID : Text) : async Result.Result<Text, Text> {
-        totalActivityCount += 1;
-        let activityID = Nat.toText(totalActivityCount);
-        let updateResult = await updateUserShardMap(userID, activityID);
-        let updateResult2 = await updateUserShardMap(recipientID, activityID);
-        switch (updateResult, updateResult2) {
-            case (#ok(_), #ok(_)) {
-                #ok(activityID);
-            };
-            case (#err(e), _) {
-                #err("Failed to update user shard map: " # e);
-            };
-            case (_, #err(e)) {
-                #err("Failed to update recipient shard map: " # e);
-            };
-        };
-    };
+//     public shared func isAdmin(caller : Principal) : async Bool {
+//         if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
+//             true;
+//         } else {
+//             false;
+//         };
+//     };
 
-    // Other necessary functions...
+//     public shared func deleteActivitiesForAsset(assetID : Text) : async Result.Result<(), Text> {
+//         let parts = Text.split(assetID, #text("-"));
+//         switch (parts.next(), parts.next(), parts.next()) {
+//             case (?_assetNum, ?userID, ?_timestamp) {
+//                 // Get user's shards from userShardMap
+//                 switch (BTree.get(userSharedActivityShardMap, Text.compare, userID)) {
+//                     case (?userShards) {
+//                         var errorCount = 0;
 
-    public shared func isAdmin(caller : Principal) : async Bool {
-        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
-            true;
-        } else {
-            false;
-        };
-    };
+//                         // Iterate through user's shards only
+//                         for (shardID in userShards.vals()) {
+//                             switch (BTree.get(sharedActivityShards, Text.compare, shardID)) {
+//                                 case (?principal) {
+//                                     let shard : SharedActivityShard.SharedActivityShard = actor (Principal.toText(principal));
+//                                     let result = await shard.deleteActivitiesForAsset(assetID);
+//                                     switch (result) {
+//                                         case (#err(_)) { errorCount += 1 };
+//                                         case (#ok(_)) {};
+//                                     };
+//                                 };
+//                                 case (null) { errorCount += 1 };
+//                             };
+//                         };
 
-    public shared func deleteActivitiesForAsset(assetID : Text) : async Result.Result<(), Text> {
-        let parts = Text.split(assetID, #text("-"));
-        switch (parts.next(), parts.next(), parts.next()) {
-            case (?_assetNum, ?userID, ?_timestamp) {
-                // Get user's shards from userShardMap
-                switch (BTree.get(userShardMap, Text.compare, userID)) {
-                    case (?userShards) {
-                        var errorCount = 0;
+//                         if (errorCount > 0) {
+//                             #err("Failed to delete activities in " # Nat.toText(errorCount) # " shards");
+//                         } else {
+//                             #ok(());
+//                         };
+//                     };
+//                     case (null) {
+//                         #err("No shards found for user ID: " # userID);
+//                     };
+//                 };
+//             };
+//             case _ {
+//                 #err("Invalid asset ID format");
+//             };
+//         };
+//     };
 
-                        // Iterate through user's shards only
-                        for (shardID in userShards.vals()) {
-                            switch (BTree.get(shards, Text.compare, shardID)) {
-                                case (?principal) {
-                                    let shard : SharedActivityShard.SharedActivityShard = actor (Principal.toText(principal));
-                                    let result = await shard.deleteActivitiesForAsset(assetID);
-                                    switch (result) {
-                                        case (#err(_)) { errorCount += 1 };
-                                        case (#ok(_)) {};
-                                    };
-                                };
-                                case (null) { errorCount += 1 };
-                            };
-                        };
-
-                        if (errorCount > 0) {
-                            #err("Failed to delete activities in " # Nat.toText(errorCount) # " shards");
-                        } else {
-                            #ok(());
-                        };
-                    };
-                    case (null) {
-                        #err("No shards found for user ID: " # userID);
-                    };
-                };
-            };
-            case _ {
-                #err("Invalid asset ID format");
-            };
-        };
-    };
-
-};
+// };

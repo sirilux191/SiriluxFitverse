@@ -59,9 +59,7 @@ export default defineConfig({
     "process.env.CANISTER_ID_IDENTITY_MANAGER": JSON.stringify(
       process.env.CANISTER_ID_IDENTITY_MANAGER
     ),
-    "process.env.CANISTER_ID_SHARED_ACTIVITY": JSON.stringify(
-      process.env.CANISTER_ID_SHARED_ACTIVITY
-    ),
+
     "process.env.CANISTER_ID_GAMIFICATIONSYSTEM": JSON.stringify(
       process.env.CANISTER_ID_GAMIFICATIONSYSTEM
     ),

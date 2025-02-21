@@ -27,8 +27,14 @@ import {
 } from "@/components/ui/select";
 import useActorStore from "../State/Actors/ActorStore";
 
+import { hex_decode } from "./VETKey/VetKeyFunctions";
+
 const FileUpload = () => {
-  const { actors, createStorageShardActorExternal } = useActorStore();
+  const {
+    actors,
+    createStorageShardActorExternal,
+    createDataAssetShardActorExternal,
+  } = useActorStore();
   const [file, setFile] = useState(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [description, setDescription] = useState("");
@@ -174,65 +180,65 @@ const FileUpload = () => {
       // Step 1: Get upload location and unique ID from DataAsset canister
       const metadata = {
         category: category,
-        tags: [keywords],
+        description: description,
+        tags: keywords.split(",").map((k) => k.trim()),
         format: file.file.type,
       };
+
       const dataAsset = {
-        assetID: "uniqueID",
+        assetID: "",
         title: file.file.name,
-        description: description,
-        data: "uniqueID",
+        dataAssetShardPrincipal: "",
+        dataStorageShardPrincipal: "",
         metadata: metadata,
       };
 
       const result = await actors.dataAsset.uploadDataAsset(dataAsset);
       let uniqueID = "";
-      let storagePrincipal = "";
+      let assetShardPrincipal = "";
+      let storageShardPrincipal = "";
 
       Object.keys(result).forEach((key) => {
         if (key === "err") {
           throw new Error(result[key]);
         }
         if (key === "ok") {
-          uniqueID = result[key][0];
-          storagePrincipal = result[key][1];
+          [uniqueID, assetShardPrincipal, storageShardPrincipal] = result[key];
         }
       });
 
-      if (!uniqueID || !storagePrincipal) {
-        throw new Error("Failed to get unique ID or storage principal");
+      if (!uniqueID || !assetShardPrincipal || !storageShardPrincipal) {
+        throw new Error("Failed to get required upload information");
       }
 
-      // Step 2: Get encryption key
+      // Step 2: Create dataAssetShard actor and get encryption key
+      const dataAssetShard =
+        await createDataAssetShardActorExternal(assetShardPrincipal);
+      if (!dataAssetShard) {
+        throw new Error("Failed to create data asset shard actor");
+      }
+      console.log(dataAssetShard);
       const seed = window.crypto.getRandomValues(new Uint8Array(32));
       const tsk = new vetkd.TransportSecretKey(seed);
+
+      // Get encrypted key from the asset shard
       const encryptedKeyResult =
-        await actors.dataAsset.getEncryptedSymmetricKeyForAsset(
+        await dataAssetShard.encrypted_symmetric_key_for_asset(
           uniqueID,
           Object.values(tsk.public_key())
         );
 
       let encryptedKey = "";
       Object.keys(encryptedKeyResult).forEach((key) => {
-        if (key === "err") {
-          throw new Error(encryptedKeyResult[key]);
-        }
-        if (key === "ok") {
-          encryptedKey = encryptedKeyResult[key];
-        }
+        if (key === "err") throw new Error(encryptedKeyResult[key]);
+        if (key === "ok") encryptedKey = encryptedKeyResult[key];
+        console.log(encryptedKey);
       });
 
-      const pkBytesHex =
-        await actors.dataAsset.getSymmetricKeyVerificationKey(uniqueID);
-      let symmetricVerificationKey = "";
-      Object.keys(pkBytesHex).forEach((key) => {
-        if (key === "err") {
-          throw new Error(pkBytesHex[key]);
-        }
-        if (key === "ok") {
-          symmetricVerificationKey = pkBytesHex[key];
-        }
-      });
+      // Get verification key from the asset shard
+      const symmetricVerificationKey =
+        await dataAssetShard.getSymmetricKeyVerificationKey();
+      console.log(symmetricVerificationKey);
 
       const aesGCMKey = tsk.decrypt_and_hash(
         hex_decode(encryptedKey),
@@ -245,13 +251,15 @@ const FileUpload = () => {
       // Step 3: Split file into chunks and encrypt each chunk
       const ENCRYPTION_OVERHEAD = 28; // 12 bytes for IV + 16 bytes for auth tag
       const MAX_CHUNK_SIZE = 1.9 * 1000 * 1000; // 1.9MB max for encrypted chunk
-      const CHUNK_SIZE = MAX_CHUNK_SIZE - ENCRYPTION_OVERHEAD; // Adjust input size to account for encryption overhead
+      const CHUNK_SIZE = MAX_CHUNK_SIZE - ENCRYPTION_OVERHEAD;
       const arrayBuffer = await file.file.arrayBuffer();
       const fileData = new Uint8Array(arrayBuffer);
       const totalChunks = Math.ceil(fileData.length / CHUNK_SIZE);
 
-      // Create storage shard actor
-      const storageShard = createStorageShardActorExternal(storagePrincipal);
+      // Create storage shard actor using the principal
+      const storageShard = createStorageShardActorExternal(
+        storageShardPrincipal
+      );
       if (!storageShard) {
         throw new Error("Failed to create storage shard actor");
       }
@@ -280,11 +288,17 @@ const FileUpload = () => {
           i,
           encryptedChunk
         );
-        console.log(`Chunk ${i + 1}/${totalChunks} uploaded:`, uploadResult);
+        console.log(uploadResult);
+        if ("err" in uploadResult) {
+          throw new Error(
+            `Failed to upload chunk ${i + 1}: ${uploadResult.err}`
+          );
+        }
       }
 
       toast({
         title: "Success",
+
         description: "File uploaded successfully",
       });
     } catch (error) {
@@ -316,10 +330,6 @@ const FileUpload = () => {
   };
   // const hex_encode = (bytes) =>
   //   bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, "0"), "");
-  const hex_decode = (hexString) =>
-    Uint8Array.from(
-      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
-    );
 
   const handleRemoveFile = () => {
     setFile(null);

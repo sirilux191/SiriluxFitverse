@@ -18,7 +18,7 @@ function WasmModuleUploader({ shardType }) {
   const { actors, login, logout } = useActorStore();
   const [wasmFile, setWasmFile] = useState(null);
   const [message, setMessage] = useState("");
-  const [moduleType, setModuleType] = useState("regular");
+  const [moduleType, setModuleType] = useState("Asset");
   const navigate = useNavigate();
   const [shardUpdateStatus, setShardUpdateStatus] = useState({});
   const [isUpdating, setIsUpdating] = useState(false);
@@ -61,12 +61,11 @@ function WasmModuleUploader({ shardType }) {
           result = await actors.facility.updateWasmModule(byteArray);
           break;
         case "dataAsset":
-          if (moduleType === "storage") {
-            result =
-              await actors.dataAsset.updateDataStorageWasmModule(byteArray);
-          } else {
-            result = await actors.dataAsset.updateWasmModule(byteArray);
-          }
+          const shardTypeEnum = { [moduleType]: null };
+          result = await actors.dataAsset.updateWasmModule(
+            shardTypeEnum,
+            byteArray
+          );
           break;
         case "marketplace":
           result = await actors.marketplace.updateWasmModule(byteArray);
@@ -82,7 +81,7 @@ function WasmModuleUploader({ shardType }) {
 
       if ("ok" in result) {
         setMessage(
-          `WASM module for ${shardType}${moduleType === "storage" ? " storage" : ""} updated successfully.`
+          `WASM module for ${shardType} ${moduleType} updated successfully.`
         );
       } else {
         setMessage(`Error updating ${shardType} WASM module: ${result.err}`);
@@ -107,22 +106,9 @@ function WasmModuleUploader({ shardType }) {
           result = await actors.user.updateExistingShards();
           break;
         case "dataAsset":
-          const regularResult = await actors.dataAsset.updateExistingShards();
-          const storageResult =
-            await actors.dataAsset.updateExistingDataStorageShards();
-
-          if (regularResult.err || storageResult.err) {
-            setShardUpdateStatus({
-              status: "error",
-              message: `Errors: ${regularResult.err || ""} ${storageResult.err || ""}`,
-            });
-          } else {
-            setShardUpdateStatus({
-              status: "success",
-              message: "All shards updated successfully",
-            });
-          }
-          return;
+          const shardTypeEnum = { [moduleType]: null };
+          result = await actors.dataAsset.updateExistingShards(shardTypeEnum);
+          break;
         case "sharedActivity":
           result = await actors.sharedActivity.updateExistingShards();
           break;
@@ -179,8 +165,11 @@ function WasmModuleUploader({ shardType }) {
                   <SelectValue placeholder="Select module type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="regular">Regular Module</SelectItem>
-                  <SelectItem value="storage">Storage Module</SelectItem>
+                  <SelectItem value="Asset">Asset Module</SelectItem>
+                  <SelectItem value="Storage">Storage Module</SelectItem>
+                  <SelectItem value="SharedActivity">
+                    Shared Activity Module
+                  </SelectItem>
                 </SelectContent>
               </Select>
             )}

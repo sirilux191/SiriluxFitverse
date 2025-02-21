@@ -11,8 +11,16 @@ import { Progress } from "@/components/ui/progress";
 import { useToastProgressStore } from "../State/ProgressStore/ToastProgressStore";
 import useActorStore from "../State/Actors/ActorStore";
 
-const DownloadFile = ({ data, uniqueID, format, title, accessLevel }) => {
-  const { actors, createStorageShardActorExternal } = useActorStore();
+const DownloadFile = ({
+  dataAssetShardPrincipal,
+  dataStorageShardPrincipal,
+  uniqueID,
+  format,
+  title,
+  accessLevel,
+}) => {
+  const { createStorageShardActorExternal, createDataAssetShardActorExternal } =
+    useActorStore();
   const [downloading, setDownloading] = useState(false);
   const setProgress = useToastProgressStore((state) => state.setProgress);
   const resetProgress = useToastProgressStore((state) => state.resetProgress);
@@ -44,41 +52,46 @@ const DownloadFile = ({ data, uniqueID, format, title, accessLevel }) => {
 
     // Read file and store in IndexedDB
     const reader = new FileReader();
-    // reader.onloadend = async () => {
-    //   try {
-    //     const db = await initDB();
-    //     const transaction = db.transaction(["files"], "readwrite");
-    //     const store = transaction.objectStore("files");
+    reader.onloadend = async () => {
+      try {
+        const db = await initDB();
+        const transaction = db.transaction(["files"], "readwrite");
+        const store = transaction.objectStore("files");
 
-    //     const fileEntry = {
-    //       id: uniqueID,
-    //       name: file.name,
-    //       data: reader.result,
-    //       timestamp: new Date().toISOString(),
-    //     };
+        const fileEntry = {
+          id: uniqueID,
+          name: file.name,
+          data: reader.result,
+          timestamp: new Date().toISOString(),
+        };
 
-    //     store.put(fileEntry);
+        store.put(fileEntry);
 
-    //     transaction.oncomplete = () => {
-    //       db.close();
-    //     };
-    //   } catch (error) {
-    //     console.error("Error storing file in IndexedDB:", error);
-    //   }
-    // };
+        transaction.oncomplete = () => {
+          db.close();
+        };
+      } catch (error) {
+        console.error("Error storing file in IndexedDB:", error);
+      }
+    };
 
     reader.readAsDataURL(file);
     URL.revokeObjectURL(url);
   }
 
-  const downloadFromStorageShard = async (
-    storagePrincipal,
-    uniqueID,
-    toastId
-  ) => {
-    const storageShard = createStorageShardActorExternal(storagePrincipal);
-    if (!storageShard) {
+  const downloadFromStorageShard = async (uniqueID, toastId) => {
+    const dataStorageShard = await createStorageShardActorExternal(
+      dataStorageShardPrincipal
+    );
+    if (!dataStorageShard) {
       throw new Error("Failed to create storage shard actor");
+    }
+
+    const dataAssetShard = await createDataAssetShardActorExternal(
+      dataAssetShardPrincipal
+    );
+    if (!dataAssetShard) {
+      throw new Error("Failed to create data asset shard actor");
     }
 
     try {
@@ -86,7 +99,7 @@ const DownloadFile = ({ data, uniqueID, format, title, accessLevel }) => {
       const seed = window.crypto.getRandomValues(new Uint8Array(32));
       const tsk = new vetkd.TransportSecretKey(seed);
       const encryptedKeyResult =
-        await actors.dataAsset.getEncryptedSymmetricKeyForAsset(
+        await dataAssetShard.encrypted_symmetric_key_for_asset(
           uniqueID,
           Object.values(tsk.public_key())
         );
@@ -100,16 +113,11 @@ const DownloadFile = ({ data, uniqueID, format, title, accessLevel }) => {
       if (!encryptedKey)
         throw new Error("Failed to retrieve the encrypted key.");
 
-      const pkBytesHex =
-        await actors.dataAsset.getSymmetricKeyVerificationKey(uniqueID);
-      let symmetricVerificiationKey = "";
-      Object.keys(pkBytesHex).forEach((key) => {
-        if (key === "err") throw new Error(pkBytesHex[key]);
-        if (key === "ok") symmetricVerificiationKey = pkBytesHex[key];
-      });
+      const symmetricVerificiationKey =
+        await dataAssetShard.getSymmetricKeyVerificationKey();
 
       if (!symmetricVerificiationKey)
-        throw new Error("Failed to get encrypted key");
+        throw new Error("Failed to get symmetric key verification key");
 
       const aesGCMKey = tsk.decrypt_and_hash(
         hex_decode(encryptedKey),
@@ -120,7 +128,7 @@ const DownloadFile = ({ data, uniqueID, format, title, accessLevel }) => {
       );
 
       const CHUNK_SIZE = 1.9 * 1000 * 1000; // 1.9MB in bytes
-      const totalSize = await storageShard.getDataSize(uniqueID);
+      const totalSize = await dataStorageShard.getDataSize(uniqueID);
       const decryptedChunks = [];
       let downloadedSize = 0;
 
@@ -128,12 +136,12 @@ const DownloadFile = ({ data, uniqueID, format, title, accessLevel }) => {
         // Use different methods based on access level
         const chunkResult =
           accessLevel === "owned"
-            ? await storageShard.getDataChunk(
+            ? await dataStorageShard.getDataChunk(
                 uniqueID,
                 Number(offset),
                 Number(CHUNK_SIZE)
               )
-            : await storageShard.getDataChunkForReadPermittedPrincipal(
+            : await dataStorageShard.getDataChunkForReadPermittedPrincipal(
                 uniqueID,
                 Number(offset),
                 Number(CHUNK_SIZE)
@@ -247,11 +255,7 @@ const DownloadFile = ({ data, uniqueID, format, title, accessLevel }) => {
       setProgress(0, "Starting download and decryption...", toastId);
 
       // Download and decrypt data
-      const decryptedData = await downloadFromStorageShard(
-        data,
-        uniqueID,
-        toastId
-      );
+      const decryptedData = await downloadFromStorageShard(uniqueID, toastId);
 
       // Create blob and trigger download
       const decryptedBlob = new Blob([decryptedData], { type: format });
