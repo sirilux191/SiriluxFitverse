@@ -67,8 +67,8 @@
       "main": "src/SiriluxHealthCare_backend/DataAsset/DataAssetShard.mo",
       "type": "motoko"
     },
-    "Shared_Activity": {
-      "main": "src/SiriluxHealthCare_backend/SharedActivitySystem/SharedActivityService.mo",
+    "DataStorageShard": {
+      "main": "src/SiriluxHealthCare_backend/DataAsset/DataStorageShard.mo",
       "type": "motoko"
     },
 
@@ -105,8 +105,8 @@
 
         "DataAsset",
         "DataAssetShard",
+        "DataStorageShard",
 
-        "Shared_Activity",
         "SharedActivityShard",
 
         "WellnessAvatarNFT",

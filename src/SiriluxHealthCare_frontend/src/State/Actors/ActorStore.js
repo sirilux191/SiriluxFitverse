@@ -7,10 +7,13 @@ import { createActor as createProfessionalActor } from "../../../../declarations
 import { createActor as createFacilityActor } from "../../../../declarations/Facility";
 import { createActor as createDataAssetActor } from "../../../../declarations/DataAsset";
 import { createActor as createIdentityManagerActor } from "../../../../declarations/Identity_Manager";
-import { createActor as createSharedActivityActor } from "../../../../declarations/Shared_Activity";
 import { createActor as createGamificationSystemActor } from "../../../../declarations/GamificationSystem";
 import { createActor as createTokenActor } from "../../../../declarations/icrc_ledger_canister";
 import { createActor as createIcrcIndexActor } from "../../../../declarations/icrc_index_canister";
+import { createActor as createStorageShardActor } from "../../../../declarations/DataStorageShard";
+import { createActor as createSharedActivityShardActor } from "../../../../declarations/SharedActivityShard";
+import { createActor as createDataAssetShardActor } from "../../../../declarations/DataAssetShard";
+
 const useActorStore = create(
   persist(
     (set, get) => ({
@@ -20,10 +23,12 @@ const useActorStore = create(
         facility: null,
         dataAsset: null,
         identityManager: null,
-        sharedActivity: null,
         gamificationSystem: null,
         token: null,
         icrcIndex: null,
+        storageShard: null,
+        sharedActivity: null,
+        dataAssetShard: null,
       },
       isAuthenticated: false,
       authClient: null,
@@ -68,10 +73,6 @@ const useActorStore = create(
                 process.env.CANISTER_ID_IDENTITY_MANAGER,
                 { agent }
               ),
-              sharedActivity: createSharedActivityActor(
-                process.env.CANISTER_ID_SHARED_ACTIVITY,
-                { agent }
-              ),
               gamificationSystem: createGamificationSystemActor(
                 process.env.CANISTER_ID_GAMIFICATIONSYSTEM,
                 { agent }
@@ -111,10 +112,12 @@ const useActorStore = create(
             facility: null,
             dataAsset: null,
             identityManager: null,
-            sharedActivity: null,
             gamificationSystem: null,
             token: null,
             icrcIndex: null,
+            storageShard: null,
+            sharedActivity: null,
+            dataAssetShard: null,
           },
           isAuthenticated: false,
           authClient: null,
@@ -125,6 +128,76 @@ const useActorStore = create(
         if (authClient) {
           await authClient.logout();
         }
+      },
+
+      createStorageShardActorExternal: (storagePrincipal) => {
+        const { authClient } = get();
+        if (!authClient) return null;
+
+        const identity = authClient.getIdentity();
+        const agent = new HttpAgent({ identity });
+
+        if (process.env.DFX_NETWORK !== "ic") {
+          agent.fetchRootKey().catch(console.error);
+        }
+
+        return createStorageShardActor(storagePrincipal, { agent });
+      },
+
+      createSharedActivityShardActorExternal: async (
+        sharedActivityPrincipal
+      ) => {
+        const { authClient } = get();
+        if (!authClient) return null;
+
+        const identity = authClient.getIdentity();
+        const agent = new HttpAgent({
+          identity,
+          host:
+            process.env.DFX_NETWORK === "ic"
+              ? "https://ic0.app"
+              : "http://localhost:4943",
+        });
+
+        // Always fetch root key for non-mainnet environments
+        if (process.env.DFX_NETWORK !== "ic") {
+          try {
+            await agent.fetchRootKey();
+          } catch (error) {
+            console.error("Error fetching root key:", error);
+            return null;
+          }
+        }
+
+        return createSharedActivityShardActor(sharedActivityPrincipal, {
+          agent,
+        });
+      },
+
+      createDataAssetShardActorExternal: async (dataAssetPrincipal) => {
+        const { authClient } = get();
+        if (!authClient) return null;
+
+        const identity = authClient.getIdentity();
+        const agent = new HttpAgent({
+          identity,
+          host:
+            process.env.DFX_NETWORK === "ic"
+              ? "https://ic0.app"
+              : "http://localhost:4943",
+        });
+
+        // Always fetch root key for non-mainnet environments
+        if (process.env.DFX_NETWORK !== "ic") {
+          try {
+            await agent.fetchRootKey();
+          } catch (error) {
+            console.error("Error fetching root key:", error);
+            return null;
+          }
+        }
+
+        return createDataAssetShardActor(dataAssetPrincipal, { agent });
       },
     }),
     {

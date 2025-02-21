@@ -1,10 +1,9 @@
 import Array "mo:base/Array";
-import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
+import Debug "mo:base/Debug";
 import Error "mo:base/Error";
 import Cycles "mo:base/ExperimentalCycles";
 import Float "mo:base/Float";
-import HashMap "mo:base/HashMap";
 import Int "mo:base/Int";
 import Nat "mo:base/Nat";
 import Principal "mo:base/Principal";
@@ -13,18 +12,15 @@ import Text "mo:base/Text";
 import Time "mo:base/Time";
 import Timer "mo:base/Timer";
 import ICRC2 "mo:icrc2-types";
-import Ids "mo:incremental-ids";
 import BTree "mo:stableheapbtreemap/BTree";
 
-import SharedActivityService "../SharedActivitySystem/SharedActivityService";
+import SharedActivityShard "../SharedActivitySystem/SharedActivityShard";
 import Types "../Types";
 import CanisterIDs "../Types/CanisterIDs";
 import CanisterTypes "../Types/CanisterTypes";
-import Hex "../utility/Hex";
 import Interface "../utility/ic-management-interface";
 import DataAssetShard "DataAssetShard";
 import DataStorageShard "DataStorageShard";
-
 actor class DataAssetService() = this {
 
     type DataAsset = Types.DataAsset;
@@ -32,90 +28,181 @@ actor class DataAssetService() = this {
     type SharedType = Types.SharedType;
     type sharedActivityInfo = Types.sharedActivityInfo;
 
-    let sharedActivityService : SharedActivityService.SharedActivityService = actor (CanisterIDs.sharedActivityCanisterID);
-    let identityManager = CanisterTypes.identityManager;
+    type ErrorText = Text;
+    type AssetShardPrincipal = Text;
+    type UniqueAssetID = Text;
+    type StorageShardPrincipal = Text;
 
-    stable let ids = Ids.new();
-    let asset_ids = Ids.create(ids, "asset");
-    private stable var totalAssetCount : Nat = 1;
+    type Balance = Types.Balance;
+    type Metadata = Types.Metadata;
+    type ServiceLimit = Types.ServiceLimit;
 
-    private stable var shardCount : Nat = 0;
-    private stable var dataStorageShardCount : Nat = 0;
+    // Enum for shard types
+    private type ShardType = {
+        #Asset;
+        #Storage;
+        #SharedActivity;
+    };
 
-    private let ASSETS_PER_SHARD : Nat = 2_000_000;
-    private let DATA_PER_DATA_STORAGE_SHARD : Nat = 40_000;
+    private type ServiceOperation = {
+        #Upload;
+        #Share;
+        #Delete;
+    };
 
-    private let tokensPerSecond : Nat = 1; // 1 token per second for 1MB / Second
-
-    private stable let shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
-    private stable let dataStorageShards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
-
-    private stable var userShardMap : BTree.BTree<Text, [Text]> = BTree.init<Text, [Text]>(?128);
-    private stable var principalTimerMap : BTree.BTree<Principal, Nat> = BTree.init<Principal, Nat>(?128);
-
-    private stable var dataAssetShardWasmModule : [Nat8] = [];
-    private stable var dataStorageShardWasmModule : [Nat8] = [];
-
-    private stable var subScriberMap : BTree.BTree<Principal, Types.Balance> = BTree.init<Principal, Types.Balance>(?128);
+    private let icrcLedger : ICRC2.Service = actor (CanisterIDs.icrc_ledger_canister_id);
+    private let identityManager = CanisterTypes.identityManager;
 
     private let IC = "aaaaa-aa";
     private let ic : Interface.Self = actor (IC);
 
-    private let icrcLedger : ICRC2.Service = actor (CanisterIDs.icrc_ledger_canister_id);
+    private stable var totalAssetCount : Nat = 1;
+    private stable var totalSharedActivityCount : Nat = 1;
 
-    let uploadKeyAssetIDmap = HashMap.HashMap<Text, Text>(0, Text.equal, Text.hash);
+    private stable var assetShardCount : Nat = 0;
+    private stable var dataStorageShardCount : Nat = 0;
+    private stable var sharedActivityShardCount : Nat = 0;
 
-    public shared ({ caller }) func uploadDataAsset(asset : DataAsset) : async Result.Result<Text, Text> {
+    private let ASSETS_PER_SHARD : Nat = 5_000;
+    private let DATA_FILE_PER__SHARD : Nat = 1_000;
+    private let SHARED_ACTIVITY_PER_SHARD : Nat = 5_000;
+
+    private let MAX_SHARES : Nat = 200;
+    private let MAX_UPLOADS : Nat = 50;
+    private let MAX_DELETES : Nat = 25;
+
+    private let TOKEN_PER_DATA_MB_PER_SECOND : Nat = 1; // 1 token per 1MB / Second
+
+    private stable var assetShards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(?8); // Asset Shards (Shard ID(asset-shard-0), Principal)
+    private stable var dataStorageShards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(?8); // Data Storage Shards (Shard ID(storage-shard-0), Principal)
+    private stable var sharedActivityShards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(?8); // Shared Activity Shards (Shard ID(shared-activity-shard-0), Principal)
+
+    private stable var userAssetShardMap : BTree.BTree<Text, BTree.BTree<Text, ()>> = BTree.init<Text, BTree.BTree<Text, ()>>(?128); // User Asset Shards (User ID, Shard ID(asset-shard-0), ())
+    private stable var userSharedActivityShardMap : BTree.BTree<Text, BTree.BTree<Text, ()>> = BTree.init<Text, BTree.BTree<Text, ()>>(?128); // User Shared Activity Shards (User ID, Shard ID(shared-activity-shard-0), ())
+    private stable var principalTimerMap : BTree.BTree<Principal, Nat> = BTree.init<Principal, Nat>(?128); // Principal Timer Map (Principal, Timer)
+
+    private stable var dataAssetShardWasmModule : [Nat8] = []; // Data Asset Shard Wasm Module (Wasm Module)
+    private stable var dataStorageShardWasmModule : [Nat8] = []; // Data Storage Shard Wasm Module (Wasm Module)
+    private stable var sharedActivityShardWasmModule : [Nat8] = []; // Shared Activity Shard Wasm Module (Wasm Module)
+
+    private stable var subscriberMap : BTree.BTree<Principal, Types.Balance> = BTree.init<Principal, Types.Balance>(?128); // Subscriber Map (Principal, Balance (remaining tokens, stored dataMB, last Update Time))
+    private stable var principalServiceLimitMap : BTree.BTree<Principal, ServiceLimit> = BTree.init<Principal, ServiceLimit>(?128); // Principal Service Limit Map (Principal, Service Limit)
+
+    // ===============================
+    // Core Asset Management Functions
+    // ===============================
+    // Main asset operations (upload, share, delete)
+    public shared ({ caller }) func uploadDataAsset(asset : DataAsset) : async Result.Result<(UniqueAssetID, AssetShardPrincipal, StorageShardPrincipal), ErrorText> {
+
+        let serviceLimit = getServiceLimit(caller);
+
+        if (serviceLimit.usedUploads >= serviceLimit.maxUploads) {
+            return #err("Upload limit reached" # " " # Nat.toText(serviceLimit.usedUploads) # " " # Nat.toText(serviceLimit.maxUploads));
+        };
 
         let userIDResult = await getUserID(caller);
 
         switch (userIDResult) {
+
             case (#ok(userID)) {
-                let assetNumNat = Ids.next(ids, "asset");
+
+                let assetNumNat = totalAssetCount;
                 let assetNum = Nat.toText(assetNumNat);
                 let timestamp = Int.toText(Time.now());
 
-                let shardResult = await getShard(assetNum);
-                let dataStorageShardResult = await getDataStorageShard(assetNum);
-                switch (shardResult, dataStorageShardResult) {
-                    case (#ok(shard), #ok(dataStorageShard)) {
+                incrementTotalAssetCount();
 
-                        let updatedAsset = {
-                            asset with assetID = assetNum # "-" # userID # "-" # timestamp;
-                            data = "shard-principal";
+                // Get the asset shard and data storage shard [async-parallel]
+                let assetShardResult = getAssetShard(assetNum);
+                let dataStorageShardResult = getDataStorageShard(assetNum);
 
+                switch (await assetShardResult, await dataStorageShardResult) {
+                    case (#ok(assetShard), #ok(dataStorageShard)) {
+
+                        let assetShardID = getAssetShardID(assetNum);
+                        let assetShardPrincipal = switch (BTree.get(assetShards, Text.compare, assetShardID)) {
+                            case (?principal) { Principal.toText(principal) };
+                            case null {
+                                return #err("Asset shard principal not found");
+                            };
                         };
 
-                        let result = await shard.insertDataAsset(userID, timestamp, updatedAsset, caller);
-                        let dataStorageResult = await dataStorageShard.grantAccess(caller, updatedAsset.assetID);
-                        switch (result, dataStorageResult) {
-                            case (#ok(insertDataAssetResult), #ok(dataStorageResult)) {
-
-                                incrementTotalAssetCount();
-                                let shardID = getShardID(assetNum);
-                                ignore await updateUserShardMap(userID, shardID);
-                                #ok(insertDataAssetResult);
-
+                        let storageShardID = getDataStorageShardID(assetNum);
+                        let storagePrincipal = switch (BTree.get(dataStorageShards, Text.compare, storageShardID)) {
+                            case (?principal) { Principal.toText(principal) };
+                            case null {
+                                return #err("Storage shard principal not found");
                             };
+                        };
+
+                        let updatedAsset = {
+                            asset with
+                            assetID = assetNum # "-" # userID # "-" # timestamp;
+                            dataAssetShardPrincipal = assetShardPrincipal;
+                            dataStorageShardPrincipal = storagePrincipal;
+                        };
+
+                        // Insert the asset and grant access [async-parallel]
+                        let assetInsertResult = assetShard.insertDataAsset(userID, timestamp, updatedAsset, caller);
+                        let dataStorageResult = dataStorageShard.grantAccess(caller, updatedAsset.assetID);
+
+                        switch (await assetInsertResult, await dataStorageResult) {
+                            case (#ok(insertDataAssetResult), #ok(_dataStorageAccessResult)) {
+
+                                ignore updateServiceLimit(caller, #Upload);
+
+                                let shardID = getAssetShardID(assetNum);
+
+                                switch (updateUserAssetShardMap(userID, shardID)) {
+                                    case (#ok(_)) {
+                                        #ok(insertDataAssetResult, assetShardPrincipal, storagePrincipal);
+                                    };
+                                    case (#err(e)) {
+                                        // TODO: Retry the update operation
+                                        return #err(e);
+                                    };
+                                };
+                            };
+
                             case (#err(e), _) {
-                                Ids.Gen.release(asset_ids, (assetNumNat));
 
-                                return #err(e);
+                                let revokeResult = await dataStorageShard.revokeAccess(updatedAsset.assetID);
+                                switch (revokeResult) {
+                                    case (#ok(_)) {
+                                        decrementTotalAssetCount();
+                                        return #err(e);
+                                    };
+                                    case (#err(e)) {
+                                        // TODO: Retry the revoke operation
+                                        return #err(e);
+                                    };
+                                };
                             };
-                            case (_, #err(e)) {
-                                Ids.Gen.release(asset_ids, (assetNumNat));
 
-                                return #err(e);
+                            case (_, #err(e)) {
+
+                                let deleteResult = await assetShard.deleteDataAsset(userID, timestamp);
+                                switch (deleteResult) {
+                                    case (#ok(_)) {
+                                        decrementTotalAssetCount();
+                                        return #err(e);
+                                    };
+                                    case (#err(e)) {
+                                        // TODO: Retry the delete operation
+                                        return #err(e);
+                                    };
+                                };
+
                             };
                         };
                     };
+
                     case (#err(e), _) {
-                        Ids.Gen.release(asset_ids, (assetNumNat));
+                        decrementTotalAssetCount();
                         return #err(e);
                     };
                     case (_, #err(e)) {
-                        Ids.Gen.release(asset_ids, (assetNumNat));
-
+                        decrementTotalAssetCount();
                         return #err(e);
                     };
                 };
@@ -126,389 +213,195 @@ actor class DataAssetService() = this {
         };
     };
 
-    public shared ({ caller }) func getUserDataAssets() : async Result.Result<[(Text, DataAsset)], Text> {
+    public shared ({ caller }) func shareDataAsset(assetID : Text, recipientID : Text, hours : Nat) : async Result.Result<Text, Text> {
+        let serviceLimit = getServiceLimit(caller);
 
-        let userIDResult = await getUserID(caller);
-        switch (userIDResult) {
-            case (#ok(userID)) {
-
-                let shardsResult = await getUserShards(userID);
-
-                switch (shardsResult) {
-                    case (#ok(shards)) {
-
-                        let allAssets = Buffer.Buffer<(Text, DataAsset)>(0);
-
-                        for (shard in shards.vals()) {
-
-                            let assetsResult = await shard.getUserDataAssets(userID);
-
-                            switch (assetsResult) {
-                                case (#ok(assets)) {
-                                    allAssets.append(Buffer.fromArray(assets));
-                                };
-                                case (#err(_)) { /* Skip if error */ };
-                            };
-                        };
-                        #ok(Buffer.toArray(allAssets));
-
-                    };
-                    case (#err(e)) {
-                        #err(e);
-                    };
-                };
-            };
-            case (#err(e)) {
-                #err("User not found: " # e);
-            };
-        };
-    };
-
-    public shared ({ caller }) func getDataAsset(assetID : Text) : async Result.Result<DataAsset, Text> {
-
-        let parts = Text.split(assetID, #text("-"));
-        switch (parts.next(), parts.next(), parts.next()) {
-            case (?assetNum, ?userID, ?timestamp) {
-                let shardResult = await getShard(assetNum);
-                switch (shardResult) {
-                    case (#ok(shard)) {
-                        let hasAccessResult = await shard.hasAccess(caller, assetID);
-                        switch (hasAccessResult) {
-                            case (true) {
-
-                                let assetResult = await shard.getDataAsset(userID, timestamp);
-                                switch (assetResult) {
-                                    case (#ok(asset)) { return #ok(asset) };
-                                    case (#err(e)) { return #err(e) };
-                                };
-
-                            };
-                            case (false) {
-                                return #err("Caller does not have access to this asset");
-                            };
-                        };
-                    };
-                    case (#err(e)) { return #err(e) };
-                };
-            };
-            case _ {
-                return #err("Invalid asset ID format");
-            };
+        if (serviceLimit.usedShares >= serviceLimit.maxShares) {
+            return #err("Share limit reached" # " " # Nat.toText(serviceLimit.usedShares) # " " # Nat.toText(serviceLimit.maxShares));
         };
 
-    };
+        let userIDResult = getUserID(caller);
+        let recipientPrincipalResult = identityManager.getPrincipalByID(recipientID);
 
-    public shared ({ caller }) func updateDataAsset(assetID : Text, updatedAsset : DataAsset) : async Result.Result<(), Text> {
-        if (not (assetID == updatedAsset.assetID)) {
-            return #err("Asset ID are not the same");
-        };
-        let userIDResult = await getUserID(caller);
-        switch (userIDResult) {
-            case (#ok(userID)) {
+        switch (await userIDResult, await recipientPrincipalResult) {
+            case (#ok(userID), #ok(recipientPrincipal)) {
+
                 let parts = Text.split(assetID, #text("-"));
-                switch (parts.next(), parts.next(), parts.next()) {
-                    case (?assetNum, ?assetUserID, ?timestamp) {
-                        let shardResult = await getShard(assetNum);
-                        switch (shardResult) {
-                            case (#ok(shard)) {
-                                if (userID == assetUserID) {
-                                    let updateResult = await shard.updateDataAsset(userID, timestamp, updatedAsset);
-                                    switch (updateResult) {
-                                        case (#ok(_)) { return #ok(()) };
-                                        case (#err(e)) {
-                                            return #err(e);
-                                        };
-                                    };
-                                } else {
-                                    return #err("Only the owner can update this asset");
-                                };
-                            };
-                            case (#err(e)) { return #err(e) };
-                        };
-                    };
-                    case _ { return #err("Invalid asset ID format") };
-                };
 
-            };
-            case (#err(e)) { return #err("Error getting caller ID: " # e) };
-        };
-    };
-
-    public shared ({ caller }) func shareDataAsset(assetID : Text, recipientID : Text, sharedType : SharedType) : async Result.Result<Text, Text> {
-        let userIDResult = await getUserID(caller);
-        switch (userIDResult) {
-            case (#ok(callerID)) {
-                let parts = Text.split(assetID, #text("-"));
                 switch (parts.next(), parts.next(), parts.next()) {
                     case (?assetNum, ?ownerID, ?_timestamp) {
-                        if (callerID != ownerID) {
+
+                        if (userID != ownerID) {
                             return #err("Only the owner can share this asset");
                         };
-                        let shardResult = await getShard(assetNum);
-                        switch (shardResult) {
-                            case (#ok(shard)) {
-                                let recipientPrincipalResult = await identityManager.getPrincipalByID(recipientID);
-                                switch (recipientPrincipalResult) {
-                                    case (#ok(recipientPrincipal)) {
-                                        let grantResult = await shard.grantAccess(assetID, recipientPrincipal);
-                                        switch (grantResult) {
-                                            case (#ok(_)) {
 
-                                                let recordResult = await sharedActivityService.recordSharedActivity(caller, assetID, recipientID, sharedType);
-                                                switch (recordResult) {
-                                                    case (#ok(_)) {
-                                                        #ok("Shared successfully");
-                                                    };
-                                                    case (#err(e)) {
-                                                        #err("Failed to record shared activity: " # e);
-                                                    };
-                                                };
+                        // Get activity ID first
+                        switch (getNextSharedActivityID(userID, recipientID)) {
+                            case (#ok(activityID)) {
+                                // Get all three shards in parallel
+                                let assetShardResult = getAssetShard(assetNum);
+                                let dataStorageShardResult = getDataStorageShard(assetNum);
+                                let activityShardResult = getSharedActivityShard(activityID);
+
+                                switch (await assetShardResult, await dataStorageShardResult, await activityShardResult) {
+                                    case (#ok(assetShard), #ok(dataStorageShard), #ok(activityShard)) {
+                                        let assetShardPrincipal = switch (BTree.get(assetShards, Text.compare, getAssetShardID(assetNum))) {
+                                            case (?principal) {
+                                                Principal.toText(principal);
                                             };
-                                            case (#err(e)) {
+                                            case null {
+                                                return #err("Asset shard principal not found");
+                                            };
+                                        };
+
+                                        let activityShardPrincipal = switch (BTree.get(sharedActivityShards, Text.compare, getSharedActivityShardID(activityID))) {
+                                            case (?principal) {
+                                                Principal.toText(principal);
+                                            };
+                                            case null {
+                                                return #err("Activity shard principal not found");
+                                            };
+                                        };
+
+                                        // Create activity info
+                                        let activity : Types.sharedActivityInfo = {
+                                            activityID = activityID;
+                                            assetID = assetID;
+                                            usedSharedBy = userID;
+                                            usedSharedTo = recipientID;
+                                            sharedAt = Time.now();
+                                            sharedTill = Time.now() + (hours * 60 * 60 * 1_000_000_000); // hours
+
+                                            assetShardPrincipal = assetShardPrincipal;
+                                            activityShardPrincipal = activityShardPrincipal;
+                                        };
+
+                                        // Perform all operations in parallel
+                                        let grantResult = assetShard.grantAccess(assetID, recipientPrincipal, activity.sharedTill); // hours access
+                                        let grantReadResult = dataStorageShard.grantReadPermission(assetID, recipientPrincipal, activity.sharedTill); // hours access
+                                        let recordResult = activityShard.insertActivity(caller, recipientPrincipal, activity);
+
+                                        switch (await grantResult, await grantReadResult, await recordResult) {
+                                            case (#ok(_), #ok(_), #ok(_)) {
+                                                let newServiceLimit : ServiceLimit = {
+                                                    serviceLimit with
+                                                    usedShares = serviceLimit.usedShares + 1;
+                                                };
+                                                ignore BTree.insert(principalServiceLimitMap, Principal.compare, caller, newServiceLimit);
+                                                #ok("Shared successfully");
+                                            };
+                                            case (#err(e), _, _) {
                                                 #err("Failed to grant access: " # e);
+                                            };
+                                            case (_, #err(e), _) {
+                                                #err("Failed to grant read permission: " # e);
+                                            };
+                                            case (_, _, #err(e)) {
+                                                #err("Failed to record shared activity: " # e);
                                             };
                                         };
                                     };
-                                    case (#err(e)) {
-                                        #err("Recipient not found: " # e);
+                                    case (#err(e), _, _) {
+                                        #err("Failed to get asset shard: " # e);
+                                    };
+                                    case (_, #err(e), _) {
+                                        #err("Failed to get storage shard: " # e);
+                                    };
+                                    case (_, _, #err(e)) {
+                                        #err("Failed to get activity shard: " # e);
                                     };
                                 };
                             };
-                            case (#err(e)) { #err("Failed to get shard: " # e) };
+                            case (#err(e)) {
+                                #err("Failed to generate activity ID: " # e);
+                            };
                         };
                     };
                     case _ { #err("Invalid asset ID format") };
                 };
             };
-            case (#err(e)) { #err("Error getting caller ID: " # e) };
+            case (#err(e), _) { #err("Error getting caller ID: " # e) };
+            case (_, #err(e)) {
+                #err("Error getting recipient principal: " # e);
+            };
         };
     };
 
-    // By Facility & Professional
-    private func uploadDataAssetForUser(caller : Principal, asset : DataAsset, userID : Text, uploadKey : Text) : async Result.Result<(Text, Text), Text> {
+    public shared ({ caller }) func deleteDataAsset(assetID : Text) : async Result.Result<Text, Text> {
 
-        if (uploadKeyAssetIDmap.get(uploadKey) != ?asset.assetID) {
-            return #err("Not a valid Upload Key or Asset ID with Upload Key doesn't match");
-        };
-        uploadKeyAssetIDmap.delete(uploadKey);
-        let identityResult = await identityManager.getIdentity(caller);
-        switch (identityResult) {
-            case (#ok(callerIdentityResult)) {
-                switch (callerIdentityResult) {
-                    case (id, callerType) {
-                        if (callerType != "Professional" and callerType != "Facility") {
-                            return #err("Only professionals or facilities can upload data for users");
+        let userIDResult = await getUserID(caller);
+
+        switch (userIDResult) {
+            case (#ok(userID)) {
+
+                let parts = Text.split(assetID, #text("-"));
+
+                switch (parts.next(), parts.next(), parts.next()) {
+                    case (?assetNum, ?assetUserID, ?timestamp) {
+
+                        if (userID != assetUserID) {
+                            return #err("Only the owner can delete this asset");
                         };
 
-                        let userIDPrincipalResult = await identityManager.getPrincipalByID(userID);
+                        let assetShardResult = await getAssetShard(assetNum);
+                        let dataStorageShardResult = await getDataStorageShard(assetNum);
 
-                        switch (userIDPrincipalResult) {
-                            case (#ok(userPrincipal)) {
-                                let parts = Text.split(asset.assetID, #text("-"));
-                                switch (parts.next(), parts.next(), parts.next()) {
-                                    case (?assetNum, ?userIDByAsset, ?timestamp) {
+                        switch (assetShardResult, dataStorageShardResult) {
+                            case (#ok(assetShard), #ok(dataStorageShard)) {
 
-                                        if (userID != userIDByAsset) {
-                                            return #err("Check UserIDs submitted and asset ID");
-                                        };
+                                let deleteResult = assetShard.deleteDataAsset(userID, timestamp);
+                                let storageDeleteResult = dataStorageShard.deleteDataByPermittedPrincipal(assetID);
 
-                                        let shardResult = await getShard(assetNum);
-                                        switch (shardResult) {
-                                            case (#ok(shard)) {
-                                                let result = await shard.insertDataAsset(userID, timestamp, asset, userPrincipal);
-                                                switch (result) {
-                                                    case (#ok(insertDataAssetResult)) {
-                                                        let shardID = getShardID(assetNum);
-
-                                                        let updateResult = await updateUserShardMap(userID, shardID);
-                                                        switch (updateResult) {
-                                                            case (#ok(_)) {
-                                                                return #ok(id, insertDataAssetResult);
-
-                                                            };
-                                                            case (#err(e)) {
-                                                                return #err("Failed to update user shard map: " # e);
-                                                            };
-                                                        };
-                                                    };
-                                                    case (#err(e)) {
-                                                        return #err(e);
-                                                    };
-                                                };
-                                            };
-                                            case (#err(e)) {
-                                                #err("Error getting shard: " # e);
-                                            };
-                                        };
+                                switch (await deleteResult, await storageDeleteResult) {
+                                    case (#ok(_), #ok(_)) {
+                                        #ok("Asset deleted successfully");
                                     };
-                                    case _ {
-                                        return #err("Invalid asset ID format");
+                                    case (#err(e), _) {
+                                        // TODO: Retry the delete operation
+                                        #err("Failed to delete asset metadata: " # e);
                                     };
+                                    case (_, #err(e)) {
+                                        // TODO: Retry the delete operation
+                                        #err("Failed to delete storage data: " # e);
+                                    };
+
                                 };
                             };
-                            case (#err(error)) { #err(error) };
-                        };
-
-                    };
-
-                };
-            };
-            case (#err(error)) { #err(error) };
-        };
-    };
-
-    public shared ({ caller }) func uploadAndSignUserDataAsset(asset : DataAsset, userID : Text, uploadKey : Text) : async Result.Result<Text, Text> {
-
-        let uploadResult = await uploadDataAssetForUser(caller, asset, userID, uploadKey);
-
-        switch (uploadResult) {
-            case (#ok(value)) {
-                switch (value) {
-                    case (id, _resultText) {
-                        try {
-                            Cycles.add<system>(25_000_000_000);
-                            let { signature } = await ic.sign_with_schnorr({
-                                message = Text.encodeUtf8("Document with Asset ID :" # asset.assetID # " is uploaded by the entity with ID : " #id # " at the timestamp : " # Int.toText(Time.now()) # " for User with ID : " # userID);
-                                derivation_path = [Principal.toBlob(caller)];
-                                key_id = {
-                                    algorithm = #bip340secp256k1;
-                                    name = "dfx_test_key";
-                                };
-                            });
-                            let signature_hex = Hex.encode(Blob.toArray(signature));
-                            return #ok(signature_hex);
-                        } catch (err) {
-                            return #err(Error.message(err));
-                        };
-                    };
-                };
-            };
-            case (#err(error)) { #err(error) };
-        };
-
-    };
-
-    public func getSymmetricKeyVerificationKey(assetID : Text) : async Result.Result<Text, Text> {
-        let parts = Text.split(assetID, #text("-"));
-        switch (parts.next(), parts.next(), parts.next()) {
-            case (?assetNum, ?_userID, ?_timestamp) {
-                let shardResult = await getShard(assetNum);
-                switch (shardResult) {
-                    case (#ok(shard)) {
-                        #ok(await shard.getSymmetricKeyVerificationKey());
-                    };
-                    case (#err(e)) {
-                        #err("Error getting shard: " # e);
-                    };
-                };
-            };
-            case _ { return #err("Invalid asset ID format") };
-        };
-
-    };
-
-    public shared ({ caller }) func getEncryptedSymmetricKeyForAsset(assetID : Text, encryption_public_key : Blob) : async Result.Result<Text, Text> {
-        let parts = Text.split(assetID, #text("-"));
-        switch (parts.next(), parts.next(), parts.next()) {
-            case (?assetNum, ?_userID, ?_timestamp) {
-                let shardResult = await getShard(assetNum);
-                switch (shardResult) {
-                    case (#ok(shard)) {
-                        await shard.encrypted_symmetric_key_for_asset(caller, assetID, encryption_public_key);
-                    };
-                    case (#err(e)) {
-                        #err("Error getting shard: " # e);
-                    };
-                };
-            };
-            case _ { return #err("Invalid asset ID format") };
-        };
-
-    };
-
-    public shared ({ caller }) func getEncryptedSymmetricKeyForAssetForUserDataUpload(userID : Text, encryption_public_key : Blob) : async Result.Result<(Text, Text), Text> {
-        let identityResult = await identityManager.getIdentity(caller);
-        switch (identityResult) {
-            case (#ok(value)) {
-                switch (value) {
-                    case (_id, userType) {
-
-                        if (userType != "Professional" and userType != "Facility") {
-                            return #err("Only professionals or facilities can upload data for users");
-                        };
-                        let userIDPrincipalResult = await identityManager.getPrincipalByID(userID);
-                        switch (userIDPrincipalResult) {
-                            case (#ok(principal)) {
-                                let assetNum = Nat.toText(Ids.next(ids, "asset"));
-                                let timestamp = Int.toText(Time.now());
-                                let assetID = assetNum # "-" # userID # "-" # timestamp;
-
-                                let shardResult = await getShard(assetNum);
-                                switch (shardResult) {
-                                    case (#ok(shard)) {
-                                        let encryptionKeyResult = await shard.encrypted_symmetric_key_for_asset(principal, assetID, encryption_public_key);
-                                        switch (encryptionKeyResult) {
-                                            case (#ok(value)) {
-                                                uploadKeyAssetIDmap.put(value, assetID);
-                                                return #ok(assetID, value);
-                                            };
-                                            case (#err(error)) { #err(error) };
-                                        };
-                                    };
-                                    case (#err(e)) {
-                                        #err("Error getting shard: " # e);
-                                    };
-                                };
+                            case (#err(e), _) {
+                                #err("Failed to access asset shard: " # e);
                             };
-                            case (#err(e)) {
-                                #err(e);
+                            case (_, #err(e)) {
+                                #err("Failed to access storage shard: " # e);
                             };
                         };
                     };
-
-                };
-            };
-            case (#err(error)) { #err(error) };
-        };
-    };
-
-    public func getShard(assetNum : Text) : async Result.Result<DataAssetShard.DataAssetShard, Text> {
-        let shardID = getShardID(assetNum);
-        switch (BTree.get(shards, Text.compare, shardID)) {
-            case (?principal) {
-                #ok(actor (Principal.toText(principal)) : DataAssetShard.DataAssetShard);
-            };
-            case null {
-                let newShardResult = await createShard();
-                switch (newShardResult) {
-                    case (#ok(newShardPrincipal)) {
-                        ignore BTree.insert(shards, Text.compare, shardID, newShardPrincipal);
-                        shardCount += 1;
-                        #ok(actor (Principal.toText(newShardPrincipal)) : DataAssetShard.DataAssetShard);
-                    };
-                    case (#err(e)) {
-                        #err(e);
+                    case _ {
+                        #err("Invalid asset ID format");
                     };
                 };
             };
-        };
-    };
-
-    private func getShardID(assetNum : Text) : Text {
-
-        switch (Nat.fromText(assetNum)) {
-            case (?num) {
-                let shardIndex = num / ASSETS_PER_SHARD;
-                "shard-" # Nat.toText(shardIndex + 1);
+            case (#err(e)) {
+                #err("Error getting caller ID: " # e);
             };
-            case null { "shard-0" }; // Default
         };
-
     };
 
-    private func createShard() : async Result.Result<Principal, Text> {
-        if (Array.size(dataAssetShardWasmModule) == 0) {
-            return #err("Wasm module not set. Please update the Wasm module first.");
+    private func incrementTotalAssetCount() : () {
+        totalAssetCount += 1;
+    };
+
+    private func decrementTotalAssetCount() : () {
+        totalAssetCount -= 1;
+    };
+
+    // ===============================
+    // Shard Management & Routing Functions
+    // ===============================
+    // Shard creation and initialization
+    private func createShard(shardType : ShardType) : async Result.Result<Principal, Text> {
+        let wasmModule = getWasmModule(shardType);
+        if (Array.size(wasmModule) == 0) {
+            return #err("Wasm module not set for " # getShardTypeString(shardType) # " shard. Please update the Wasm module first.");
         };
 
         try {
@@ -517,181 +410,55 @@ actor class DataAssetService() = this {
             let newCanister = await ic.create_canister({ settings = null });
             let canisterPrincipal = newCanister.canister_id;
 
-            let installResult = await installCodeOnShard(canisterPrincipal);
-            switch (installResult) {
-                case (#ok(())) {
-                    #ok(canisterPrincipal);
-                };
-                case (#err(e)) {
-                    #err(e);
-                };
-            };
-        } catch (e) {
-            #err("Failed to create shard: " # Error.message(e));
-        };
-    };
-
-    private func installCodeOnShard(canisterPrincipal : Principal) : async Result.Result<(), Text> {
-        let arg = [];
-
-        try {
-            await ic.install_code({
-                arg = arg;
-                wasm_module = dataAssetShardWasmModule;
+            let _installResult = await ic.install_code({
+                arg = [];
+                wasm_module = wasmModule;
                 mode = #install;
                 canister_id = canisterPrincipal;
             });
 
             await ic.start_canister({ canister_id = canisterPrincipal });
-            #ok(());
+            #ok(canisterPrincipal);
         } catch (e) {
-            #err("Failed to install or start code on shard: " # Error.message(e));
+            #err("Failed to create " # getShardTypeString(shardType) # " shard: " # Error.message(e));
         };
     };
 
-    private func upgradeCodeOnShard(canisterPrincipal : Principal) : async Result.Result<(), Text> {
-        let arg = [];
-
-        try {
-            await ic.install_code({
-                arg = arg;
-                wasm_module = dataAssetShardWasmModule;
-                mode = #upgrade;
-                canister_id = canisterPrincipal;
-            });
-
-            #ok(());
-        } catch (e) {
-            #err("Failed to install or start code on shard: " # Error.message(e));
-        };
+    private func createAssetShard() : async Result.Result<Principal, Text> {
+        await createShard(#Asset);
     };
 
-    public shared ({ caller }) func updateWasmModule(wasmModule : [Nat8]) : async Result.Result<(), Text> {
-        if (not (await isAdmin(caller))) {
-            return #err("You are not Admin, only admin can perform this action");
-        };
-        if (Array.size(wasmModule) < 8) {
-            return #err("Invalid WASM module: too small");
-        };
-
-        dataAssetShardWasmModule := wasmModule;
-        #ok(());
+    private func createDataStorageShard() : async Result.Result<Principal, Text> {
+        await createShard(#Storage);
     };
 
-    public shared ({ caller }) func updateExistingShards() : async Result.Result<(), Text> {
-        if (not (await isAdmin(caller))) {
-            return #err("You are not Admin, only admin can perform this action");
-        };
-        if (Array.size(dataAssetShardWasmModule) == 0) {
-            return #err("Wasm module not set. Please update the Wasm module first.");
-        };
-
-        var updatedCount = 0;
-        var errorCount = 0;
-
-        for ((shardID, principal) in BTree.entries(shards)) {
-            let installResult = await upgradeCodeOnShard(principal);
-            switch (installResult) {
-                case (#ok(())) {
-                    updatedCount += 1;
-                };
-                case (#err(_err)) {
-                    errorCount += 1;
-                };
+    private func createSharedActivityShard() : async Result.Result<Principal, Text> {
+        await createShard(#SharedActivity);
+    };
+    // Shard routing and access
+    private func getAssetShard(assetNum : Text) : async Result.Result<DataAssetShard.DataAssetShard, Text> {
+        let assetShardID = getAssetShardID(assetNum);
+        switch (BTree.get(assetShards, Text.compare, assetShardID)) {
+            case (?principal) {
+                #ok(actor (Principal.toText(principal)) : DataAssetShard.DataAssetShard);
             };
-        };
-
-        if (errorCount > 0) {
-            #err("Updated " # Nat.toText(updatedCount) # " shards, but encountered errors in " # Nat.toText(errorCount) # " shards");
-        } else {
-            #ok(());
-        };
-    };
-
-    private func updateUserShardMap(userID : Text, shardID : Text) : async Result.Result<Text, Text> {
-        switch (BTree.get(userShardMap, Text.compare, userID)) {
             case null {
-                let newBuffer = Buffer.Buffer<Text>(1);
-                newBuffer.add(shardID);
-                ignore BTree.insert(userShardMap, Text.compare, userID, Buffer.toArray(newBuffer));
-            };
-            case (?existingArray) {
-
-                let buffer = Buffer.fromArray<Text>(existingArray);
-                if (not Buffer.contains<Text>(buffer, shardID, Text.equal)) {
-                    buffer.add(shardID);
-                    ignore BTree.insert(userShardMap, Text.compare, userID, Buffer.toArray(buffer));
-                };
-            };
-        };
-        #ok("User shard map updated successfully and Data Uploaded");
-    };
-
-    public func getUserShards(userID : Text) : async Result.Result<[DataAssetShard.DataAssetShard], Text> {
-        switch (BTree.get(userShardMap, Text.compare, userID)) {
-            case null { #err("No shards found for user") };
-            case (?shardIDs) {
-                let shardActors = Buffer.Buffer<DataAssetShard.DataAssetShard>(shardIDs.size());
-                for (shardID in shardIDs.vals()) {
-                    switch (BTree.get(shards, Text.compare, shardID)) {
-                        case (?principal) {
-                            shardActors.add(actor (Principal.toText(principal)) : DataAssetShard.DataAssetShard);
-                        };
-                        case null { /* Skip if shard not found */ };
+                let newAssetShardResult = await createAssetShard();
+                switch (newAssetShardResult) {
+                    case (#ok(newAssetShardPrincipal)) {
+                        ignore BTree.insert(assetShards, Text.compare, assetShardID, newAssetShardPrincipal);
+                        assetShardCount += 1;
+                        #ok(actor (Principal.toText(newAssetShardPrincipal)) : DataAssetShard.DataAssetShard);
+                    };
+                    case (#err(e)) {
+                        #err(e);
                     };
                 };
-                #ok(Buffer.toArray(shardActors));
             };
         };
     };
 
-    public shared func isAdmin(caller : Principal) : async Bool {
-        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
-            true;
-        } else {
-            false;
-        };
-    };
-
-    public query func getTotalAssetCount() : async Nat {
-        totalAssetCount;
-    };
-
-    public query func getShardCount() : async Nat {
-        shardCount;
-    };
-
-    public query func getAssetsPerShard() : async Nat {
-        ASSETS_PER_SHARD;
-    };
-
-    private func getUserID(principal : Principal) : async Result.Result<Text, Text> {
-        let identityResult = await identityManager.getIdentity(principal);
-        switch (identityResult) {
-            case (#ok((id, _))) { #ok(id) };
-            case (#err(e)) { #err(e) };
-        };
-    };
-
-    private func incrementTotalAssetCount() : () {
-        totalAssetCount += 1;
-    };
-
-    public query func getShardPrincipal(shardID : Text) : async Result.Result<Principal, Text> {
-        switch (BTree.get(shards, Text.compare, shardID)) {
-            case (?principal) { #ok(principal) };
-            case null { #err("Shard ID not found") };
-        };
-    };
-
-    public query func getStorageShardPrincipal(shardID : Text) : async Result.Result<Principal, Text> {
-        switch (BTree.get(dataStorageShards, Text.compare, shardID)) {
-            case (?principal) { #ok(principal) };
-            case null { #err("Shard ID not found") };
-        };
-    };
-
-    public func getDataStorageShard(assetNum : Text) : async Result.Result<DataStorageShard.DataStorageShard, Text> {
+    private func getDataStorageShard(assetNum : Text) : async Result.Result<DataStorageShard.DataStorageShard, Text> {
         let shardID = getDataStorageShardID(assetNum);
         switch (BTree.get(dataStorageShards, Text.compare, shardID)) {
             case (?principal) {
@@ -713,118 +480,128 @@ actor class DataAssetService() = this {
         };
     };
 
+    private func getSharedActivityShard(activityID : Text) : async Result.Result<SharedActivityShard.SharedActivityShard, Text> {
+        let shardID = getSharedActivityShardID(activityID);
+        switch (BTree.get(sharedActivityShards, Text.compare, shardID)) {
+            case (?principal) {
+                #ok(actor (Principal.toText(principal)) : SharedActivityShard.SharedActivityShard);
+            };
+            case null {
+                let newShardResult = await createSharedActivityShard();
+                switch (newShardResult) {
+                    case (#ok(newShardPrincipal)) {
+                        ignore BTree.insert(sharedActivityShards, Text.compare, shardID, newShardPrincipal);
+                        sharedActivityShardCount += 1;
+                        #ok(actor (Principal.toText(newShardPrincipal)) : SharedActivityShard.SharedActivityShard);
+                    };
+                    case (#err(e)) {
+                        #err(e);
+                    };
+                };
+            };
+        };
+    };
+    // Shard ID management
+    private func getShardID(num : Text, shardType : { #Asset; #Storage; #Activity }) : Text {
+        let (prefix, itemsPerShard) = switch (shardType) {
+            case (#Asset) ("asset-shard-", ASSETS_PER_SHARD);
+            case (#Storage) ("storage-shard-", DATA_FILE_PER__SHARD);
+            case (#Activity) ("shared-activity-shard-", SHARED_ACTIVITY_PER_SHARD);
+        };
+
+        switch (Nat.fromText(num)) {
+            case (?n) {
+                let shardIndex = n / itemsPerShard;
+                prefix # Nat.toText(shardIndex + 1);
+            };
+            case null { prefix # "0" };
+        };
+    };
+
+    private func getAssetShardID(assetNum : Text) : Text {
+        getShardID(assetNum, #Asset);
+    };
+
     private func getDataStorageShardID(assetNum : Text) : Text {
-        switch (Nat.fromText(assetNum)) {
-            case (?num) {
-                let shardIndex = num / DATA_PER_DATA_STORAGE_SHARD;
-                "storage-shard-" # Nat.toText(shardIndex + 1);
-            };
-            case null { "storage-shard-0" }; // Default
-        };
+        getShardID(assetNum, #Storage);
     };
 
-    private func createDataStorageShard() : async Result.Result<Principal, Text> {
-        if (Array.size(dataStorageShardWasmModule) == 0) {
-            return #err("Storage Wasm module not set. Please update the Wasm module first.");
-        };
-
-        try {
-            let cycles = 10 ** 12;
-            Cycles.add<system>(cycles);
-            let newCanister = await ic.create_canister({ settings = null });
-            let canisterPrincipal = newCanister.canister_id;
-
-            let installResult = await installCodeOnDataStorageShard(canisterPrincipal);
-            switch (installResult) {
-                case (#ok(())) {
-                    #ok(canisterPrincipal);
-                };
-                case (#err(e)) {
-                    #err(e);
-                };
-            };
-        } catch (e) {
-            #err("Failed to create storage shard: " # Error.message(e));
-        };
+    private func getSharedActivityShardID(activityID : Text) : Text {
+        getShardID(activityID, #Activity);
     };
-
-    private func installCodeOnDataStorageShard(canisterPrincipal : Principal) : async Result.Result<(), Text> {
-        let arg = [];
-
+    // Shard code management
+    private func upgradeCodeOnShard(shardType : ShardType, canisterPrincipal : Principal) : async Result.Result<(), Text> {
+        let wasmModule = getWasmModule(shardType);
         try {
             await ic.install_code({
-                arg = arg;
-                wasm_module = dataStorageShardWasmModule;
-                mode = #install;
-                canister_id = canisterPrincipal;
-            });
-
-            #ok(await ic.start_canister({ canister_id = canisterPrincipal }));
-
-        } catch (e) {
-            #err("Failed to install or start code on storage shard: " # Error.message(e));
-        };
-    };
-
-    private func upgradeCodeOnDataStorageShard(canisterPrincipal : Principal) : async Result.Result<(), Text> {
-        let arg = [];
-
-        try {
-            await ic.install_code({
-                arg = arg;
-                wasm_module = dataStorageShardWasmModule;
+                arg = [];
+                wasm_module = wasmModule;
                 mode = #upgrade;
                 canister_id = canisterPrincipal;
             });
-
             #ok(());
         } catch (e) {
-            #err("Failed to upgrade code on storage shard: " # Error.message(e));
+            #err("Failed to upgrade code on " # getShardTypeString(shardType) # " shard: " # Error.message(e));
         };
     };
 
-    public shared ({ caller }) func updateDataStorageWasmModule(wasmModule : [Nat8]) : async Result.Result<(), Text> {
+    public shared ({ caller }) func updateExistingShards(shardType : ShardType) : async Result.Result<(), Text> {
         if (not (await isAdmin(caller))) {
             return #err("You are not Admin, only admin can perform this action");
         };
-        if (Array.size(wasmModule) < 8) {
-            return #err("Invalid WASM module: too small");
-        };
 
-        dataStorageShardWasmModule := wasmModule;
-        #ok(());
-    };
-
-    public shared ({ caller }) func updateExistingDataStorageShards() : async Result.Result<(), Text> {
-        if (not (await isAdmin(caller))) {
-            return #err("You are not Admin, only admin can perform this action");
-        };
-        if (Array.size(dataStorageShardWasmModule) == 0) {
-            return #err("Storage Wasm module not set. Please update the Wasm module first.");
+        let wasmModule = getWasmModule(shardType);
+        if (Array.size(wasmModule) == 0) {
+            return #err("Wasm module not set for " # getShardTypeString(shardType) # " shard. Please update the Wasm module first.");
         };
 
         var updatedCount = 0;
         var errorCount = 0;
+        let shardMap = switch (shardType) {
+            case (#Asset) { assetShards };
+            case (#Storage) { dataStorageShards };
+            case (#SharedActivity) { sharedActivityShards };
+        };
 
-        for ((shardID, principal) in BTree.entries(dataStorageShards)) {
-            let installResult = await upgradeCodeOnDataStorageShard(principal);
+        for ((shardID, principal) in BTree.entries(shardMap)) {
+            let installResult = await upgradeCodeOnShard(shardType, principal);
             switch (installResult) {
-                case (#ok(())) {
-                    updatedCount += 1;
-                };
-                case (#err(_err)) {
-                    errorCount += 1;
-                };
+                case (#ok(())) { updatedCount += 1 };
+                case (#err(_)) { errorCount += 1 };
             };
         };
 
         if (errorCount > 0) {
-            #err("Updated " # Nat.toText(updatedCount) # " storage shards, but encountered errors in " # Nat.toText(errorCount) # " shards");
+            #err("Updated " # Nat.toText(updatedCount) # " shards, but encountered errors in " # Nat.toText(errorCount) # " shards");
         } else {
             #ok(());
         };
     };
 
+    public shared ({ caller }) func updateWasmModule(shardType : ShardType, wasmModule : [Nat8]) : async Result.Result<(), Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("You are not Admin, only admin can perform this action");
+        };
+
+        if (Array.size(wasmModule) < 8) {
+            return #err("Invalid WASM module: too small");
+        };
+
+        switch (shardType) {
+            case (#Asset) { dataAssetShardWasmModule := wasmModule };
+            case (#Storage) { dataStorageShardWasmModule := wasmModule };
+            case (#SharedActivity) {
+                sharedActivityShardWasmModule := wasmModule;
+            };
+        };
+        #ok(());
+    };
+
+    // ===============================
+    // Storage & Data Management Functions
+    // ===============================
+
+    // Storage operations
     public shared ({ caller }) func updateDataStorageUsedMap(principal : Principal, usedSpace : Int) : async Result.Result<Types.TimeRemaining, Text> {
         for ((_, shardPrincipal) in BTree.entries(dataStorageShards)) {
             if (Principal.equal(shardPrincipal, caller)) {
@@ -832,13 +609,13 @@ actor class DataAssetService() = this {
                 let currentTime = Time.now();
 
                 // Get or initialize subscriber balance
-                let currentBalance = switch (BTree.get(subScriberMap, Principal.compare, principal)) {
+                let currentBalance = switch (BTree.get(subscriberMap, Principal.compare, principal)) {
                     case (?balance) { balance };
                     case null {
 
                         {
-                            tokens = (30 * 24 * 60 * 60) * 100; // 30 days free storage 100MB
-                            dataMB = 0; // 0 MB Current Storage Used
+                            tokens = 0;
+                            dataMB = 0;
                             lastUpdateTime = currentTime;
                         };
                     };
@@ -847,26 +624,27 @@ actor class DataAssetService() = this {
                 // Calculate elapsed time and token consumption
                 let elapsedNano = currentTime - currentBalance.lastUpdateTime;
                 let elapsedSeconds = Int.div(elapsedNano, 1_000_000_000);
-                var tokensConsumed = 0;
+                var tokensConsumed : Int = 0;
                 if (currentBalance.dataMB <= 100) {
 
                 } else {
-                    tokensConsumed := (tokensPerSecond) * (Int.abs(elapsedSeconds)) * currentBalance.dataMB;
+                    tokensConsumed := (TOKEN_PER_DATA_MB_PER_SECOND) * (Int.abs(elapsedSeconds)) * currentBalance.dataMB;
                 };
 
                 // Calculate new data size in GB
                 let newDataMB = usedSpace / 1_000_000; // Convert bytes to MB
-
+                Debug.print("New Data MB: " # debug_show newDataMB);
                 // Update balance
                 let updatedBalance : Types.Balance = {
-                    tokens = Nat.max(0, currentBalance.tokens - tokensConsumed);
+                    tokens = currentBalance.tokens - Int.abs(tokensConsumed);
                     dataMB = Int.abs(newDataMB + currentBalance.dataMB);
                     lastUpdateTime = currentTime;
                 };
+                Debug.print("Updated Balance: " # debug_show updatedBalance);
 
-                let remainingSeconds = Float.fromInt((updatedBalance.tokens) / ((tokensPerSecond) * (updatedBalance.dataMB)));
+                let remainingSeconds = Float.fromInt((updatedBalance.tokens) / ((TOKEN_PER_DATA_MB_PER_SECOND) * (updatedBalance.dataMB)));
 
-                ignore BTree.insert(subScriberMap, Principal.compare, principal, updatedBalance);
+                ignore BTree.insert(subscriberMap, Principal.compare, principal, updatedBalance);
 
                 if (currentBalance.dataMB <= 100) {
 
@@ -905,18 +683,78 @@ actor class DataAssetService() = this {
         return #err("Caller is not a data storage shard");
     };
 
+    public shared query ({ caller }) func checkDataStorageUsedMap(principal : Principal, usedSpace : Int) : async Result.Result<Types.TimeRemaining, Text> {
+        for ((_, shardPrincipal) in BTree.entries(dataStorageShards)) {
+            if (Principal.equal(shardPrincipal, caller)) {
+                let currentTime = Time.now();
+
+                // Get or initialize subscriber balance
+                let currentBalance = switch (BTree.get(subscriberMap, Principal.compare, principal)) {
+                    case (?balance) { balance };
+                    case null {
+                        {
+                            tokens = 0;
+                            dataMB = 0;
+                            lastUpdateTime = currentTime;
+                        };
+                    };
+                };
+
+                // Calculate elapsed time and token consumption
+                let elapsedNano = currentTime - currentBalance.lastUpdateTime;
+                let elapsedSeconds = Int.div(elapsedNano, 1_000_000_000);
+                var tokensConsumed : Int = 0;
+                if (currentBalance.dataMB <= 100) {
+                    // No tokens consumed for first 100MB
+                } else {
+                    tokensConsumed := (TOKEN_PER_DATA_MB_PER_SECOND) * (Int.abs(elapsedSeconds)) * currentBalance.dataMB;
+                };
+
+                // Calculate new data size in MB
+                let newDataMB = usedSpace / 1_000_000; // Convert bytes to MB
+
+                // Calculate hypothetical updated balance
+                let hypotheticalBalance : Balance = {
+                    tokens = currentBalance.tokens - Int.abs(tokensConsumed);
+                    dataMB = Int.abs(newDataMB + currentBalance.dataMB);
+                    lastUpdateTime = currentTime;
+                };
+
+                let remainingSeconds = Float.fromInt((hypotheticalBalance.tokens) / ((TOKEN_PER_DATA_MB_PER_SECOND) * (hypotheticalBalance.dataMB)));
+
+                if (currentBalance.dataMB <= 100) {
+                    return #ok({
+                        seconds = remainingSeconds;
+                        minutes = remainingSeconds / 60.0;
+                        hours = remainingSeconds / (60.0 * 60.0);
+                        days = remainingSeconds / (24.0 * 60.0 * 60.0);
+                    });
+                } else if (remainingSeconds <= (24.0 * 60.0 * 60.0 * 1)) {
+                    return #err("Remaining time after updating storage would be less than 1 day. Add tokens or update storage.");
+                };
+
+                return #ok({
+                    seconds = remainingSeconds;
+                    minutes = remainingSeconds / 60.0;
+                    hours = remainingSeconds / (60.0 * 60.0);
+                    days = remainingSeconds / (24.0 * 60.0 * 60.0);
+                });
+            };
+        };
+        return #err("Caller is not a data storage shard");
+    };
     private func deleteAllDataForPrincipal(principal : Principal) : async () {
         // Get user ID from principal
         let userIDResult = await getUserID(principal);
         switch (userIDResult) {
             case (#ok(userID)) {
                 // Get all shards associated with the user
-                let shardsResult = await getUserShards(userID);
-                switch (shardsResult) {
-                    case (#ok(userShards)) {
-                        for (shard in userShards.vals()) {
+                let assetShardsResult = getUserAssetShards(userID);
+                switch (assetShardsResult) {
+                    case (#ok(userAssetShards)) {
+                        for (assetShard in userAssetShards.vals()) {
                             // Get all assets for user from each shard
-                            let assetsResult = await shard.getUserDataAssets(userID);
+                            let assetsResult = await assetShard.getUserDataAssetsByService(userID);
                             switch (assetsResult) {
                                 case (#ok(assets)) {
                                     // Delete each asset
@@ -937,40 +775,27 @@ actor class DataAssetService() = this {
         };
     };
 
-    public shared ({ caller }) func getDataStorageUsedMap(page : Nat) : async Result.Result<[(Principal, Types.Balance)], Text> {
-        if (not (await isAdmin(caller))) {
-            return #err("You are not Admin, only admin can perform this action");
+    // Balance management
+
+    public shared query ({ caller }) func getTotalDataBalance(principalText : ?Text) : async Result.Result<Types.Balance, Text> {
+        let principal = switch (principalText) {
+            case (?text) { Principal.fromText(text) };
+            case null { caller };
         };
 
-        let pageSize = 500;
-        let allEntries = BTree.toArray(subScriberMap);
-        let startIndex = page * pageSize;
-
-        if (startIndex >= allEntries.size()) {
-            return #ok([]);
-        };
-
-        let endIndex = Nat.min(startIndex + pageSize, allEntries.size());
-        let pageEntries = Array.tabulate<(Principal, Types.Balance)>(
-            endIndex - startIndex,
-            func(i) = allEntries[startIndex + i],
-        );
-
-        #ok(pageEntries);
-    };
-
-    public shared query ({ caller }) func getTotalDataBalanceForPrincipal() : async Result.Result<Types.Balance, Text> {
-        switch (BTree.get(subScriberMap, Principal.compare, caller)) {
+        switch (BTree.get(subscriberMap, Principal.compare, principal)) {
             case (?balance) { #ok(balance) };
-            case null {
-                #err(" You are not subscriber");
-            };
+            case null { #err("Not a subscriber") };
         };
     };
 
-    // Add helper function to get remaining time for a principal
-    public shared query func getRemainingStorageTime(principal : Principal) : async Result.Result<Types.TimeRemaining, Text> {
-        switch (BTree.get(subScriberMap, Principal.compare, principal)) {
+    public shared query ({ caller }) func getRemainingStorageTime(principalText : ?Text) : async Result.Result<Types.TimeRemaining, Text> {
+        let principal = switch (principalText) {
+            case (?text) { Principal.fromText(text) };
+            case null { caller };
+        };
+
+        switch (BTree.get(subscriberMap, Principal.compare, principal)) {
             case (?balance) {
                 if (balance.tokens <= 0 or balance.dataMB <= 0) {
                     return #ok({
@@ -981,7 +806,7 @@ actor class DataAssetService() = this {
                     });
                 };
 
-                let remainingSeconds = Float.fromInt(balance.tokens) / ((Float.fromInt(tokensPerSecond)) * Float.fromInt(balance.dataMB));
+                let remainingSeconds = Float.fromInt(balance.tokens) / ((Float.fromInt(TOKEN_PER_DATA_MB_PER_SECOND)) * Float.fromInt(balance.dataMB));
 
                 #ok({
                     seconds = remainingSeconds;
@@ -996,8 +821,7 @@ actor class DataAssetService() = this {
         };
     };
 
-    // Add method to add tokens to a principal's balance
-    public shared ({ caller }) func addTokensToBalance(amount : Nat) : async Result.Result<(), Text> {
+    public shared ({ caller }) func addTokensToBalance(amount : Nat) : async Result.Result<Text, Text> {
         if (not (await isAdmin(caller))) {
             return #err("Only admin can add tokens");
         };
@@ -1008,7 +832,7 @@ actor class DataAssetService() = this {
             to = { owner = Principal.fromActor(this); subaccount = null };
             amount = amount * 100_000_000;
             fee = null;
-            memo = ?Text.encodeUtf8(" Add Tokens to Subscriber Balance: " # debug_show amount);
+            memo = ?Text.encodeUtf8("Add Tokens Subscriber: " # debug_show amount);
             created_at_time = null;
         });
 
@@ -1023,76 +847,226 @@ actor class DataAssetService() = this {
 
         let tokensToadd = Int.abs(Float.toInt((Float.fromInt(amount) * 24 * 60 * 60 * 30) / 100));
 
-        switch (BTree.get(subScriberMap, Principal.compare, caller)) {
+        switch (BTree.get(subscriberMap, Principal.compare, caller)) {
             case (?balance) {
-                let updatedBalance = {
+                let updatedBalance : Balance = {
                     tokens = balance.tokens + tokensToadd;
                     dataMB = balance.dataMB;
                     lastUpdateTime = balance.lastUpdateTime;
                 };
-                ignore BTree.insert(subScriberMap, Principal.compare, caller, updatedBalance);
-                #ok(());
+                ignore BTree.insert(subscriberMap, Principal.compare, caller, updatedBalance);
+                #ok("Successfully added tokens to balance");
             };
             case null {
-                let newBalance = {
+                let newBalance : Balance = {
                     tokens = (tokensToadd);
                     dataMB = 0; // Initialize with 100MB
                     lastUpdateTime = Time.now();
                 };
-                ignore BTree.insert(subScriberMap, Principal.compare, caller, newBalance);
-                #ok(());
+                ignore BTree.insert(subscriberMap, Principal.compare, caller, newBalance);
+                #ok("Successfully added tokens to balance");
             };
         };
     };
 
-    public shared ({ caller }) func deleteDataAsset(assetID : Text) : async Result.Result<(), Text> {
-        let userIDResult = await getUserID(caller);
-        switch (userIDResult) {
-            case (#ok(userID)) {
-                let parts = Text.split(assetID, #text("-"));
-                switch (parts.next(), parts.next(), parts.next()) {
-                    case (?assetNum, ?assetUserID, ?timestamp) {
-                        if (userID != assetUserID) {
-                            return #err("Only the owner can delete this asset");
-                        };
+    // ===============================
+    // User & Access Management Functions
+    // ===============================
+    // User management
 
-                        let shardResult = await getShard(assetNum);
-                        switch (shardResult) {
-                            case (#ok(shard)) {
-                                let deleteResult = await shard.deleteDataAsset(userID, timestamp);
-                                switch (deleteResult) {
-                                    case (#ok(_)) {
-                                        // Get data storage shard and delete data
-                                        let dataStorageShardResult = await getDataStorageShard(assetNum);
-                                        switch (dataStorageShardResult) {
-                                            case (#ok(dataStorageShard)) {
-                                                let storageDeleteResult = await dataStorageShard.deleteData(assetID);
-                                                switch (storageDeleteResult) {
-                                                    case (#ok(_)) {
-                                                        return #ok(());
-                                                    };
-                                                    case (#err(e)) {
-                                                        return #err("Asset metadata deleted but failed to delete storage data: " # e);
-                                                    };
-                                                };
-                                            };
-                                            case (#err(e)) {
-                                                return #err("Asset metadata deleted but failed to access storage shard: " # e);
-                                            };
-                                        };
-                                    };
-                                    case (#err(e)) { return #err(e) };
-                                };
-                            };
-                            case (#err(e)) {
-                                return #err("Failed to access shard: " # e);
-                            };
+    private func getUserID(principal : Principal) : async Result.Result<Text, Text> {
+
+        let identityResult = await identityManager.getIdentity(principal);
+
+        switch (identityResult) {
+            case (#ok((id, _))) { #ok(id) };
+            case (#err(e)) { #err(e) };
+        };
+
+    };
+
+    private func isAdmin(caller : Principal) : async Bool {
+        if (Principal.fromText(await identityManager.returnAdmin()) == (caller)) {
+            true;
+        } else {
+            false;
+        };
+    };
+
+    // User-shard mapping
+    private func updateUserShardMap(
+        userID : Text,
+        shardID : Text,
+        mapType : { #Asset; #Activity },
+    ) : Result.Result<Text, Text> {
+        let targetMap = switch (mapType) {
+            case (#Asset) userAssetShardMap;
+            case (#Activity) userSharedActivityShardMap;
+        };
+
+        switch (BTree.get(targetMap, Text.compare, userID)) {
+            case null {
+                let newMap = BTree.init<Text, ()>(?128);
+                ignore BTree.insert(newMap, Text.compare, shardID, ());
+                ignore BTree.insert(targetMap, Text.compare, userID, newMap);
+            };
+            case (?existingMap) {
+                ignore BTree.insert(existingMap, Text.compare, shardID, ());
+            };
+        };
+        #ok("User shard map updated successfully");
+    };
+
+    private func updateUserAssetShardMap(userID : Text, shardID : Text) : Result.Result<Text, Text> {
+        updateUserShardMap(userID, shardID, #Asset);
+    };
+
+    private func updateUserSharedActivityShardMap(userID : Text, activityID : Text) : Result.Result<(), Text> {
+        let shardID = getSharedActivityShardID(activityID);
+        switch (updateUserShardMap(userID, shardID, #Activity)) {
+            case (#ok(_)) #ok(());
+            case (#err(e)) #err(e);
+        };
+    };
+
+    private func getUserAssetShards(userID : Text) : Result.Result<[DataAssetShard.DataAssetShard], Text> {
+        switch (BTree.get(userAssetShardMap, Text.compare, userID)) {
+            case null { #err("No shards found for user") };
+            case (?shardIDs) {
+                let shardActors = Buffer.Buffer<DataAssetShard.DataAssetShard>(0);
+                for ((shardID, _) in BTree.entries(shardIDs)) {
+                    switch (BTree.get(assetShards, Text.compare, shardID)) {
+                        case (?principal) {
+                            shardActors.add(actor (Principal.toText(principal)) : DataAssetShard.DataAssetShard);
+                        };
+                        case null {
+                            /* Skip if shard not found */
                         };
                     };
-                    case _ { return #err("Invalid asset ID format") };
                 };
+                #ok(Buffer.toArray(shardActors));
             };
-            case (#err(e)) { return #err("Error getting caller ID: " # e) };
+        };
+    };
+
+    public query func getUserAssetShardsPrincipal(userID : Text) : async Result.Result<[Principal], Text> {
+        switch (BTree.get(userAssetShardMap, Text.compare, userID)) {
+            case null { #err("No shards found for user") };
+            case (?shardIDs) {
+                let shardPrincipal = Buffer.Buffer<Principal>(0);
+                for ((shardID, _) in BTree.entries(shardIDs)) {
+                    switch (BTree.get(assetShards, Text.compare, shardID)) {
+                        case (?principal) { shardPrincipal.add(principal) };
+                        case null {
+                            /* Skip if shard not found */
+                        };
+                    };
+
+                };
+                #ok(Buffer.toArray(shardPrincipal));
+            };
+        };
+    };
+
+    public query func getUserSharedActivityShardsPrincipal(userID : Text) : async Result.Result<[Principal], Text> {
+        switch (BTree.get(userSharedActivityShardMap, Text.compare, userID)) {
+            case null { #err("No shards found for user") };
+            case (?shardIDs) {
+                let shardPrincipal = Buffer.Buffer<Principal>(0);
+                for ((shardID, _) in BTree.entries(shardIDs)) {
+                    switch (BTree.get(sharedActivityShards, Text.compare, shardID)) {
+                        case (?principal) { shardPrincipal.add(principal) };
+                        case null {
+                            /* Skip if shard not found */
+                        };
+                    };
+                };
+                #ok(Buffer.toArray(shardPrincipal));
+            };
+        };
+    };
+
+    // Service limits
+    private func getServiceLimit(principal : Principal) : ServiceLimit {
+        switch (BTree.get(principalServiceLimitMap, Principal.compare, principal)) {
+            case (?serviceLimit) { serviceLimit };
+            case null {
+                let newServiceLimit : ServiceLimit = {
+                    maxShares = MAX_SHARES;
+                    usedShares = 0;
+                    maxUploads = MAX_UPLOADS;
+                    usedUploads = 0;
+                    maxDeletes = MAX_DELETES;
+                    usedDeletes = 0;
+                };
+                ignore BTree.insert(principalServiceLimitMap, Principal.compare, principal, newServiceLimit);
+                newServiceLimit;
+            };
+        };
+    };
+
+    private func updateServiceLimit(
+        principal : Principal,
+        operation : ServiceOperation,
+    ) : async () {
+        let serviceLimit = getServiceLimit(principal);
+
+        let newServiceLimit = switch (operation) {
+            case (#Upload) {
+                { serviceLimit with usedUploads = serviceLimit.usedUploads + 1 };
+            };
+            case (#Share) {
+                { serviceLimit with usedShares = serviceLimit.usedShares + 1 };
+            };
+            case (#Delete) {
+                { serviceLimit with usedDeletes = serviceLimit.usedDeletes + 1 };
+            };
+        };
+
+        ignore BTree.insert(principalServiceLimitMap, Principal.compare, principal, newServiceLimit);
+    };
+
+    // ===============================
+    // Activity Management Functions
+    // ===============================
+
+    // Activity operations
+
+    private func getNextSharedActivityID(userID : Text, recipientID : Text) : Result.Result<Text, Text> {
+        totalSharedActivityCount += 1;
+        let activityID = Nat.toText(totalSharedActivityCount);
+        let updateResult = updateUserSharedActivityShardMap(userID, activityID);
+        let updateResult2 = updateUserSharedActivityShardMap(recipientID, activityID);
+        switch (updateResult, updateResult2) {
+            case (#ok(_), #ok(_)) {
+                #ok(activityID);
+            };
+            case (#err(e), _) {
+                #err("Failed to update user shard map: " # e);
+            };
+            case (_, #err(e)) {
+                #err("Failed to update recipient shard map: " # e);
+            };
+        };
+    };
+
+    // ===============================
+    // Utility Functions
+    // ===============================
+
+    private func getWasmModule(shardType : ShardType) : [Nat8] {
+        switch (shardType) {
+            case (#Asset) { dataAssetShardWasmModule };
+            case (#Storage) { dataStorageShardWasmModule };
+            case (#SharedActivity) { sharedActivityShardWasmModule };
+        };
+    };
+
+    private func getShardTypeString(shardType : ShardType) : Text {
+        switch (shardType) {
+            case (#Asset) { "asset" };
+            case (#Storage) { "storage" };
+            case (#SharedActivity) { "shared-activity" };
         };
     };
 

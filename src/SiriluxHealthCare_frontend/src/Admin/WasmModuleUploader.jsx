@@ -6,11 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useNavigate } from "react-router-dom";
 import useActorStore from "../State/Actors/ActorStore";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function WasmModuleUploader({ shardType }) {
   const { actors, login, logout } = useActorStore();
   const [wasmFile, setWasmFile] = useState(null);
   const [message, setMessage] = useState("");
+  const [moduleType, setModuleType] = useState("Asset");
   const navigate = useNavigate();
   const [shardUpdateStatus, setShardUpdateStatus] = useState({});
   const [isUpdating, setIsUpdating] = useState(false);
@@ -53,7 +61,11 @@ function WasmModuleUploader({ shardType }) {
           result = await actors.facility.updateWasmModule(byteArray);
           break;
         case "dataAsset":
-          result = await actors.dataAsset.updateWasmModule(byteArray);
+          const shardTypeEnum = { [moduleType]: null };
+          result = await actors.dataAsset.updateWasmModule(
+            shardTypeEnum,
+            byteArray
+          );
           break;
         case "marketplace":
           result = await actors.marketplace.updateWasmModule(byteArray);
@@ -68,7 +80,9 @@ function WasmModuleUploader({ shardType }) {
       }
 
       if ("ok" in result) {
-        setMessage(`WASM module for ${shardType} updated successfully.`);
+        setMessage(
+          `WASM module for ${shardType} ${moduleType} updated successfully.`
+        );
       } else {
         setMessage(`Error updating ${shardType} WASM module: ${result.err}`);
       }
@@ -92,7 +106,8 @@ function WasmModuleUploader({ shardType }) {
           result = await actors.user.updateExistingShards();
           break;
         case "dataAsset":
-          result = await actors.dataAsset.updateExistingShards();
+          const shardTypeEnum = { [moduleType]: null };
+          result = await actors.dataAsset.updateExistingShards(shardTypeEnum);
           break;
         case "sharedActivity":
           result = await actors.sharedActivity.updateExistingShards();
@@ -141,6 +156,23 @@ function WasmModuleUploader({ shardType }) {
           className="space-y-6"
         >
           <div className="flex flex-col space-y-4">
+            {shardType === "dataAsset" && (
+              <Select
+                value={moduleType}
+                onValueChange={setModuleType}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select module type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Asset">Asset Module</SelectItem>
+                  <SelectItem value="Storage">Storage Module</SelectItem>
+                  <SelectItem value="SharedActivity">
+                    Shared Activity Module
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             <div
               className="flex items-center justify-center w-full h-32 p-4 border-2 border-gray-300 border-dashed rounded-md cursor-pointer hover:border-gray-400 focus:outline-none"
               onClick={() =>
@@ -150,7 +182,11 @@ function WasmModuleUploader({ shardType }) {
               <span className="flex items-center space-x-2 text-gray-600">
                 <Upload className="w-6 h-6" />
                 <span className="font-medium">
-                  {wasmFile ? wasmFile.name : "Click to upload WASM file"}
+                  {wasmFile
+                    ? wasmFile.name
+                    : shardType === "dataAsset"
+                      ? "Click to upload WASM file (regular or storage)"
+                      : "Click to upload WASM file"}
                 </span>
               </span>
               <input

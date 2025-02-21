@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -6,25 +6,42 @@ import {
   aes_gcm_decrypt,
 } from "../Functions/VETKey/VetKeyFunctions";
 import * as vetkd from "ic-vetkd-utils";
-import { useState } from "react";
+import { toast } from "@/components/ui/use-toast";
+import { Progress } from "@/components/ui/progress";
+import { useToastProgressStore } from "../State/ProgressStore/ToastProgressStore";
 import useActorStore from "../State/Actors/ActorStore";
 
-// Helper to download file from Lighthouse
-const downloadFromLighthouse = async (hash) => {
-  const response = await fetch(
-    `https://gateway.lighthouse.storage/ipfs/${hash}`
-  );
-  console.log(response);
-  if (!response) {
-    throw new Error("Failed to download file from Lighthouse");
-  }
-  const arrayBuffer = await response.arrayBuffer();
-  return new Uint8Array(arrayBuffer);
-};
-
-const DownloadFile = ({ data, uniqueID, format, title }) => {
-  const { actors } = useActorStore();
+const DownloadFile = ({
+  dataAssetShardPrincipal,
+  dataStorageShardPrincipal,
+  uniqueID,
+  format,
+  title,
+  accessLevel,
+}) => {
+  const { createStorageShardActorExternal, createDataAssetShardActorExternal } =
+    useActorStore();
   const [downloading, setDownloading] = useState(false);
+  const setProgress = useToastProgressStore((state) => state.setProgress);
+  const resetProgress = useToastProgressStore((state) => state.resetProgress);
+  const progress = useToastProgressStore((state) => state.progress);
+
+  const initDB = () => {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open("downloadedFiles", 1);
+
+      request.onerror = () => reject(request.error);
+
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains("files")) {
+          db.createObjectStore("files", { keyPath: "id" });
+        }
+      };
+
+      request.onsuccess = () => resolve(request.result);
+    });
+  };
 
   function downloadData(file, uniqueID) {
     const url = URL.createObjectURL(file);
@@ -33,89 +50,75 @@ const DownloadFile = ({ data, uniqueID, format, title }) => {
     link.download = file.name;
     link.click();
 
-    // Read file and store in localStorage as part of an array
+    // Read file and store in IndexedDB
     const reader = new FileReader();
-    reader.onloadend = () => {
-      // Get existing files array or initialize new one
-      const existingFiles = JSON.parse(
-        localStorage.getItem("downloadedFiles") || "[]"
-      );
+    reader.onloadend = async () => {
+      try {
+        const db = await initDB();
+        const transaction = db.transaction(["files"], "readwrite");
+        const store = transaction.objectStore("files");
 
-      // Create new file entry
-      const fileEntry = {
-        id: uniqueID,
-        name: file.name,
-        data: reader.result,
-        timestamp: new Date().toISOString(),
-      };
+        const fileEntry = {
+          id: uniqueID,
+          name: file.name,
+          data: reader.result,
+          timestamp: new Date().toISOString(),
+        };
 
-      // Add new file to array, replace if exists
-      const index = existingFiles.findIndex((f) => f.id === uniqueID);
-      if (index !== -1) {
-        existingFiles[index] = fileEntry;
-      } else {
-        existingFiles.push(fileEntry);
+        store.put(fileEntry);
+
+        transaction.oncomplete = () => {
+          db.close();
+        };
+      } catch (error) {
+        console.error("Error storing file in IndexedDB:", error);
       }
-
-      // Store updated array back in localStorage
-      localStorage.setItem("downloadedFiles", JSON.stringify(existingFiles));
     };
-    reader.readAsDataURL(file);
 
+    reader.readAsDataURL(file);
     URL.revokeObjectURL(url);
   }
 
-  const downloadFile = async () => {
-    try {
-      setDownloading(true);
-      console.log(data);
-      // Step 1: Download encrypted file from Lighthouse using the hash
-      const encryptedData = await downloadFromLighthouse(data);
-      console.log(encryptedData);
+  const downloadFromStorageShard = async (uniqueID, toastId) => {
+    const dataStorageShard = await createStorageShardActorExternal(
+      dataStorageShardPrincipal
+    );
+    if (!dataStorageShard) {
+      throw new Error("Failed to create storage shard actor");
+    }
 
-      // Step 2: Retrieve the encrypted key using encrypted_symmetric_key_for_dataAsset
+    const dataAssetShard = await createDataAssetShardActorExternal(
+      dataAssetShardPrincipal
+    );
+    if (!dataAssetShard) {
+      throw new Error("Failed to create data asset shard actor");
+    }
+
+    try {
+      // Get encryption key and setup first
       const seed = window.crypto.getRandomValues(new Uint8Array(32));
       const tsk = new vetkd.TransportSecretKey(seed);
       const encryptedKeyResult =
-        await actors.dataAsset.getEncryptedSymmetricKeyForAsset(
+        await dataAssetShard.encrypted_symmetric_key_for_asset(
           uniqueID,
           Object.values(tsk.public_key())
         );
 
       let encryptedKey = "";
-
       Object.keys(encryptedKeyResult).forEach((key) => {
-        if (key === "err") {
-          throw new Error(encryptedKeyResult[key]);
-        }
-        if (key === "ok") {
-          encryptedKey = encryptedKeyResult[key];
-        }
+        if (key === "err") throw new Error(encryptedKeyResult[key]);
+        if (key === "ok") encryptedKey = encryptedKeyResult[key];
       });
 
-      if (!encryptedKey) {
+      if (!encryptedKey)
         throw new Error("Failed to retrieve the encrypted key.");
-      }
 
-      const pkBytesHex =
-        await actors.dataAsset.getSymmetricKeyVerificationKey(uniqueID);
+      const symmetricVerificiationKey =
+        await dataAssetShard.getSymmetricKeyVerificationKey();
 
-      let symmetricVerificiationKey = "";
+      if (!symmetricVerificiationKey)
+        throw new Error("Failed to get symmetric key verification key");
 
-      Object.keys(pkBytesHex).forEach((key) => {
-        if (key === "err") {
-          throw new Error(pkBytesHex[key]);
-        }
-        if (key === "ok") {
-          symmetricVerificiationKey = pkBytesHex[key];
-        }
-      });
-
-      if (!symmetricVerificiationKey) {
-        throw new Error("Failed to get encrypted key");
-      }
-
-      // Step 3: Decrypt the key using tsk.decrypt_and_hash
       const aesGCMKey = tsk.decrypt_and_hash(
         hex_decode(encryptedKey),
         hex_decode(symmetricVerificiationKey),
@@ -124,26 +127,186 @@ const DownloadFile = ({ data, uniqueID, format, title }) => {
         new TextEncoder().encode("aes-256-gcm")
       );
 
-      // Step 4: Decrypt the file data using the AES-GCM key
-      const decryptedData = await aes_gcm_decrypt(encryptedData, aesGCMKey);
+      const CHUNK_SIZE = 1.9 * 1000 * 1000; // 1.9MB in bytes
+      const totalSize = await dataStorageShard.getDataSize(uniqueID);
+      const decryptedChunks = [];
+      let downloadedSize = 0;
 
-      // Step 5: Create a Blob and File from the decrypted data
-      const decryptedFileBlob = new Blob([decryptedData], {
-        type: format,
-      });
-      const decryptedFile = new File([decryptedFileBlob], title, {
-        type: format,
-      });
+      for (let offset = 0; offset < totalSize; offset += CHUNK_SIZE) {
+        // Use different methods based on access level
+        const chunkResult =
+          accessLevel === "owned"
+            ? await dataStorageShard.getDataChunk(
+                uniqueID,
+                Number(offset),
+                Number(CHUNK_SIZE)
+              )
+            : await dataStorageShard.getDataChunkForReadPermittedPrincipal(
+                uniqueID,
+                Number(offset),
+                Number(CHUNK_SIZE)
+              );
 
-      // Step 6: Download the decrypted file
-      downloadData(decryptedFile, uniqueID);
-      setDownloading(false);
+        if ("err" in chunkResult) {
+          throw new Error(chunkResult.err);
+        }
+
+        const encryptedChunk = chunkResult.ok;
+        try {
+          const decryptedChunk = await aes_gcm_decrypt(
+            encryptedChunk,
+            aesGCMKey
+          );
+          decryptedChunks.push(decryptedChunk);
+          downloadedSize += encryptedChunk.length;
+
+          const progress = Math.round(
+            (Number(downloadedSize) / Number(totalSize)) * 100
+          );
+          setProgress(progress, "Downloading and Decrypting File...", toastId);
+        } catch (error) {
+          console.error("Decryption error:", error);
+          throw error;
+        }
+      }
+      console.log("decryptedChunks", decryptedChunks);
+      // Combine decrypted chunks
+      const totalLength = decryptedChunks.reduce(
+        (sum, chunk) => sum + chunk.length,
+        0
+      );
+      let combinedData = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const chunk of decryptedChunks) {
+        combinedData.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      return combinedData;
     } catch (error) {
-      console.error("Error downloading file:", error);
-      alert("Failed to download the file. Please try again.");
-      setDownloading(false);
+      console.error("Storage shard error:", error);
+      throw error;
     }
   };
+
+  const checkLocalStorage = async (uniqueID) => {
+    try {
+      const db = await initDB();
+      const transaction = db.transaction(["files"], "readonly");
+      const store = transaction.objectStore("files");
+      const result = await new Promise((resolve, reject) => {
+        const request = store.get(uniqueID);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      db.close();
+      return result;
+    } catch (error) {
+      console.error("Error checking IndexedDB:", error);
+      return null;
+    }
+  };
+
+  const downloadFile = async () => {
+    const toastId = Date.now().toString();
+    try {
+      setDownloading(true);
+      resetProgress();
+
+      // Show initial toast
+      toast({
+        id: toastId,
+        title: "Downloading File",
+        description: (
+          <div className="w-full space-y-2">
+            <Progress
+              value={progress.value}
+              className="w-full"
+            />
+            <p className="text-sm text-gray-500">{progress.message}</p>
+          </div>
+        ),
+        duration: Infinity,
+      });
+
+      // Check if file exists in IndexedDB
+      const localFile = await checkLocalStorage(uniqueID);
+      if (localFile) {
+        setProgress(100, "Loading from local storage", toastId);
+        // Convert base64 to blob
+        const response = await fetch(localFile.data);
+        const blob = await response.blob();
+        const file = new File([blob], localFile.name, { type: format });
+        downloadData(file, uniqueID);
+
+        // Update toast for success
+        toast({
+          id: toastId,
+          title: "Download Complete",
+          description: "File loaded from local storage",
+          duration: 3000,
+        });
+
+        setDownloading(false);
+        return;
+      }
+
+      // If not in local storage
+      setProgress(0, "Starting download and decryption...", toastId);
+
+      // Download and decrypt data
+      const decryptedData = await downloadFromStorageShard(uniqueID, toastId);
+
+      // Create blob and trigger download
+      const decryptedBlob = new Blob([decryptedData], { type: format });
+      const decryptedFile = new File([decryptedBlob], title, {
+        type: format,
+      });
+
+      // Final success toast
+      toast({
+        id: toastId,
+        title: "Download Complete",
+        description: "File downloaded successfully",
+        duration: 3000,
+      });
+
+      downloadData(decryptedFile, uniqueID);
+    } catch (error) {
+      console.error("Error downloading file:", error);
+      // Error toast
+      toast({
+        id: toastId,
+        title: "Download Failed",
+        description: error.message || "Failed to download file",
+        variant: "destructive",
+        duration: 3000,
+      });
+    } finally {
+      setDownloading(false);
+      setTimeout(() => resetProgress(), 3000);
+    }
+  };
+
+  // Add progress effect to update toast
+  useEffect(() => {
+    if (progress.toastId) {
+      toast({
+        id: progress.toastId,
+        title: "Downloading File",
+        description: (
+          <div className="w-full space-y-2">
+            <Progress
+              value={progress.value}
+              className="w-full"
+            />
+            <p className="text-sm text-gray-500">{progress.message}</p>
+          </div>
+        ),
+        duration: Infinity,
+      });
+    }
+  }, [progress]);
 
   return (
     <Button

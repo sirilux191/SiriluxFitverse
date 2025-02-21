@@ -1,6 +1,7 @@
 import Result "mo:base/Result";
 
 import IdentityManager "../IdentityManager/IdentityManager";
+import Types "../Types";
 import CanisterIDs "CanisterIDs";
 
 module CanisterTypes {
@@ -23,8 +24,8 @@ module CanisterTypes {
     };
 
     public type DataService = actor {
-        updateDataStorageUsedMap : (Principal, Int) -> async Result.Result<(), Text>;
-
+        updateDataStorageUsedMap : (Principal, Int) -> async Result.Result<Types.TimeRemaining, Text>;
+        checkDataStorageUsedMap : (Principal, Int) -> async Result.Result<Types.TimeRemaining, Text>;
     };
 
     public let identityManager : IdentityManager.IdentityManager = actor (CanisterIDs.identityManagerCanisterID);

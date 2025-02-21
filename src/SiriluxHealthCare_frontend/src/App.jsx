@@ -8,6 +8,8 @@ import {
 import { useEffect } from "react";
 import { ThemeProvider } from "./components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
+import FullscreenWrapper from "./FullscreenWrapper";
+
 import FirstPageContent from "./onboarding/FirstPage";
 import RegisterPage1Content from "./onboarding/RegisterPage/RegisterPage1";
 import RegisterPage2Content from "./onboarding/RegisterPage/RegisterPage2";
@@ -34,81 +36,83 @@ function App() {
   }, [initAuthClient]);
 
   return (
-    <ThemeProvider>
-      <Toaster />
-      <Router>
-        <Routes>
-          <Route
-            path="/admin"
-            element={<AdminDashboard />}
-          />
-          <Route
-            path="/"
-            element={<Navigate to="/Connect" />}
-          />
+    <FullscreenWrapper>
+      <ThemeProvider>
+        <Toaster />
+        <Router>
+          <Routes>
+            <Route
+              path="/admin"
+              element={<AdminDashboard />}
+            />
+            <Route
+              path="/"
+              element={<Navigate to="/Connect" />}
+            />
 
-          <Route
-            path="/Connect"
-            element={<ConnectPage />}
-          />
+            <Route
+              path="/Connect"
+              element={<ConnectPage />}
+            />
 
-          <Route
-            path="/Register"
-            element={<FirstPageContent />}
-          />
-          <Route path="/Register">
             <Route
-              path="Abha-Id"
-              element={<RegisterPage4Content />}
+              path="/Register"
+              element={<FirstPageContent />}
+            />
+            <Route path="/Register">
+              <Route
+                path="Abha-Id"
+                element={<RegisterPage4Content />}
+              />
+              <Route
+                path="Abha-Id/verify"
+                element={<RegisteredContent1 />}
+              />
+              <Route
+                path="Health-User"
+                element={<RegisterPage1Content />}
+              />
+              <Route
+                path="Health-User/verify"
+                element={<RegisteredContent1 />}
+              />
+              <Route
+                path="Health-Professional"
+                element={<RegisterPage2Content />}
+              />
+              <Route
+                path="Health-Professional/verify"
+                element={<RegisteredContent2 />}
+              />
+              <Route
+                path="Health-Service"
+                element={<RegisterPage3Content />}
+              />
+              <Route
+                path="Health-Service/verify"
+                element={<RegisteredContent3 />}
+              />
+            </Route>
+            <Route
+              path="/Health-User/*"
+              element={<AppRoute1 />}
             />
             <Route
-              path="Abha-Id/verify"
-              element={<RegisteredContent1 />}
+              path="/Health-Professional/*"
+              element={<AppRoute2 />}
             />
             <Route
-              path="Health-User"
-              element={<RegisterPage1Content />}
+              path="/Health-Service/*"
+              element={<AppRoute3 />}
             />
             <Route
-              path="Health-User/verify"
-              element={<RegisteredContent1 />}
+              path="*"
+              element={<NotFoundPage />}
             />
-            <Route
-              path="Health-Professional"
-              element={<RegisterPage2Content />}
-            />
-            <Route
-              path="Health-Professional/verify"
-              element={<RegisteredContent2 />}
-            />
-            <Route
-              path="Health-Service"
-              element={<RegisterPage3Content />}
-            />
-            <Route
-              path="Health-Service/verify"
-              element={<RegisteredContent3 />}
-            />
-          </Route>
-          <Route
-            path="/Health-User/*"
-            element={<AppRoute1 />}
-          />
-          <Route
-            path="/Health-Professional/*"
-            element={<AppRoute2 />}
-          />
-          <Route
-            path="/Health-Service/*"
-            element={<AppRoute3 />}
-          />
-          <Route
-            path="*"
-            element={<NotFoundPage />}
-          />
-        </Routes>
-      </Router>
-    </ThemeProvider>
+          </Routes>
+        </Router>
+      </ThemeProvider>
+    </FullscreenWrapper>
   );
 }
 

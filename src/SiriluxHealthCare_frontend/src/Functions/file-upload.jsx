@@ -1,7 +1,5 @@
-import React, { useState, useContext } from "react";
-import axios from "axios";
-import Papa from "papaparse";
-import jsPDF from "jspdf";
+import React, { useState } from "react";
+
 import "jspdf-autotable";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +13,6 @@ import {
 
 import { toast } from "@/components/ui/use-toast";
 import { CircleX } from "lucide-react";
-import lighthouse from "@lighthouse-web3/sdk";
 
 import LoadingScreen from "../LoadingScreen";
 
@@ -30,8 +27,14 @@ import {
 } from "@/components/ui/select";
 import useActorStore from "../State/Actors/ActorStore";
 
+import { hex_decode } from "./VETKey/VetKeyFunctions";
+
 const FileUpload = () => {
-  const { actors } = useActorStore();
+  const {
+    actors,
+    createStorageShardActorExternal,
+    createDataAssetShardActorExternal,
+  } = useActorStore();
   const [file, setFile] = useState(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [description, setDescription] = useState("");
@@ -82,18 +85,18 @@ const FileUpload = () => {
     const supportedFormats = ["pdf", "csv", "xml", "jpg", "jpeg", "png", "txt"];
     const fileType = file.type.split("/")[1];
     const fileSizeMB = file.size / (1024 * 1024);
-    if (!supportedFormats.includes(fileType)) {
-      setErrorMessage(
-        "Unsupported file format. Please select a file with one of the supported formats: PDF, CSV, XML, JPG, JPEG, PNG."
-      );
-      return false;
-    }
-    if (fileSizeMB > 1.9) {
-      setErrorMessage(
-        "File size is larger than 2 MB. Please select a smaller file."
-      );
-      return false;
-    }
+    // if (!supportedFormats.includes(fileType)) {
+    //   setErrorMessage(
+    //     "Unsupported file format. Please select a file with one of the supported formats: PDF, CSV, XML, JPG, JPEG, PNG."
+    //   );
+    //   return false;
+    // }
+    // if (fileSizeMB > 1.9) {
+    //   setErrorMessage(
+    //     "File size is larger than 2 MB. Please select a smaller file."
+    //   );
+    //   return false;
+    // }
     return true;
   };
 
@@ -124,31 +127,44 @@ const FileUpload = () => {
     }
   };
 
-  const uploadToLighthouse = async (file) => {
-    const progressCallback = (progressData) => {
-      let percentageDone =
-        100 - (progressData?.total / progressData?.uploaded)?.toFixed(2);
-      console.log(`Upload progress: ${percentageDone}%`);
-    };
-
+  const uploadToDataStorageShard = async (
+    encryptedData,
+    uniqueID,
+    storagePrincipal
+  ) => {
     try {
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(file);
-      const fileList = dataTransfer.files;
-      console.log(fileList);
-      const output = await lighthouse.upload(
-        fileList,
-        process.env.LIGHTHOUSEAPI,
-        null,
-        progressCallback
+      // Create storage shard actor using the store method
+      const storageShard = createStorageShardActorExternal(storagePrincipal); //storagePrincipal is the principal of the storage shard canister
+      if (!storageShard) {
+        throw new Error("Failed to create storage shard actor");
+      }
+
+      // Convert encrypted data to chunks of 1.9MB
+      const CHUNK_SIZE = 1.9 * 1024 * 1024; // 1.9MB in bytes
+      const totalChunks = Math.ceil(encryptedData.length / CHUNK_SIZE);
+
+      // Start chunk upload process
+      const startResult = await storageShard.startChunkUpload(
+        uniqueID,
+        totalChunks
       );
-      console.log("File Status:", output);
-      console.log(
-        "Visit at https://gateway.lighthouse.storage/ipfs/" + output.data.Hash
-      );
-      return output.data.Hash;
+      if ("err" in startResult) {
+        throw new Error(startResult.err);
+      }
+
+      // Upload chunks
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, encryptedData.length);
+        const chunk = encryptedData.slice(start, end);
+
+        const uploadResult = await storageShard.uploadChunk(uniqueID, i, chunk);
+        console.log(uploadResult);
+      }
+
+      return true;
     } catch (error) {
-      console.error("Error uploading to Lighthouse:", error);
+      console.error("Error uploading to DataStorageShard:", error);
       throw error;
     }
   };
@@ -158,138 +174,136 @@ const FileUpload = () => {
     setLoading(true);
 
     try {
-      // Validate file before proceeding
       if (!file || !(file.file instanceof File)) {
         throw new Error("No valid file uploaded. Please upload a valid file.");
       }
 
-      // Step 1: Upload/link an empty file to get a unique ID
-      const emptyDataAsset = {
-        assetID: "",
-        title: "Empty File",
-        description: "Placeholder for encryption",
-        data: "[]",
-        metadata: {
-          category: "",
-          tags: [],
-          format: "empty",
-        },
+      // Step 1: Get upload location and unique ID from DataAsset canister
+      const metadata = {
+        category: category,
+        description: description,
+        tags: keywords.split(",").map((k) => k.trim()),
+        format: file.file.type,
       };
 
-      const result = await actors.dataAsset.uploadDataAsset(emptyDataAsset);
+      const dataAsset = {
+        assetID: "",
+        title: file.file.name,
+        dataAssetShardPrincipal: "",
+        dataStorageShardPrincipal: "",
+        metadata: metadata,
+      };
+
+      const result = await actors.dataAsset.uploadDataAsset(dataAsset);
       let uniqueID = "";
+      let assetShardPrincipal = "";
+      let storageShardPrincipal = "";
 
       Object.keys(result).forEach((key) => {
         if (key === "err") {
           throw new Error(result[key]);
         }
         if (key === "ok") {
-          uniqueID = result[key];
+          [uniqueID, assetShardPrincipal, storageShardPrincipal] = result[key];
         }
       });
-      console.log(uniqueID);
-      console.log("This is unique ID: : " + uniqueID);
-      if (!uniqueID) {
-        throw new Error("Failed to get unique ID");
+
+      if (!uniqueID || !assetShardPrincipal || !storageShardPrincipal) {
+        throw new Error("Failed to get required upload information");
       }
 
-      // Step 2: Fetch the encrypted key using encrypted_symmetric_key_for_dataAsset
+      // Step 2: Create dataAssetShard actor and get encryption key
+      const dataAssetShard =
+        await createDataAssetShardActorExternal(assetShardPrincipal);
+      if (!dataAssetShard) {
+        throw new Error("Failed to create data asset shard actor");
+      }
+      console.log(dataAssetShard);
       const seed = window.crypto.getRandomValues(new Uint8Array(32));
       const tsk = new vetkd.TransportSecretKey(seed);
+
+      // Get encrypted key from the asset shard
       const encryptedKeyResult =
-        await actors.dataAsset.getEncryptedSymmetricKeyForAsset(
+        await dataAssetShard.encrypted_symmetric_key_for_asset(
           uniqueID,
           Object.values(tsk.public_key())
         );
 
       let encryptedKey = "";
-
       Object.keys(encryptedKeyResult).forEach((key) => {
-        if (key === "err") {
-          throw new Error(encryptedKeyResult[key]);
-        }
-        if (key === "ok") {
-          encryptedKey = encryptedKeyResult[key];
-        }
+        if (key === "err") throw new Error(encryptedKeyResult[key]);
+        if (key === "ok") encryptedKey = encryptedKeyResult[key];
+        console.log(encryptedKey);
       });
-      console.log("encrypted key " + encryptedKey);
-      if (!encryptedKey) {
-        throw new Error("Failed to get encrypted key");
-      }
 
-      const pkBytesHex =
-        await actors.dataAsset.getSymmetricKeyVerificationKey(uniqueID);
-
-      let symmetricVerificiationKey = "";
-
-      Object.keys(pkBytesHex).forEach((key) => {
-        if (key === "err") {
-          throw new Error(pkBytesHex[key]);
-        }
-        if (key === "ok") {
-          symmetricVerificiationKey = pkBytesHex[key];
-        }
-      });
-      console.log("symmetric verification key " + symmetricVerificiationKey);
-      if (!symmetricVerificiationKey) {
-        throw new Error("Failed to get encrypted key");
-      }
+      // Get verification key from the asset shard
+      const symmetricVerificationKey =
+        await dataAssetShard.getSymmetricKeyVerificationKey();
+      console.log(symmetricVerificationKey);
 
       const aesGCMKey = tsk.decrypt_and_hash(
         hex_decode(encryptedKey),
-        hex_decode(symmetricVerificiationKey),
+        hex_decode(symmetricVerificationKey),
         new TextEncoder().encode(uniqueID),
         32,
         new TextEncoder().encode("aes-256-gcm")
       );
-      console.log(aesGCMKey);
 
-      // Step 3: Encrypt the user's file using the AES-GCM key
+      // Step 3: Split file into chunks and encrypt each chunk
+      const ENCRYPTION_OVERHEAD = 28; // 12 bytes for IV + 16 bytes for auth tag
+      const MAX_CHUNK_SIZE = 1.9 * 1000 * 1000; // 1.9MB max for encrypted chunk
+      const CHUNK_SIZE = MAX_CHUNK_SIZE - ENCRYPTION_OVERHEAD;
       const arrayBuffer = await file.file.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      const encryptedData = await aes_gcm_encrypt(uint8Array, aesGCMKey);
+      const fileData = new Uint8Array(arrayBuffer);
+      const totalChunks = Math.ceil(fileData.length / CHUNK_SIZE);
 
-      // Step 4: Upload encrypted data to Lighthouse
-      const encryptedBlob = new Blob([encryptedData]);
-      const encryptedFile = new File([encryptedBlob], "encrypted.bin", {
-        type: "application/octet-stream",
-      });
-      const lighthouseHash = await uploadToLighthouse(encryptedFile);
-
-      const metadata = {
-        category: category,
-        tags: [keywords],
-        format: file.file.type,
-      };
-
-      const dataAsset = {
-        assetID: uniqueID,
-        title: file.file.name,
-        description: description,
-        data: lighthouseHash,
-        metadata: metadata,
-      };
-
-      // Step 5: Update the data asset with the Lighthouse hash
-      const updateResult = await actors.dataAsset.updateDataAsset(
-        uniqueID,
-        dataAsset
+      // Create storage shard actor using the principal
+      const storageShard = createStorageShardActorExternal(
+        storageShardPrincipal
       );
+      if (!storageShard) {
+        throw new Error("Failed to create storage shard actor");
+      }
 
-      Object.keys(updateResult).forEach((key) => {
-        if (key === "err") {
-          throw new Error(updateResult[key]);
+      // Start chunk upload process
+      const startResult = await storageShard.startChunkUpload(
+        uniqueID,
+        totalChunks
+      );
+      if ("err" in startResult) {
+        throw new Error(startResult.err);
+      }
+
+      // Process and upload each chunk
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, fileData.length);
+        const chunk = fileData.slice(start, end);
+
+        // Encrypt the chunk
+        const encryptedChunk = await aes_gcm_encrypt(chunk, aesGCMKey);
+
+        // Upload the encrypted chunk
+        const uploadResult = await storageShard.uploadChunk(
+          uniqueID,
+          i,
+          encryptedChunk
+        );
+        console.log(uploadResult);
+        if ("err" in uploadResult) {
+          throw new Error(
+            `Failed to upload chunk ${i + 1}: ${uploadResult.err}`
+          );
         }
-        if (key === "ok") {
-          toast({
-            title: "Success",
-            description: updateResult[key],
-            variant: "success",
-          });
-        }
+      }
+
+      toast({
+        title: "Success",
+
+        description: "File uploaded successfully",
       });
     } catch (error) {
-      handleError(error); // Use utility function for error handling
+      handleError(error);
     } finally {
       setLoading(false);
     }
@@ -317,10 +331,6 @@ const FileUpload = () => {
   };
   // const hex_encode = (bytes) =>
   //   bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, "0"), "");
-  const hex_decode = (hexString) =>
-    Uint8Array.from(
-      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
-    );
 
   const handleRemoveFile = () => {
     setFile(null);

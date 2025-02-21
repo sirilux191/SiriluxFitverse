@@ -12,6 +12,7 @@ module Types {
 
     public type Metadata = {
         category : Text;
+        description : Text;
         tags : [Text];
         format : Text; //  e.g., "CSV", "JSON", "image/png"
     };
@@ -53,8 +54,8 @@ module Types {
     public type DataAsset = {
         assetID : Text;
         title : Text;
-        description : Text;
-        data : Text;
+        dataAssetShardPrincipal : Text;
+        dataStorageShardPrincipal : Text;
         metadata : Metadata;
     };
 
@@ -67,9 +68,12 @@ module Types {
     public type sharedActivityInfo = {
         activityID : Text;
         assetID : Text;
+        assetShardPrincipal : Text;
+        activityShardPrincipal : Text;
         usedSharedTo : Text;
-        time : Nat;
-        sharedType : SharedType;
+        usedSharedBy : Text;
+        sharedAt : Time.Time;
+        sharedTill : Time.Time;
     };
 
     public type IdenitySharedInfo = {
@@ -115,4 +119,20 @@ module Types {
 
     public let admin : Text = (env.admin);
 
+    public type QuotaInfo = {
+        maxStorage : Nat; // in bytes
+        usedStorage : Nat;
+        maxAssets : Nat;
+        currentAssets : Nat;
+        lastResetTime : Int;
+    };
+
+    public type ServiceLimit = {
+        maxShares : Nat;
+        usedShares : Nat;
+        maxUploads : Nat;
+        usedUploads : Nat;
+        maxDeletes : Nat;
+        usedDeletes : Nat;
+    };
 };

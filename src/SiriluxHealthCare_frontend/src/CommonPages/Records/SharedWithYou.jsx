@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import {
   FileText,
@@ -27,23 +27,58 @@ export default function SharedWithYou() {
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingAsset, setLoadingAsset] = useState(false);
-  const { actors } = useActorStore();
+  const {
+    actors,
+    createSharedActivityShardActorExternal,
+    createDataAssetShardActorExternal,
+  } = useActorStore();
 
   // Fetch activities on mount
   useEffect(() => {
     const fetchActivities = async () => {
       try {
-        const result = await actors.sharedActivity.getReceivedActivities();
-        if (result.ok) {
-          const processedActivities = result.ok.map((activity) => ({
-            activityID: activity.activityID,
-            assetID: activity.assetID,
-            date: new Date(Number(activity.time) / 1000000).toLocaleString(),
-            sharedTo: activity.usedSharedTo,
-          }));
-          console.log("Processed activities:", processedActivities);
-          setActivities(processedActivities);
+        let userIDResult = await actors.identityManager.getIdentityBySelf();
+        if (!userIDResult.ok) {
+          throw new Error("Failed to get user ID");
         }
+        const userID = userIDResult.ok[0];
+        // Get shared activity shard principals for this user
+        const shardPrincipalsResult =
+          await actors.dataAsset.getUserSharedActivityShardsPrincipal(userID);
+        if (!shardPrincipalsResult.ok) {
+          throw new Error("Failed to get shard principals");
+        }
+
+        // Create actors for each shard and fetch activities
+        const allActivities = [];
+        for (const shardPrincipal of shardPrincipalsResult.ok) {
+          const shardActor = await createSharedActivityShardActorExternal(
+            shardPrincipal.toText()
+          );
+
+          const shardActivitiesResult =
+            await shardActor.getUserReceivedActivities();
+
+          if (shardActivitiesResult.ok) {
+            allActivities.push(...shardActivitiesResult.ok);
+          }
+        }
+
+        // Process and set activities
+        const processedActivities = allActivities.map((activity) => ({
+          activityID: activity.activityID,
+          assetID: activity.assetID,
+          date: new Date(Number(activity.sharedAt) / 1000000).toLocaleString(),
+          sharedTill: new Date(
+            Number(activity.sharedTill) / 1000000
+          ).toLocaleString(),
+          sharedBy: activity.usedSharedBy,
+          sharedTo: activity.usedSharedTo,
+          assetShardPrincipal: activity.assetShardPrincipal,
+          activityShardPrincipal: activity.activityShardPrincipal,
+        }));
+        console.log(processedActivities);
+        setActivities(processedActivities);
       } catch (error) {
         console.error("Error fetching activities:", error);
       } finally {
@@ -57,21 +92,37 @@ export default function SharedWithYou() {
   const handleShowDetails = async (activity) => {
     setSelectedActivity(activity);
     setLoadingAsset(true);
+    setSelectedAsset(null); // Reset selected asset
 
     try {
-      const assetResult = await actors.dataAsset.getDataAsset(activity.assetID);
+      const assetShardActor = await createDataAssetShardActorExternal(
+        activity.assetShardPrincipal
+      );
+      const assetResult = await assetShardActor.getDataAsset(activity.assetID);
+      console.log(assetResult);
       if (assetResult.ok) {
         setSelectedAsset({
+          assetID: activity.assetID,
           title: assetResult.ok.title,
-          description: assetResult.ok.description || "No description available",
-          format: assetResult.ok.metadata.format,
-          category: assetResult.ok.metadata.category,
-          data: assetResult.ok.data,
+          description:
+            assetResult.ok.metadata.description || "No description available",
           metadata: assetResult.ok.metadata,
+          dataAssetShardPrincipal: assetResult.ok.dataAssetShardPrincipal,
+          dataStorageShardPrincipal: assetResult.ok.dataStorageShardPrincipal,
+          error: null,
+        });
+      } else {
+        setSelectedAsset({
+          assetID: activity.assetID,
+          error: assetResult.err,
         });
       }
     } catch (error) {
       console.error("Error fetching asset:", error);
+      setSelectedAsset({
+        assetID: activity.assetID,
+        error: "Failed to fetch asset details",
+      });
     } finally {
       setLoadingAsset(false);
     }
@@ -165,13 +216,22 @@ export default function SharedWithYou() {
 
                     <div className="flex flex-col flex-grow">
                       <h3 className="text-gray-100 font-medium mb-3 text-center">
-                        Asset ID: {activity.assetID}
+                        Activity ID: {activity.activityID}
                       </h3>
 
                       <div className="mt-auto space-y-4">
-                        <div className="flex justify-center gap-2">
+                        <div className="flex flex-col items-center gap-2">
                           <span className="bg-gray-800 text-gray-300 px-3 py-1 rounded-full text-sm">
-                            {activity.date}
+                            Shared: {activity.date}
+                          </span>
+                          <span
+                            className={`bg-gray-800 px-3 py-1 rounded-full text-sm ${
+                              new Date(activity.sharedTill) < new Date()
+                                ? "text-red-400"
+                                : "text-orange-400"
+                            }`}
+                          >
+                            Access Till: {activity.sharedTill}
                           </span>
                         </div>
 
@@ -198,6 +258,17 @@ export default function SharedWithYou() {
                   <div className="text-center py-8">
                     Loading asset details...
                   </div>
+                ) : selectedAsset?.error ? (
+                  <div className="space-y-6">
+                    <DialogHeader>
+                      <DialogTitle className="text-xl font-semibold">
+                        Error Loading Asset
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="p-4 bg-red-900/30 border border-red-800 rounded-lg">
+                      <p className="text-red-400">{selectedAsset.error}</p>
+                    </div>
+                  </div>
                 ) : (
                   selectedAsset && (
                     <div className="space-y-6">
@@ -208,7 +279,7 @@ export default function SharedWithYou() {
                       </DialogHeader>
 
                       <div className="flex justify-center">
-                        {getIconByCategory(selectedAsset.category)}
+                        {getIconByCategory(selectedAsset.metadata.category)}
                       </div>
 
                       <div className="space-y-4">
@@ -221,18 +292,34 @@ export default function SharedWithYou() {
 
                         <div className="flex flex-wrap gap-2">
                           <span className="bg-gray-800 text-gray-300 px-3 py-1 rounded-full text-xs">
-                            Format: {selectedAsset.format}
+                            Format: {selectedAsset.metadata.format}
                           </span>
                           <span className="bg-gray-800 text-purple-400 px-3 py-1 rounded-full text-xs">
-                            Category: {selectedAsset.category}
+                            Category: {selectedAsset.metadata.category}
+                          </span>
+                          <span
+                            className={`bg-gray-800 px-3 py-1 rounded-full text-xs ${
+                              new Date(selectedActivity?.sharedTill) <
+                              new Date()
+                                ? "text-red-400"
+                                : "text-orange-400"
+                            }`}
+                          >
+                            Access Till: {selectedActivity?.sharedTill}
                           </span>
                         </div>
 
                         <DownloadFile
-                          data={selectedAsset.data}
-                          uniqueID={selectedActivity?.assetID}
+                          dataAssetShardPrincipal={
+                            selectedAsset?.dataAssetShardPrincipal
+                          }
+                          dataStorageShardPrincipal={
+                            selectedAsset?.dataStorageShardPrincipal
+                          }
+                          uniqueID={selectedAsset?.assetID}
                           title={selectedAsset.title}
-                          format={selectedAsset.format}
+                          format={selectedAsset.metadata.format}
+                          accessLevel={"shared"}
                           className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
                         />
                       </div>
