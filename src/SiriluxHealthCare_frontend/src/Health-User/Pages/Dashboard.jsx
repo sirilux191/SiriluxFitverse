@@ -11,7 +11,7 @@ import { Principal } from "@dfinity/principal";
 // Add a new AddTokens component
 const AddTokens = ({ onClose }) => {
   const [amount, setAmount] = useState("");
-  const { actors } = useActorStore();
+  const { dataAsset } = useActorStore();
   const approveSpender = useWalletStore((state) => state.approveSpender);
 
   const handleAddTokens = async () => {
@@ -30,13 +30,14 @@ const AddTokens = ({ onClose }) => {
       const dataAssetPrincipal = Principal.fromText(
         process.env.CANISTER_ID_DATAASSET
       );
-      await approveSpender(actors, {
+      await approveSpender({
         spender: { owner: dataAssetPrincipal, subaccount: [] },
         amount: numAmount,
+        memo: "Adding tokens to balance",
       });
 
       // Then proceed with adding tokens
-      const result = await actors.dataAsset.addTokensToBalance(numAmount);
+      const result = await dataAsset.addTokensToBalance(numAmount);
       console.log(result);
       if (result.ok) {
         toast({

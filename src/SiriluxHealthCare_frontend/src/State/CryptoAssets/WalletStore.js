@@ -1,24 +1,27 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Principal } from "@dfinity/principal";
+import useActorStore from "../Actors/ActorStore";
+
 const useWalletStore = create(
   persist(
     (set) => ({
       balance: 0,
       transactions: [],
-
       loading: false,
       error: null,
 
-      fetchBalance: async (actors) => {
+      fetchBalance: async () => {
         set({ loading: true, error: null });
         try {
+          const { identityManager, token } = useActorStore.getState();
+
           const account = {
-            owner: Principal.fromText(await actors.gamificationSystem.whoami()),
+            owner: await identityManager.whoami(),
             subaccount: [],
           };
 
-          const balance = await actors.token.icrc1_balance_of(account);
+          const balance = await token.icrc1_balance_of(account);
 
           set({ balance: Number(balance) / 1e8, loading: false });
         } catch (error) {
@@ -27,10 +30,12 @@ const useWalletStore = create(
         }
       },
 
-      sendTokens: async (actors, transferArgs) => {
+      sendTokens: async (transferArgs) => {
         set({ loading: true, error: null });
         try {
-          const result = await actors.token.icrc1_transfer({
+          const { token } = useActorStore.getState();
+
+          const result = await token.icrc1_transfer({
             to: transferArgs.to,
             amount: BigInt(transferArgs.amount * 1e8),
             fee: transferArgs.fee ? [BigInt(transferArgs.fee * 1e8)] : [],
@@ -69,10 +74,12 @@ const useWalletStore = create(
         }
       },
 
-      approveSpender: async (actors, approveArgs) => {
+      approveSpender: async (approveArgs) => {
         set({ loading: true, error: null });
         try {
-          const result = await actors.token.icrc2_approve({
+          const { token } = useActorStore.getState();
+
+          const result = await token.icrc2_approve({
             spender: approveArgs.spender,
             amount: BigInt(approveArgs.amount * 1e8),
             expected_allowance: approveArgs.expected_allowance
@@ -101,16 +108,18 @@ const useWalletStore = create(
         }
       },
 
-      fetchTransactions: async (actors) => {
+      fetchTransactions: async () => {
         set({ loading: true, error: null });
         try {
-          const principal = await actors.gamificationSystem.whoami();
+          const { identityManager, icrcIndex } = useActorStore.getState();
+
+          const principal = await identityManager.whoami();
           const account = {
-            owner: Principal.fromText(principal),
+            owner: principal,
             subaccount: [],
           };
 
-          const response = await actors.icrcIndex.get_account_transactions({
+          const response = await icrcIndex.get_account_transactions({
             account,
             max_results: 25n,
             start: [],
@@ -173,7 +182,8 @@ const useWalletStore = create(
 
               const transferData = transaction.transfer[0];
 
-              const isSender = transferData.from.owner.toText() === principal;
+              const isSender =
+                transferData.from.owner.toText() === principal.toText();
               return {
                 ...commonData,
                 type: isSender ? "Sent" : "Received",

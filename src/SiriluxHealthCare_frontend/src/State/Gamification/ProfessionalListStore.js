@@ -1,19 +1,23 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { toast } from "@/components/ui/use-toast";
+import useActorStore from "../Actors/ActorStore";
+import useWalletStore from "../CryptoAssets/WalletStore";
+import { Principal } from "@dfinity/principal";
 
 const useProfessionalListStore = create(
   persist(
-    (set) => ({
+    (set, get) => ({
       professionals: [],
       availableSlots: [],
       isLoading: false,
       error: null,
-
-      fetchProfessionals: async (actors) => {
+      fetchProfessionals: async () => {
         try {
+          const { gamificationSystem } = useActorStore.getState();
+
           set({ isLoading: true, error: null });
-          const result = await actors.gamificationSystem.getAllProfessionals();
+          const result = await gamificationSystem.getAllProfessionals();
           set({ professionals: result, isLoading: false });
         } catch (error) {
           console.error("Error fetching professionals:", error);
@@ -44,9 +48,7 @@ const useProfessionalListStore = create(
       groupSlotsByDate: (slots) => {
         const grouped = {};
         slots.forEach((slot) => {
-          const { date } = useProfessionalListStore
-            .getState()
-            .formatDateTime(slot.start);
+          const { date } = get().formatDateTime(slot.start);
           if (!grouped[date]) {
             grouped[date] = [];
           }
@@ -61,10 +63,11 @@ const useProfessionalListStore = create(
         return grouped;
       },
 
-      fetchAvailableSlots: async (actors, idToVisit) => {
+      fetchAvailableSlots: async (idToVisit) => {
         try {
-          const result =
-            await actors.gamificationSystem.getAvailableSlots(idToVisit);
+          const { gamificationSystem } = useActorStore.getState();
+
+          const result = await gamificationSystem.getAvailableSlots(idToVisit);
           console.log("result", result);
           if (Array.isArray(result)) {
             console.log("Available Slots for ID:", idToVisit);
@@ -78,6 +81,7 @@ const useProfessionalListStore = create(
                 capacity: Number(slot.capacity),
                 start: Number(slot.start),
                 entityId: slot.entityId,
+                price: Number(slot.price),
               }));
 
             // Sort slots by start time
@@ -103,13 +107,32 @@ const useProfessionalListStore = create(
       },
 
       initiateVisit: async (
-        actors,
         idToVisit,
         slotTime,
-        selectedAvatarForVisit
+        selectedAvatarForVisit,
+        slotPrice
       ) => {
         try {
-          const result = await actors.gamificationSystem.initiateVisit(
+          const { gamificationSystem } = useActorStore.getState();
+
+          // Approve token spending for the slot price
+          const walletStore = useWalletStore.getState();
+          try {
+            await walletStore.approveSpender({
+              spender: {
+                owner: Principal.fromText(
+                  process.env.CANISTER_ID_GAMIFICATIONSYSTEM
+                ),
+                subaccount: [],
+              },
+              amount: slotPrice,
+              memo: `Visit: ${idToVisit}`,
+            });
+          } catch (approvalError) {
+            throw new Error(`Token approval failed: ${approvalError.message}`);
+          }
+
+          const result = await gamificationSystem.initiateVisit(
             idToVisit,
             slotTime,
             { Online: null },
@@ -122,9 +145,7 @@ const useProfessionalListStore = create(
               description: "Your visit has been successfully booked.",
               duration: 3000,
             });
-            await useProfessionalListStore
-              .getState()
-              .fetchAvailableSlots(actors, idToVisit);
+            await get().fetchAvailableSlots(idToVisit);
           } else {
             throw new Error(result.err);
           }

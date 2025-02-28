@@ -1,6 +1,12 @@
 import React from "react";
-import { useState, useContext } from "react";
-import { Upload, RefreshCw, AlertCircle } from "lucide-react";
+import { useState, useContext, useEffect } from "react";
+import {
+  Upload,
+  RefreshCw,
+  AlertCircle,
+  UserPlus,
+  UserMinus,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -13,15 +19,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 function WasmModuleUploader({ shardType }) {
-  const { actors, login, logout } = useActorStore();
+  const {
+    user,
+    professional,
+    facility,
+    dataAsset,
+
+    login,
+    logout,
+  } = useActorStore();
   const [wasmFile, setWasmFile] = useState(null);
   const [message, setMessage] = useState("");
   const [moduleType, setModuleType] = useState("Asset");
   const navigate = useNavigate();
   const [shardUpdateStatus, setShardUpdateStatus] = useState({});
   const [isUpdating, setIsUpdating] = useState(false);
+  const [principalToAdd, setPrincipalToAdd] = useState("");
+  const [principalToRemove, setPrincipalToRemove] = useState("");
+  const [principalActionStatus, setPrincipalActionStatus] = useState({});
+  const [isPrincipalActionInProgress, setIsPrincipalActionInProgress] =
+    useState(false);
 
   const readFile = (file) => {
     return new Promise((resolve, reject) => {
@@ -52,27 +73,21 @@ function WasmModuleUploader({ shardType }) {
       let result;
       switch (shardType) {
         case "user":
-          result = await actors.user.updateWasmModule(byteArray);
+          result = await user.updateUserShardWasmModule(byteArray);
           break;
         case "professional":
-          result = await actors.professional.updateWasmModule(byteArray);
+          result =
+            await professional.updateProfessionalShardWasmModule(byteArray);
           break;
         case "facility":
-          result = await actors.facility.updateWasmModule(byteArray);
+          result = await facility.updateFacilityShardWasmModule(byteArray);
           break;
         case "dataAsset":
           const shardTypeEnum = { [moduleType]: null };
-          result = await actors.dataAsset.updateWasmModule(
+          result = await dataAsset.updateDataAssetWasmModule(
             shardTypeEnum,
             byteArray
           );
-          break;
-        case "marketplace":
-          result = await actors.marketplace.updateWasmModule(byteArray);
-          break;
-        case "sharedActivity":
-          console.log(actors.sharedActivity);
-          result = await actors.sharedActivity.updateWasmModule(byteArray);
           break;
         default:
           setMessage("Unknown shard type");
@@ -97,23 +112,21 @@ function WasmModuleUploader({ shardType }) {
       let result;
       switch (service) {
         case "facility":
-          result = await actors.facility.updateExistingShards();
+          result = await facility.updateExistingShards();
           break;
         case "professional":
-          result = await actors.professional.updateExistingShards();
+          result = await professional.updateExistingShards();
           break;
         case "user":
-          result = await actors.user.updateExistingShards();
+          result = await user.updateExistingShards();
           break;
         case "dataAsset":
           const shardTypeEnum = { [moduleType]: null };
-          result = await actors.dataAsset.updateExistingShards(shardTypeEnum);
-          break;
-        case "sharedActivity":
-          result = await actors.sharedActivity.updateExistingShards();
+          result = await dataAsset.updateExistingShards(shardTypeEnum);
           break;
         default:
       }
+      console.log(result);
 
       if (result.err) {
         setShardUpdateStatus({ status: "error", message: result.err });
@@ -127,6 +140,111 @@ function WasmModuleUploader({ shardType }) {
       setShardUpdateStatus({ status: "error", message: error.message });
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const handleAddPermittedPrincipal = async () => {
+    if (!principalToAdd) {
+      setPrincipalActionStatus({
+        status: "error",
+        message: "Please enter a principal ID to add",
+      });
+      return;
+    }
+
+    setIsPrincipalActionInProgress(true);
+    setPrincipalActionStatus({});
+
+    try {
+      let result;
+      if (shardType === "user") {
+        result = await user.addPermittedPrincipalToAllShards(principalToAdd);
+      } else if (shardType === "dataAsset") {
+        result =
+          await dataAsset.addPermittedPrincipalToAllShards(principalToAdd);
+      } else if (shardType === "professional") {
+        result =
+          await professional.addPermittedPrincipalToAllShards(principalToAdd);
+      } else if (shardType === "facility") {
+        result =
+          await facility.addPermittedPrincipalToAllShards(principalToAdd);
+      }
+      console.log(result);
+      if (result.ok) {
+        setPrincipalActionStatus({
+          status: "success",
+          message: result.ok,
+        });
+        setPrincipalToAdd("");
+      } else {
+        setPrincipalActionStatus({
+          status: "error",
+          message: result.err,
+        });
+      }
+    } catch (error) {
+      setPrincipalActionStatus({
+        status: "error",
+        message: `Error adding principal: ${error.message}`,
+      });
+    } finally {
+      setIsPrincipalActionInProgress(false);
+    }
+  };
+
+  const handleRemovePermittedPrincipal = async () => {
+    if (!principalToRemove) {
+      setPrincipalActionStatus({
+        status: "error",
+        message: "Please enter a principal ID to remove",
+      });
+      return;
+    }
+
+    setIsPrincipalActionInProgress(true);
+    setPrincipalActionStatus({});
+
+    try {
+      let result;
+      if (shardType === "user") {
+        result =
+          await user.removePermittedPrincipalFromAllShards(principalToRemove);
+      } else if (shardType === "dataAsset") {
+        result =
+          await dataAsset.removePermittedPrincipalFromAllShards(
+            principalToRemove
+          );
+      } else if (shardType === "professional") {
+        result =
+          await professional.removePermittedPrincipalFromAllShards(
+            principalToRemove
+          );
+      } else if (shardType === "facility") {
+        result =
+          await facility.removePermittedPrincipalFromAllShards(
+            principalToRemove
+          );
+      }
+
+      if (result.ok) {
+        setPrincipalActionStatus({
+          status: "success",
+          message: result.ok,
+        });
+        setPrincipalToRemove("");
+      } else {
+        setPrincipalActionStatus({
+          status: "error",
+          message: result.err,
+        });
+      }
+    } catch (error) {
+      setPrincipalActionStatus({
+        status: "error",
+        message: `Error removing principal: ${error.message}`,
+      });
+    } finally {
+      setIsPrincipalActionInProgress(false);
     }
   };
 
@@ -217,27 +335,18 @@ function WasmModuleUploader({ shardType }) {
         <div className="mt-8">
           <h3 className="text-lg font-semibold mb-4">Update Existing Shards</h3>
 
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              "facility",
-              "professional",
-              "user",
-              "dataAsset",
-              "sharedActivity",
-            ].map((service) => (
-              <button
-                key={service}
-                onClick={() => handleUpdateShards(service)}
-                disabled={isUpdating}
-                className={`p-3 rounded-md ${
-                  isUpdating ? "bg-gray-300" : "bg-blue-600 hover:bg-blue-700"
-                } text-white transition-colors`}
-              >
-                {isUpdating
-                  ? "Updating..."
-                  : `Update ${service.replace(/([A-Z])/g, " $1")} Shards`}
-              </button>
-            ))}
+          <div className="grid grid-cols-1 gap-4">
+            <button
+              onClick={() => handleUpdateShards(shardType)}
+              disabled={isUpdating}
+              className={`p-3 rounded-md ${
+                isUpdating ? "bg-gray-300" : "bg-blue-600 hover:bg-blue-700"
+              } text-white transition-colors`}
+            >
+              {isUpdating
+                ? "Updating..."
+                : `Update ${shardType.charAt(0).toUpperCase() + shardType.slice(1)} Shards`}
+            </button>
           </div>
 
           {shardUpdateStatus.message && (
@@ -252,6 +361,104 @@ function WasmModuleUploader({ shardType }) {
             </div>
           )}
         </div>
+
+        {["user", "dataAsset", "professional", "facility"].includes(
+          shardType
+        ) && (
+          <div className="mt-8 border-t pt-6">
+            <h3 className="text-lg font-medium mb-2">
+              Manage Permitted Principals
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Add or remove principals that are permitted to access all{" "}
+              {shardType} shards.
+            </p>
+
+            <div className="mb-4">
+              <Label
+                htmlFor="add-principal"
+                className="mb-2 block"
+              >
+                Add Principal
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="add-principal"
+                  placeholder="Enter principal ID to add"
+                  value={principalToAdd}
+                  onChange={(e) => setPrincipalToAdd(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleAddPermittedPrincipal}
+                  disabled={isPrincipalActionInProgress || !principalToAdd}
+                  variant="outline"
+                >
+                  {isPrincipalActionInProgress ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <UserPlus className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <Label
+                htmlFor="remove-principal"
+                className="mb-2 block"
+              >
+                Remove Principal
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="remove-principal"
+                  placeholder="Enter principal ID to remove"
+                  value={principalToRemove}
+                  onChange={(e) => setPrincipalToRemove(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleRemovePermittedPrincipal}
+                  disabled={isPrincipalActionInProgress || !principalToRemove}
+                  variant="outline"
+                  className="text-red-500 border-red-200 hover:bg-red-50"
+                >
+                  {isPrincipalActionInProgress ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <UserMinus className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {principalActionStatus.message && (
+              <Alert
+                variant={
+                  principalActionStatus.status === "error"
+                    ? "destructive"
+                    : "default"
+                }
+                className={
+                  principalActionStatus.status === "success"
+                    ? "bg-green-50 text-green-700 border-green-200"
+                    : ""
+                }
+              >
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>
+                  {principalActionStatus.status === "error"
+                    ? "Error"
+                    : "Success"}
+                </AlertTitle>
+                <AlertDescription>
+                  {principalActionStatus.message}
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

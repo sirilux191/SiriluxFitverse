@@ -35,6 +35,7 @@
     "@radix-ui/react-toast": "^1.2.5",
     "@radix-ui/react-tooltip": "^1.1.7",
     "@tanstack/react-table": "^8.15.3",
+    "@vapi-ai/web": "^2.2.2",
     "aadhaar-validator": "^1.1.0",
     "axios": "^1.7.7",
     "class-variance-authority": "^0.7.1",

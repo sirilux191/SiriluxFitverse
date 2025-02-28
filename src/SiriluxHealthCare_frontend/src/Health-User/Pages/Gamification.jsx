@@ -28,21 +28,21 @@ import ProfessionalList from "./GamificationComponents/ProfessionalList";
 import GamificationNavigationMenu from "./GamificationComponents/GamificationNavigation";
 
 const Gamification = () => {
-  const { actors } = useActorStore();
+  const { gamificationSystem } = useActorStore();
 
   const [facilities, setFacilities] = useState([]);
 
   const [activeTab, setActiveTab] = useState("professionals");
 
   useEffect(() => {
-    if (actors) {
+    if (gamificationSystem) {
       fetchFacilities();
     }
-  }, [actors]);
+  }, [gamificationSystem]);
 
   const fetchFacilities = async () => {
     try {
-      const result = await actors.gamificationSystem.getAllFacilities();
+      const result = await gamificationSystem.getAllFacilities();
       setFacilities(result); // Ensure result is in the expected format
     } catch (error) {
       console.error("Error fetching facilities:", error);

@@ -29,11 +29,9 @@ import {
   Star,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import useActorStore from "@/State/Actors/ActorStore";
 import useNFTStore from "@/State/CryptoAssets/NFTStore";
 
 const NFTCard = ({ nft, onVisit, isPending, showManage = false, onManage }) => {
-  const { actors } = useActorStore();
   const { transferNFT } = useNFTStore();
   const { toast } = useToast();
   const QUALITY_TIERS = {
@@ -152,7 +150,7 @@ const NFTCard = ({ nft, onVisit, isPending, showManage = false, onManage }) => {
 
     setIsTransferring(true);
     try {
-      const result = await transferNFT(actors, nft.id, principalAddress);
+      const result = await transferNFT(nft.id, principalAddress);
       if (result.success) {
         setIsTransferOpen(false);
         setPrincipalAddress("");

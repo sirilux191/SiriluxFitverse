@@ -36,7 +36,7 @@ import LoadingScreen from "../LoadingScreen";
 import useActorStore from "../State/Actors/ActorStore";
 
 function ProfessionalApproval() {
-  const { actors } = useActorStore();
+  const { professional } = useActorStore();
   const [professionals, setProfessionals] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -46,7 +46,7 @@ function ProfessionalApproval() {
 
   const fetchPendingRequests = async () => {
     try {
-      const result = await actors.professional.getPendingProfessionalRequests();
+      const result = await professional.getPendingProfessionalRequests();
       if (result.ok) {
         const formattedRequests = result.ok.map(([principal, data]) => ({
           id: principal,
@@ -78,9 +78,9 @@ function ProfessionalApproval() {
     try {
       let result;
       if (action === "approve") {
-        result = await actors.professional.approveProfessionalRequest(id);
+        result = await professional.approveProfessionalRequest(id);
       } else {
-        result = await actors.professional.rejectProfessionalRequest(id);
+        result = await professional.rejectProfessionalRequest(id);
       }
 
       if (result.ok) {

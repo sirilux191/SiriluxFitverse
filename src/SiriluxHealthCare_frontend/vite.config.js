@@ -77,10 +77,10 @@ export default defineConfig({
         ? `http://${process.env.CANISTER_ID_INTERNET_IDENTITY}.localhost:4943/`
         : "https://identity.ic0.app/"
     ),
-    "process.env.LIGHTHOUSEAPI": JSON.stringify(process.env.LIGHTHOUSEAPI),
     "process.env.OPENAI_API_KEY": JSON.stringify(process.env.OPENAI_API_KEY),
-    "process.env.OPENAI_ASSISTANT_ID": JSON.stringify(
-      process.env.OPENAI_ASSISTANT_ID
+    "process.env.VAPI_BOT_KEY": JSON.stringify(process.env.VAPI_BOT_KEY),
+    "process.env.CLOUD_FUNCTION_URL": JSON.stringify(
+      process.env.CLOUD_FUNCTION_URL
     ),
   },
   resolve: {

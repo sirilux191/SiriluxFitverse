@@ -1,61 +1,29 @@
-import React, { useState, useContext } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import React, { useState } from "react";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Building2, Database, Coins, UserPlus } from "lucide-react";
+import { Users, Building2, Database, Coins, Shield } from "lucide-react";
 import ProfessionalApproval from "./ProfessionalApproval";
 import FacilityApproval from "./FacilityApproval";
 import ShardManagement from "./ShardManagement";
 import NFTManagement from "./NFTManagement";
-import ActorContext from "../ActorContext";
-import { toast } from "@/components/ui/use-toast";
+import AdminRegistration from "./AdminRegistration";
+
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("professionals");
-  const { actors } = useContext(ActorContext);
 
   const tabs = [
     { id: "professionals", label: "Professional Approval", icon: <Users /> },
     { id: "facilities", label: "Facility Approval", icon: <Building2 /> },
     { id: "shards", label: "Shard Management", icon: <Database /> },
     { id: "nfts", label: "NFT Management", icon: <Coins /> },
+    { id: "admin", label: "Admin Registration", icon: <Shield /> },
   ];
-
-  const adminRegister = async () => {
-    try {
-      // Replace this with the actual method to register an admin
-      const result = await actors.identityManager.registerAdmin();
-      if (result.ok) {
-        toast({
-          title: "Admin Registered Successfully",
-          description: result.ok,
-        });
-      } else {
-        toast({
-          title: "Error Registering Admin",
-          description: result.err,
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error Registering Admin",
-        description: error,
-      });
-      // You might want to show an error message to the user here
-    }
-  };
 
   return (
     <div className="flex h-screen bg-background">
       <aside className="w-64 bg-card text-card-foreground p-4">
         <h1 className="text-2xl font-bold mb-6">Admin Dashboard</h1>
-        <Button
-          onClick={adminRegister}
-          className="w-full justify-start mb-4"
-          variant="outline"
-        >
-          <UserPlus className="mr-2 h-4 w-4" />
-          Register Admin
-        </Button>
         <nav>
           {tabs.map((tab) => (
             <Button
@@ -93,6 +61,9 @@ const AdminDashboard = () => {
               </TabsContent>
               <TabsContent value="nfts">
                 <NFTManagement />
+              </TabsContent>
+              <TabsContent value="admin">
+                <AdminRegistration />
               </TabsContent>
             </Tabs>
           </CardContent>

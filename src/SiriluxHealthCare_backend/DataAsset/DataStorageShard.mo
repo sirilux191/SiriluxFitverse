@@ -10,8 +10,8 @@ import Text "mo:base/Text";
 import Time "mo:base/Time";
 import BTree "mo:stableheapbtreemap/BTree";
 
+import SubscriptionManager "../Subscription/SubscriptionManager";
 import CanisterIDs "../Types/CanisterIDs";
-import CanisterTypes "../Types/CanisterTypes";
 
 actor class DataStorageShard() {
     // Type for storing chunks temporarily
@@ -19,7 +19,9 @@ actor class DataStorageShard() {
         chunks : Buffer.Buffer<Blob>;
         totalChunks : Nat;
     };
-    private let dataStorageService = CanisterTypes.dataStorageService;
+
+    private let subscriptionManager : SubscriptionManager.SubscriptionManager = actor (CanisterIDs.subscriptionManagerCanisterID);
+
     private stable var dataStoreAccess : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
     private stable var dataReadPermittedPrincipals : BTree.BTree<Text, BTree.BTree<Principal, Time.Time>> = BTree.init<Text, BTree.BTree<Principal, Time.Time>>(null);
     // Main storage map for completed data
@@ -67,7 +69,7 @@ actor class DataStorageShard() {
                 let existingDataSize : Int = existingData.size();
                 // let newDataSize : Int = data.size();
                 let totalSize : Int = existingDataSize - dataSize;
-                switch (await dataStorageService.updateDataStorageUsedMap(caller, totalSize)) {
+                switch (await subscriptionManager.updateDataStorageUsedMap(caller, totalSize)) {
                     case (#ok(_timeRemaining)) {
                         ignore BTree.insert(dataStore, Text.compare, id, data);
                         return #ok("Data inserted");
@@ -82,7 +84,7 @@ actor class DataStorageShard() {
             };
         };
 
-        switch (await dataStorageService.updateDataStorageUsedMap(caller, dataSize)) {
+        switch (await subscriptionManager.updateDataStorageUsedMap(caller, dataSize)) {
             case (#ok(_)) {
                 ignore BTree.insert(dataStore, Text.compare, id, data);
                 return #ok("Data inserted");
@@ -112,7 +114,7 @@ actor class DataStorageShard() {
                 let newDataSize : Int = totalChunks * 2_000_000;
                 let totalSize : Int = newDataSize - existingDataSize;
                 // Check Only Don't Update
-                switch (await dataStorageService.checkDataStorageUsedMap(caller, totalSize)) {
+                switch (await subscriptionManager.checkDataStorageUsedMap(caller, totalSize)) {
                     case (#ok(_)) {
 
                     };
@@ -181,7 +183,7 @@ actor class DataStorageShard() {
 
                             let totalSize : Int = completeData.size() - existingDataSize;
                             Debug.print("Total Size: " # Nat.toText(Int.abs(totalSize)));
-                            switch (await dataStorageService.updateDataStorageUsedMap(caller, totalSize)) {
+                            switch (await subscriptionManager.updateDataStorageUsedMap(caller, totalSize)) {
                                 case (#ok(_)) {
                                     ignore BTree.insert(dataStore, Text.compare, id, completeData);
                                     ignore BTree.delete(chunksInProgress, Text.compare, id);
@@ -197,7 +199,7 @@ actor class DataStorageShard() {
                         };
                     };
                     Debug.print("Test 1");
-                    switch (await dataStorageService.updateDataStorageUsedMap(caller, completeData.size())) {
+                    switch (await subscriptionManager.updateDataStorageUsedMap(caller, completeData.size())) {
                         case (#ok(_)) {
                             Debug.print("Test 2");
                             ignore BTree.insert(dataStore, Text.compare, id, completeData);
@@ -313,7 +315,7 @@ actor class DataStorageShard() {
         };
         switch (BTree.get(dataStore, Text.compare, id)) {
             case (?data) {
-                switch (await dataStorageService.updateDataStorageUsedMap(caller, -data.size())) {
+                switch (await subscriptionManager.updateDataStorageUsedMap(caller, -data.size())) {
                     case (#ok(_)) {
                         ignore BTree.delete(dataStore, Text.compare, id);
                         return #ok("Data deleted");

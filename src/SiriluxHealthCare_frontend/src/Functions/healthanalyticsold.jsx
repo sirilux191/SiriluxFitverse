@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import { CardTitle, CardHeader, CardContent, Card } from "@/components/ui/card";
 import { Dna, Footprints, GlassWater, Heart, User, Weight } from "lucide-react";
-import ActorContext from "../ActorContext";
+import useActorStore from "../State/Actors/ActorStore";
 import LoadingScreen from "../LoadingScreen";
 import { toast } from "@/components/ui/use-toast";
 import * as vetkd from "ic-vetkd-utils";
 import { useUserProfileStore } from "../State/User/UserProfile/UserProfileStore";
 function HealthAnalyticsOld() {
   const { userProfile } = useUserProfileStore();
-  const { actors } = useContext(ActorContext);
+  const { user } = useActorStore();
   const [loading, setLoading] = useState(false);
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("");
@@ -90,7 +90,7 @@ function HealthAnalyticsOld() {
 
   useEffect(() => {
     fetchUserData();
-  }, [actors]);
+  }, [user]);
 
   if (loading) {
     return <LoadingScreen />;

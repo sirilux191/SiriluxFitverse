@@ -29,21 +29,20 @@ actor class UserService() {
 
     private stable var totalUserCount : Nat = 0;
     private stable var shardCount : Nat = 0;
-    private stable let USERS_PER_SHARD : Nat = 200_000;
+    private stable let USERS_PER_SHARD : Nat = 20_000;
     private stable let STARTING_USER_ID : Nat = 10_000_000_000_000; // Starting User ID
 
-    private stable var shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null); //Shard Number to Shard Canister ID
-    private stable var userPrincipalIDMap : BTree.BTree<Principal, Text> = BTree.init<Principal, Text>(null); // Principal to User ID
-    private stable var reverseUserPrincipalIDMap : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null); // User ID to Principal
+    private stable var shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null); //Shard Number <--> Shard Canister ID
+
+    private stable var userPrincipalIDMap : BTree.BTree<Principal, Text> = BTree.init<Principal, Text>(null); // Principal <--> User ID
+    private stable var reverseUserPrincipalIDMap : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null); // User ID <--> Principal
 
     private stable var userIdentitySharedMap : BTree.BTree<Principal, BTree.BTree<Principal, Types.IdenitySharedInfo>> = BTree.init<Principal, BTree.BTree<Principal, Types.IdenitySharedInfo>>(null); // Principal to User ID
 
-    private stable var userShardWasmModule : [Nat8] = []; // Wasm Module for Shard Canister
+    private stable var userShardWasmModule : [Nat8] = []; // WASM Module for Shard Canister
 
     private let IC = "aaaaa-aa";
     private let ic : Interface.Self = actor (IC);
-
-    private stable var creatingShard : Bool = false;
 
     //USER CRUD SECTION Via Shard Canisters
 
@@ -55,8 +54,8 @@ actor class UserService() {
         switch (userIDResult, uuidResult) {
             case (#ok(userID), #ok(uuid)) {
                 let tempID : HealthIDUser = {
-                    // Temporary User ID Data Structure
-                    IDNum = userID;
+
+                    IDNum = userID # "@siriluxuser";
                     UUID = uuid;
                     MetaData = {
                         // User Metadata
@@ -71,21 +70,39 @@ actor class UserService() {
                     case (#ok(())) {
                         let identityResult = await identityManager.registerIdentity(caller, userID, "User");
                         switch (identityResult) {
-                            case (#ok(())) {
+                            case (#ok(_)) {
                                 // Insert user data into the shard
                                 let shardResult = await getShard(userID);
                                 switch (shardResult) {
                                     case (#ok(shard)) {
-                                        await shard.insertUser(userID, tempID);
-
+                                        switch (await shard.insertUser(userID, tempID)) {
+                                            case (#ok(insertedUserID)) {
+                                                #ok("User Created Successfully with ID: " # insertedUserID);
+                                            };
+                                            case (#err(e)) {
+                                                //To Do Remove for Identity Manager
+                                                //To Do Remove from Register User
+                                                #err("Failed to insert user: " # e);
+                                            };
+                                        };
                                     };
                                     case (#err(e)) {
+                                        //To Do Remove for Identity Manager
+                                        //To Do Remove from Register User
                                         #err("Failed to get shard: " # e);
                                     };
                                 };
                             };
                             case (#err(e)) {
-                                #err("Failed to register identity: " # e);
+                                switch (await removeUser(caller)) {
+                                    case (#ok(_)) {
+                                        #err("Failed to register identity and user: " # e);
+                                    };
+                                    case (#err(e)) {
+                                        //Add Timer to remove user
+                                        #err("Failed to register identity and user: " # e);
+                                    };
+                                };
                             };
                         };
                     };
@@ -99,13 +116,13 @@ actor class UserService() {
 
     // Function to read user data
     public shared ({ caller }) func readUser() : async Result.Result<HealthIDUser, Text> {
-        let userIDResult = await getUserID(caller); // Get User ID via UserShardManager
+        let userIDResult = await getUserID(?caller);
         switch (userIDResult) {
             case (#ok(id)) {
-                let shardResult = await getShard(id); // Get Shard via UserShardManager
+                let shardResult = await getShard(id);
                 switch (shardResult) {
                     case (#ok(shard)) {
-                        await shard.getUser(id); // Get User via Shard
+                        await shard.getUser(id);
                     };
                     case (#err(e)) {
                         #err("Failed to get shard: " # e);
@@ -120,7 +137,7 @@ actor class UserService() {
 
     // Function to update user data
     public shared ({ caller }) func updateUser(updateData : Types.HealthIDUserData) : async Result.Result<Text, Text> {
-        let userIDResult = await getUserID(caller);
+        let userIDResult = await getUserID(?caller);
         switch (userIDResult) {
             case (#ok(id)) {
                 let shardResult = await getShard(id);
@@ -153,15 +170,15 @@ actor class UserService() {
                     };
                 };
             };
-            case (#err(_)) {
-                #err("You're not registered as a Health User");
+            case (#err(err)) {
+                #err(err);
             };
         };
     };
 
     // Function to delete a user
     public shared ({ caller }) func deleteUser() : async Result.Result<Text, Text> {
-        let userIDResult = await getUserID(caller);
+        let userIDResult = await getUserID(?caller);
         switch (userIDResult) {
             case (#ok(id)) {
                 let shardResult = await getShard(id);
@@ -172,7 +189,7 @@ actor class UserService() {
                             case (#ok(_)) {
                                 let removeIdentityResult = await identityManager.removeIdentity(id);
                                 switch (removeIdentityResult) {
-                                    case (#ok(())) {
+                                    case (#ok(_)) {
                                         let removeUserResult = await removeUser(caller);
                                         switch (removeUserResult) {
                                             case (#ok(())) {
@@ -204,13 +221,11 @@ actor class UserService() {
         };
     };
 
-    //USER CRUD SECTION Via Shard Canisters
-
     //USER IDENTITY SHARING SECTION
 
     // Updated share function using getIdentityByID
     public shared ({ caller }) func shareIdentityAccess(targetUserID : Text, durationSeconds : Nat) : async Result.Result<Text, Text> {
-        let ownerIDResult = await getUserID(caller);
+        let ownerIDResult = await getUserID(?caller);
         let targetPrincipalAndIdentityResult = await identityManager.getPrincipalAndIdentityTypeByID(targetUserID);
         switch (ownerIDResult, targetPrincipalAndIdentityResult) {
             case (#ok(ownerID), #ok(targetPrincipalAndIdentity)) {
@@ -313,8 +328,6 @@ actor class UserService() {
         };
     };
 
-    //USER IDENTITY SHARING SECTION
-
     //VETKD SECTION
 
     public func symmetric_key_verification_key() : async Text {
@@ -400,46 +413,44 @@ actor class UserService() {
     // ID MetaFunctions Section
     // Function to generate a new user ID
     private func generateUserID() : Result.Result<Text, Text> {
-
         #ok(Nat.toText(STARTING_USER_ID + totalUserCount));
     };
 
     // Function to generate a UUID
     private func generateUUID() : async Result.Result<Text, Text> {
-
         let g = Source.Source();
         #ok(UUID.toText(await g.new()));
     };
 
-    // Function to get the caller's principal ID
-    public shared query ({ caller }) func whoami() : async Text {
-        Principal.toText(caller);
-    };
-
-    // Function to get the user ID of the caller
-    public shared ({ caller }) func getIDSelf() : async Result.Result<Text, Text> {
-        await getUserID(caller);
-    };
-
-    // Function to get the total number of users
-    public func getNumberOfSignedUpUsers() : async Nat {
-        totalUserCount;
-    };
-
     // Function to get the user ID for a given principal
-    public func getUserID(caller : Principal) : async Result.Result<Text, Text> {
-        switch (BTree.get(userPrincipalIDMap, Principal.compare, caller)) {
-            // Get UserID from Principal
-            case (?userID) {
-                #ok(userID);
+    public shared query ({ caller }) func getUserID(callerPrincipal : ?Principal) : async Result.Result<Text, Text> {
+        switch (callerPrincipal) {
+            case (?callerPrincipal) {
+                switch (BTree.get(userPrincipalIDMap, Principal.compare, callerPrincipal)) {
+                    // Get UserID from Principal
+                    case (?userID) {
+                        #ok(userID);
+                    };
+                    case null {
+                        #err("User ID not found for the given principal");
+                    };
+                };
             };
             case null {
-                #err("User ID not found for the given principal");
+                switch (BTree.get(userPrincipalIDMap, Principal.compare, caller)) {
+                    // Get UserID from Principal
+                    case (?userID) {
+                        #ok(userID);
+                    };
+                    case null {
+                        #err("User ID not found for the given principal");
+                    };
+                };
             };
         };
     };
     // New function to get Principal by user ID
-    public func getPrincipalByUserID(userID : Text) : async Result.Result<Principal, Text> {
+    public query func getPrincipalByUserID(userID : Text) : async Result.Result<Principal, Text> {
         switch (BTree.get(reverseUserPrincipalIDMap, Text.compare, userID)) {
             // Get Principal from UserID
             case (?principal) {
@@ -454,17 +465,16 @@ actor class UserService() {
     // ID MetaFunctions Section
 
     // Function to get the shard ID for a user
-    private func getShardID(userID : Text) : Text {
+    private func getShardID(userID : Text) : Result.Result<Text, Text> {
         switch (Nat.fromText(userID)) {
             case (?value) {
                 if (value >= STARTING_USER_ID) {
-
                     let shardIndex : Nat = (value - STARTING_USER_ID) / USERS_PER_SHARD;
-                    return Nat.toText(shardIndex);
+                    return #ok(Nat.toText(shardIndex));
                 };
-                return ("not a valid User ID");
+                return #err("not a valid User ID");
             };
-            case (null) { return ("not a valid User ID") };
+            case (null) { return #err("not a valid User ID") };
         };
 
     };
@@ -472,34 +482,34 @@ actor class UserService() {
     // Function to get the shard for a user
     private func getShard(userID : Text) : async Result.Result<UserShard.UserShard, Text> {
 
-        if (shardCount == 0 or totalUserCount >= shardCount * USERS_PER_SHARD) {
-            if (creatingShard) {
-                return #err("Shard creation is in progress");
+        let shardIDResult = getShardID(userID);
+        var shardID = "";
+        switch (shardIDResult) {
+            case (#ok(shardIDResult)) {
+                shardID := shardIDResult;
             };
-            creatingShard := true;
-            // Create a new shard
-            let newShardResult = await createShard();
-            switch (newShardResult) {
-                case (#ok(newShardPrincipal)) {
-                    let newShardID = "shard-" # Nat.toText(shardCount);
-                    ignore BTree.insert(shards, Text.compare, newShardID, newShardPrincipal);
-                    shardCount += 1;
-                    creatingShard := false;
-                    return #ok(actor (Principal.toText(newShardPrincipal)) : UserShard.UserShard);
-                };
-                case (#err(e)) {
-                    return #err(e);
-                };
+            case (#err(e)) {
+                return #err(e);
             };
         };
 
-        let shardID = getShardID(userID);
         switch (BTree.get(shards, Text.compare, "shard-" #shardID)) {
             case (?principal) {
                 #ok(actor (Principal.toText(principal)) : UserShard.UserShard);
             };
             case null {
-                #err("Shard not found for user ID: " # userID);
+                let newShardResult = await createShard();
+                switch (newShardResult) {
+                    case (#ok(newShardPrincipal)) {
+                        let newShardID = "shard-" # Nat.toText(shardCount);
+                        ignore BTree.insert(shards, Text.compare, newShardID, newShardPrincipal);
+                        shardCount += 1;
+                        return #ok(actor (Principal.toText(newShardPrincipal)) : UserShard.UserShard);
+                    };
+                    case (#err(e)) {
+                        return #err(e);
+                    };
+                };
             };
         };
     };
@@ -551,18 +561,15 @@ actor class UserService() {
     };
 
     // Function to update the WASM module
-    public shared ({ caller }) func updateWasmModule(wasmModule : [Nat8]) : async Result.Result<(), Text> {
-
+    public shared ({ caller }) func updateUserShardWasmModule(wasmModule : [Nat8]) : async Result.Result<Text, Text> {
         if (not (await isAdmin(caller))) {
             return #err("You are not Admin, only admin can perform this action");
         };
-
         if (Array.size(wasmModule) < 8) {
             return #err("Invalid WASM module: too small");
         };
-
         userShardWasmModule := wasmModule;
-        #ok(());
+        #ok("WASM Module for User Shard Updated Successfully");
     };
 
     private func upgradeCodeOnShard(canisterPrincipal : Principal) : async Result.Result<(), Text> {
@@ -683,11 +690,5 @@ actor class UserService() {
         // Optionally, you can process the results in the buffer here if needed
         return #ok("Removed Principal from all shards successfully");
     };
-    //Shard Manager Section
-
-    // // Query function to get the shard count
-    // public query func getShardCount() : async Nat {
-    //     shardCount;
-    // };
 
 };

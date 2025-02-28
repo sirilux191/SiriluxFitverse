@@ -24,14 +24,205 @@ import lighthouse from "@lighthouse-web3/sdk";
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 
-import { useState, useContext } from "react";
+import { useState } from "react";
 
 import LoadingScreen from "../../LoadingScreen";
 import * as vetkd from "ic-vetkd-utils";
 
 import useActorStore from "../../State/Actors/ActorStore";
+
+const generateBeautifulPDF = (formData, metadata) => {
+  const doc = new jsPDF();
+
+  // Set document properties
+  doc.setProperties({
+    title: "Health Report",
+    subject: "Medical Checkup and Prescription Details",
+    author: "Sirilux Healthcare",
+    creator: "Sirilux Healthcare Platform",
+  });
+
+  // Add a header with logo
+  doc.setFillColor(41, 98, 255);
+  doc.rect(0, 0, 210, 30, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(22);
+  doc.setFont("helvetica", "bold");
+  doc.text("SIRILUX HEALTHCARE", 105, 15, { align: "center" });
+  doc.setFontSize(12);
+  doc.text("Medical Report", 105, 23, { align: "center" });
+
+  // Add report title
+  doc.setTextColor(41, 98, 255);
+  doc.setFontSize(18);
+  doc.text("Health Checkup Report", 105, 40, { align: "center" });
+
+  // Add date
+  const today = new Date();
+  doc.setFontSize(10);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Generated on: ${today.toLocaleDateString()}`, 105, 47, {
+    align: "center",
+  });
+
+  // Add divider
+  doc.setDrawColor(200, 200, 200);
+  doc.line(20, 50, 190, 50);
+
+  // Health Checkup Section
+  doc.setFontSize(14);
+  doc.setTextColor(41, 98, 255);
+  doc.setFont("helvetica", "bold");
+  doc.text("Health Checkup Details", 20, 60);
+
+  // Add checkup details
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(60, 60, 60);
+  let yPos = 70;
+
+  // Format the checkup details
+  if (formData.dateOfCheckup) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Date of Checkup:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.dateOfCheckup, 80, yPos);
+    yPos += 8;
+  }
+
+  if (formData.typeOfCheckup) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Type of Checkup:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.typeOfCheckup, 80, yPos);
+    yPos += 8;
+  }
+
+  if (formData.healthcareProvider) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Healthcare Provider:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.healthcareProvider, 80, yPos);
+    yPos += 8;
+  }
+
+  if (formData.reasonForCheckup) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Reason for Checkup:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.reasonForCheckup, 80, yPos);
+    yPos += 8;
+  }
+
+  // Add divider
+  yPos += 5;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(20, yPos, 190, yPos);
+  yPos += 10;
+
+  // Prescription Section
+  doc.setFontSize(14);
+  doc.setTextColor(128, 0, 128); // Purple color for prescription section
+  doc.setFont("helvetica", "bold");
+  doc.text("Prescription Details", 20, yPos);
+  yPos += 10;
+
+  // Add prescription details
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(60, 60, 60);
+
+  if (formData.medicationName) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Medication Name(s):", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.medicationName, 80, yPos);
+    yPos += 8;
+  }
+
+  if (formData.dosage) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Dosage:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.dosage, 80, yPos);
+    yPos += 8;
+  }
+
+  if (formData.frequency) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Frequency:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.frequency, 80, yPos);
+    yPos += 8;
+  }
+
+  if (formData.prescribingDoctor) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Prescribing Doctor:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.prescribingDoctor, 80, yPos);
+    yPos += 8;
+  }
+
+  // Add metadata section
+  yPos += 5;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(20, yPos, 190, yPos);
+  yPos += 10;
+
+  doc.setFontSize(14);
+  doc.setTextColor(60, 60, 60);
+  doc.setFont("helvetica", "bold");
+  doc.text("Report Metadata", 20, yPos);
+  yPos += 10;
+
+  doc.setFontSize(11);
+  if (metadata.category) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Category:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(metadata.category, 80, yPos);
+    yPos += 8;
+  }
+
+  if (metadata.tags && metadata.tags.length > 0) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Keywords:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(metadata.tags.join(", "), 80, yPos);
+    yPos += 8;
+  }
+
+  if (metadata.description) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Description:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+
+    // Handle multi-line description
+    const splitDescription = doc.splitTextToSize(metadata.description, 110);
+    doc.text(splitDescription, 80, yPos);
+  }
+
+  // Add footer
+  doc.setFontSize(10);
+  doc.setTextColor(150, 150, 150);
+  doc.text(
+    "This is a confidential medical document generated by Sirilux Healthcare.",
+    105,
+    280,
+    { align: "center" }
+  );
+  doc.text("Page 1 of 1", 105, 285, { align: "center" });
+
+  return doc;
+};
+
 export default function UploadContent() {
-  const { actors } = useActorStore();
+  const {
+    dataAsset,
+    createDataAssetShardActorExternal,
+    createStorageShardActorExternal,
+  } = useActorStore();
   const [formData, setFormData] = useState({
     dateOfCheckup: "",
     typeOfCheckup: "",
@@ -90,143 +281,135 @@ export default function UploadContent() {
 
     try {
       // Step 1: Upload/link an empty file to get a unique ID
-      const emptyDataAsset = {
-        assetID: "",
-        title: "Empty File",
-        description: "Placeholder for encryption",
-        data: "[]",
-        metadata: {
-          category: "",
-          tags: [],
-          format: "empty",
-        },
+      const metadata = {
+        category: category,
+        tags: keywords ? [keywords] : [],
+        description: description,
+        format: "application/pdf",
       };
 
-      const result = await actors.dataAsset.uploadDataAsset(emptyDataAsset);
+      const dataAssetFile = {
+        assetID: "",
+        title: "Generated Report",
+        dataAssetShardPrincipal: "",
+        dataStorageShardPrincipal: "",
+        metadata: metadata,
+      };
+
+      const result = await dataAsset.uploadDataAsset(dataAssetFile);
       let uniqueID = "";
+      let assetShardPrincipal = "";
+      let storageShardPrincipal = "";
 
       Object.keys(result).forEach((key) => {
         if (key === "err") {
           throw new Error(result[key]);
         }
         if (key === "ok") {
-          uniqueID = result[key];
+          [uniqueID, assetShardPrincipal, storageShardPrincipal] = result[key];
         }
       });
-      console.log(uniqueID);
-      console.log("This is unique ID: : " + uniqueID);
-      if (!uniqueID) {
-        throw new Error("Failed to get unique ID");
+
+      if (!uniqueID || !assetShardPrincipal || !storageShardPrincipal) {
+        throw new Error("Failed to get required upload information");
       }
 
-      // Step 2: Fetch the encrypted key using encrypted_symmetric_key_for_dataAsset
+      // Step 2: Create dataAssetShard actor and get encryption key
+      const dataAssetShard =
+        await createDataAssetShardActorExternal(assetShardPrincipal);
+      if (!dataAssetShard) {
+        throw new Error("Failed to create data asset shard actor");
+      }
+
       const seed = window.crypto.getRandomValues(new Uint8Array(32));
       const tsk = new vetkd.TransportSecretKey(seed);
+
+      // Get encrypted key from the asset shard
       const encryptedKeyResult =
-        await actors.dataAsset.getEncryptedSymmetricKeyForAsset(
+        await dataAssetShard.encrypted_symmetric_key_for_asset(
           uniqueID,
           Object.values(tsk.public_key())
         );
 
       let encryptedKey = "";
-
       Object.keys(encryptedKeyResult).forEach((key) => {
-        if (key === "err") {
-          throw new Error(encryptedKeyResult[key]);
-        }
-        if (key === "ok") {
-          encryptedKey = encryptedKeyResult[key];
-        }
+        if (key === "err") throw new Error(encryptedKeyResult[key]);
+        if (key === "ok") encryptedKey = encryptedKeyResult[key];
       });
-      console.log("encrypted key " + encryptedKey);
-      if (!encryptedKey) {
-        throw new Error("Failed to get encrypted key");
-      }
 
-      const pkBytesHex =
-        await actors.dataAsset.getSymmetricKeyVerificationKey(uniqueID);
-
-      let symmetricVerificiationKey = "";
-
-      Object.keys(pkBytesHex).forEach((key) => {
-        if (key === "err") {
-          throw new Error(pkBytesHex[key]);
-        }
-        if (key === "ok") {
-          symmetricVerificiationKey = pkBytesHex[key];
-        }
-      });
-      console.log("symmetric verification key " + symmetricVerificiationKey);
-      if (!symmetricVerificiationKey) {
-        throw new Error("Failed to get encrypted key");
-      }
+      // Get verification key from the asset shard
+      const symmetricVerificationKey =
+        await dataAssetShard.getSymmetricKeyVerificationKey();
 
       const aesGCMKey = tsk.decrypt_and_hash(
         hex_decode(encryptedKey),
-        hex_decode(symmetricVerificiationKey),
+        hex_decode(symmetricVerificationKey),
         new TextEncoder().encode(uniqueID),
         32,
         new TextEncoder().encode("aes-256-gcm")
       );
-      console.log(aesGCMKey);
 
-      // Step 3: Encrypt the user's file using the AES-GCM key
-      // Generate PDF
-      const doc = new jsPDF();
-      let pdfContent = "";
-      for (const [key, value] of Object.entries(formData)) {
-        pdfContent += `${key}: ${value}\n\n`;
-      }
-      doc.text(pdfContent, 10, 10);
-
-      // Save PDF as a file
+      // Step 3: Generate PDF from form data
+      const doc = generateBeautifulPDF(formData, metadata);
       const pdfBlob = doc.output("blob");
       const pdfFile = new File([pdfBlob], "generated.pdf", {
         type: "application/pdf",
       });
 
+      // Step 4: Encrypt the PDF file
       const arrayBuffer = await pdfFile.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      const encryptedData = await aes_gcm_encrypt(uint8Array, aesGCMKey);
+      const fileData = new Uint8Array(arrayBuffer);
 
-      // Step 4: Upload encrypted data to Lighthouse
-      const encryptedBlob = new Blob([encryptedData]);
-      const encryptedFile = new File([encryptedBlob], "encrypted.bin", {
-        type: "application/octet-stream",
-      });
-      const lighthouseHash = await uploadToLighthouse(encryptedFile);
-
-      const metadata = {
-        category: category,
-        tags: [keywords],
-        format: pdfFile.type,
-      };
-
-      const dataAsset = {
-        assetID: uniqueID,
-        title: pdfFile.name,
-        description: description,
-        data: lighthouseHash,
-        metadata: metadata,
-      };
-
-      // Step 5: Update the data asset with the Lighthouse hash
-      const updateResult = await actors.dataAsset.updateDataAsset(
-        uniqueID,
-        dataAsset
+      // Create storage shard actor using the principal
+      const storageShard = await createStorageShardActorExternal(
+        storageShardPrincipal
       );
+      if (!storageShard) {
+        throw new Error("Failed to create storage shard actor");
+      }
 
-      Object.keys(updateResult).forEach((key) => {
-        if (key === "err") {
-          throw new Error(updateResult[key]);
+      // Calculate chunks for upload
+      const ENCRYPTION_OVERHEAD = 28; // 12 bytes for IV + 16 bytes for auth tag
+      const MAX_CHUNK_SIZE = 1.9 * 1000 * 1000; // 1.9MB max for encrypted chunk
+      const CHUNK_SIZE = MAX_CHUNK_SIZE - ENCRYPTION_OVERHEAD;
+      const totalChunks = Math.ceil(fileData.length / CHUNK_SIZE);
+
+      // Start chunk upload process
+      const startResult = await storageShard.startChunkUpload(
+        uniqueID,
+        totalChunks
+      );
+      if ("err" in startResult) {
+        throw new Error(startResult.err);
+      }
+
+      // Process and upload each chunk
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, fileData.length);
+        const chunk = fileData.slice(start, end);
+
+        // Encrypt the chunk
+        const encryptedChunk = await aes_gcm_encrypt(chunk, aesGCMKey);
+
+        // Upload the encrypted chunk
+        const uploadResult = await storageShard.uploadChunk(
+          uniqueID,
+          i,
+          encryptedChunk
+        );
+
+        if ("err" in uploadResult) {
+          throw new Error(
+            `Failed to upload chunk ${i + 1}: ${uploadResult.err}`
+          );
         }
-        if (key === "ok") {
-          toast({
-            title: "Success",
-            description: updateResult[key],
-            variant: "success",
-          });
-        }
+      }
+
+      toast({
+        title: "Success",
+        description: "Health data uploaded successfully!",
+        variant: "success",
       });
     } catch (error) {
       console.error("Error:", error);

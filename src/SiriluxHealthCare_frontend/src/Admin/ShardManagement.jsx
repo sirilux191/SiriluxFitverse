@@ -5,14 +5,7 @@ import WasmModuleUploader from "./WasmModuleUploader";
 const ShardManagement = () => {
   const [activeTab, setActiveTab] = useState("user");
 
-  const shardTypes = [
-    "user",
-    "professional",
-    "facility",
-    "dataAsset",
-    "marketplace",
-    "sharedActivity",
-  ];
+  const shardTypes = ["user", "professional", "facility", "dataAsset"];
 
   return (
     <Tabs

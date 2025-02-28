@@ -8,30 +8,27 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import AvatarStatus from "./AvatarStatus";
 
 const NFT = () => {
-  const { actors } = useActorStore();
+  const { gamificationSystem } = useActorStore();
   const { nfts, loading, error, fetchNFTs } = useNFTStore();
   const { toast } = useToast();
   const [selectedAvatar, setSelectedAvatar] = useState(null);
   const [isAvatarStatusOpen, setIsAvatarStatusOpen] = useState(false);
 
   useEffect(() => {
-    if (actors) {
-      fetchNFTs(actors);
+    if (gamificationSystem) {
+      fetchNFTs();
     }
-  }, [actors, fetchNFTs]);
+  }, [gamificationSystem, fetchNFTs]);
 
   const handleTransfer = async (avatarId, principalAddress) => {
     try {
-      result = await actors.gamificationSystem.transferNFT(
-        avatarId,
-        principalAddress
-      );
+      result = await gamificationSystem.transferNFT(avatarId, principalAddress);
       toast({
         title: "Avatar Transferred",
         description: "The avatar has been successfully transferred.",
         duration: 3000,
       });
-      fetchNFTs(actors);
+      fetchNFTs();
     } catch (error) {
       console.error("Error transferring avatar:", error);
       toast({
@@ -53,7 +50,7 @@ const NFT = () => {
       <div className="text-center p-8 text-red-500">
         <p>Error loading NFTs: {error}</p>
         <Button
-          onClick={() => fetchNFTs(actors)}
+          onClick={() => fetchNFTs()}
           className="mt-4"
         >
           Retry

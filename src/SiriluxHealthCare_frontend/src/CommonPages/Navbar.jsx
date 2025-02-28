@@ -13,7 +13,7 @@ import { toast } from "@/components/ui/use-toast"; // Ensure toast is imported
 const Navbar = ({ toggleSidebar }) => {
   const location = useLocation();
   const navigate = useNavigate(); // Initialize useNavigate
-  const { actors, logout } = useActorStore(); // Get the logout function and actors
+  const { identityManager, logout } = useActorStore(); // Get the logout function
 
   const getCurrentPageName = () => {
     const path = location.pathname.split("/").pop();
@@ -27,7 +27,7 @@ const Navbar = ({ toggleSidebar }) => {
 
   const getPrincipalId = async () => {
     try {
-      const principal = await actors.gamificationSystem.whoami();
+      const principal = await identityManager.whoami();
 
       await navigator.clipboard.writeText(principal);
       toast({

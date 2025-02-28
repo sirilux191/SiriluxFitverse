@@ -10,11 +10,11 @@ import {
   Building,
   UserPlus,
 } from "lucide-react";
-import ActorContext from "../ActorContext";
+import useActorStore from "../State/Actors/ActorStore";
 
 export default function FirstPageContent() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useContext(ActorContext);
+  const { isAuthenticated } = useActorStore();
 
   const checkRegistration = async (type) => {
     if (!isAuthenticated) {
@@ -54,17 +54,6 @@ export default function FirstPageContent() {
             </div>
             <p className="text-sm text-gray-500 mb-4">Login/Register As</p>
             <div>
-              <Button
-                className="flex justify-between items-center w-full border border-gray-300 p-3 rounded-md mb-2"
-                variant="secondary"
-                onClick={() => checkRegistration("Abha-Id")}
-              >
-                <div className="flex items-center">
-                  <UserPlus className="text-primary" />
-                  <span className="ml-2 font-bold">Register with Abha </span>
-                </div>
-                <ChevronRight />
-              </Button>
               <Button
                 className="flex justify-between items-center w-full border border-gray-300 p-3 rounded-md mb-2"
                 variant="secondary"

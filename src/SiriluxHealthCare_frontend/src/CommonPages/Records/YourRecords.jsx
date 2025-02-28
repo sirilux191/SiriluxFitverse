@@ -8,54 +8,36 @@ import {
   FileStack,
   Brain,
   Search,
-  Download,
-  Trash2,
 } from "lucide-react";
 
-import LoadingScreen from "@/LoadingScreen"; // Import LoadingScreen
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-
-import { ShareDataFunc } from "@/Functions/ShareData";
-import DownloadFile from "@/Functions/DownloadFile";
-import { Button } from "@/components/ui/button";
-import OpenAI from "openai";
+import LoadingScreen from "@/LoadingScreen";
 
 import useActorStore from "@/State/Actors/ActorStore";
-import * as pdfjs from "pdfjs-dist";
-import EditFile from "@/Functions/EditFile";
+
 import { useUserProfileStore } from "../../State/User/UserProfile/UserProfileStore";
 import { jsPDF } from "jspdf";
 import { useToast } from "@/components/ui/use-toast";
-
-// Initialize OpenAI client (make sure to add VITE_OPENAI_API_KEY to your .env)
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true,
-});
-
-// Set worker path directly
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.mjs",
-  import.meta.url
-).toString();
+import AssetDetailsDialog from "./AssetDetailsDialog";
 
 export default function YourRecords() {
   const [activeTab, setActiveTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [records, setRecords] = useState([]);
-  const { actors, createDataAssetShardActorExternal } = useActorStore();
+  const { dataAsset, identityManager, createDataAssetShardActorExternal } =
+    useActorStore();
   const userProfile = useUserProfileStore((state) => state.userProfile);
   const [loading, setLoading] = useState(true);
   const [expandedCard, setExpandedCard] = useState(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
   const [aiSummary, setAiSummary] = useState("");
   const { toast } = useToast();
+
+  // Reset AI summary when changing the expanded card
+  useEffect(() => {
+    if (expandedCard === null) {
+      setAiSummary("");
+    }
+  }, [expandedCard]);
 
   // Function to get icon based on category
   const getIconByCategory = (category) => {
@@ -132,7 +114,7 @@ export default function YourRecords() {
   useEffect(() => {
     const fetchUserDataAssets = async () => {
       try {
-        let userIDResult = await actors.identityManager.getIdentityBySelf();
+        let userIDResult = await identityManager.getIdentity([]);
         if (!userIDResult.ok) {
           throw new Error("Failed to get user ID");
         }
@@ -140,7 +122,7 @@ export default function YourRecords() {
         // Get shared activity shard principals for this user
 
         const shardPrincipalsResult =
-          await actors.dataAsset.getUserAssetShardsPrincipal(userID);
+          await dataAsset.getUserAssetShardsPrincipal(userID);
 
         if ("err" in shardPrincipalsResult) {
           throw new Error(shardPrincipalsResult.err);
@@ -194,7 +176,12 @@ export default function YourRecords() {
     };
 
     fetchUserDataAssets();
-  }, [actors, userProfile, createDataAssetShardActorExternal]);
+  }, [
+    dataAsset,
+    identityManager,
+    userProfile,
+    createDataAssetShardActorExternal,
+  ]);
 
   const filteredRecords = useMemo(() => {
     let filtered = records;
@@ -252,185 +239,91 @@ export default function YourRecords() {
     try {
       console.log("Starting AI Summary generation for recordId:", recordId);
       setIsGeneratingSummary(true);
-      setErrorMessage("");
+
+      setAiSummary(""); // Reset any previous summary
 
       const file = await getFileFromIndexedDB(recordId);
       console.log("Retrieved file:", file);
 
       if (!file) {
+        toast({
+          title: "Error",
+          description:
+            "Please download the file first before generating summary",
+          variant: "destructive",
+        });
         throw new Error(
           "Please download the file first before generating summary"
         );
       }
 
-      // Convert base64 to Uint8Array
-      console.log("Converting base64 to binary...");
-      const base64Data = file.data.split(",")[1];
-      const binaryData = atob(base64Data);
-      const bytes = new Uint8Array(binaryData.length);
-      for (let i = 0; i < binaryData.length; i++) {
-        bytes[i] = binaryData.charCodeAt(i);
-      }
-      console.log("Binary conversion complete, byte length:", bytes.length);
+      // Get file type from stored metadata
+      const record = records.find((r) => r.assetID === recordId);
+      const fileType = record.metadata.format.toLowerCase();
 
-      // Load and parse PDF
-      console.log("Loading PDF...");
-      const pdf = await pdfjs.getDocument({ data: bytes }).promise;
-      console.log("PDF loaded, number of pages:", pdf.numPages);
+      // Validate supported MIME types
+      const supportedTypes = [
+        "application/pdf",
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+      ];
 
-      let textContent = "";
-
-      // Extract text from each page
-      for (let i = 1; i <= pdf.numPages; i++) {
-        console.log(`Processing page ${i}/${pdf.numPages}`);
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        textContent += content.items.map((item) => item.str).join(" ") + "\n";
+      if (!supportedTypes.includes(fileType)) {
+        throw new Error("Unsupported file format for AI summary");
       }
 
-      // Clean up the text
-      textContent = textContent.replace(/\s+/g, " ").trim();
-      console.log("Extracted text length:", textContent.length);
-      console.log(
-        "First 100 characters of text:",
-        textContent.substring(0, 100)
-      );
+      // Get authentication token
+      const tokenResult = await identityManager.generateCloudFunctionToken();
+      if (!tokenResult.ok) {
+        throw new Error(
+          "Failed to get authentication token: " + tokenResult.err
+        );
+      }
+      console.log("Token:", tokenResult.ok);
+      // Get user principal
+      const principal = await identityManager.whoami();
+      const principalText = principal.toString();
 
-      console.log("Sending request to OpenAI...");
-      const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert medical document analyzer. Analyze medical documents and provide structured summaries focusing on:
-            1. Patient Information (if available)
-            2. Key Diagnoses
-            3. Vital Signs & Lab Results
-            4. Medications & Treatments
-            5. Recommendations & Follow-up
-            6. Critical Findings or Concerns`,
-          },
-          {
-            role: "user",
-            content: `Please analyze this medical document and provide a structured summary: ${textContent}`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 1000,
+      // Create the correct file object to send
+      const base64Data = file.data;
+
+      // Call the cloud function with file data and type
+      const response = await fetch(process.env.CLOUD_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tokenResult.ok}`,
+          "X-User-Principal": principalText,
+        },
+        body: JSON.stringify({
+          fileData: base64Data,
+          fileType: fileType,
+        }),
       });
 
-      console.log("Received OpenAI response:", response);
-      setAiSummary(response.choices[0].message.content);
-      console.log("AI Summary set successfully");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate summary");
+      }
+
+      const result = await response.json();
+      setAiSummary(result.summary);
     } catch (error) {
       console.error("Error generating summary:", error);
-      console.error("Error stack:", error.stack);
-      setErrorMessage(error.message || "Failed to generate summary");
+      setAiSummary(""); // Clear any partial summary on error
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate summary",
+        variant: "destructive",
+      });
     } finally {
       setIsGeneratingSummary(false);
     }
   };
 
-  // Update generateAllPDFsSummary function
-  const generateAllPDFsSummary = async () => {
-    try {
-      console.log("Starting generation of summary for all PDFs");
-      setIsGeneratingSummary(true);
-      setErrorMessage("");
-
-      const db = await new Promise((resolve, reject) => {
-        const request = indexedDB.open("downloadedFiles", 1);
-        request.onerror = () => {
-          console.error("Error opening IndexedDB:", request.error);
-          reject(request.error);
-        };
-        request.onsuccess = () => {
-          console.log("Successfully opened IndexedDB");
-          resolve(request.result);
-        };
-      });
-
-      const transaction = db.transaction(["files"], "readonly");
-      const store = transaction.objectStore("files");
-      const allFiles = await new Promise((resolve, reject) => {
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-
-      const pdfFiles = allFiles.filter((file) =>
-        file.name.toLowerCase().endsWith(".pdf")
-      );
-
-      if (pdfFiles.length === 0) {
-        throw new Error("No PDF files found in downloads");
-      }
-
-      // Process all PDFs
-      console.log("Processing all PDF files...");
-      const processedPDFs = await Promise.all(
-        pdfFiles.map(async (file) => {
-          const base64Data = file.data.split(",")[1];
-          const binaryData = atob(base64Data);
-          const bytes = new Uint8Array(binaryData.length);
-          for (let i = 0; i < binaryData.length; i++) {
-            bytes[i] = binaryData.charCodeAt(i);
-          }
-
-          const pdf = await pdfjs.getDocument({ data: bytes }).promise;
-          let textContent = "";
-
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const content = await page.getTextContent();
-            textContent +=
-              content.items.map((item) => item.str).join(" ") + "\n";
-          }
-
-          return {
-            name: file.name,
-            content: textContent.replace(/\s+/g, " ").trim(),
-          };
-        })
-      );
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert medical document analyzer reviewing multiple medical documents. Provide a comprehensive analysis that:
-            1. Summarizes each document briefly
-            2. Identifies patterns and trends across documents
-            3. Highlights key medical findings and their progression
-            4. Notes any contradictions or inconsistencies
-            5. Provides a timeline of medical events
-            6. Flags critical information requiring attention`,
-          },
-          {
-            role: "user",
-            content: `Please analyze these medical documents and provide a comprehensive summary:\n\n${processedPDFs
-              .map(
-                (pdf) => `Document: ${pdf.name}\nContent: ${pdf.content}\n---`
-              )
-              .join("\n")}`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 1500,
-      });
-
-      setAiSummary(response.choices[0].message.content);
-    } catch (error) {
-      console.error("Error generating all PDFs summary:", error);
-      console.error("Error stack:", error.stack);
-      setErrorMessage(error.message || "Failed to generate summary");
-    } finally {
-      setIsGeneratingSummary(false);
-    }
-  };
-
-  // Add this helper function to download the AI Summary
+  // Updated function to download a beautifully formatted AI Summary
   const downloadAISummary = () => {
     try {
       console.log("Starting AI Summary download");
@@ -440,26 +333,139 @@ export default function YourRecords() {
       }
 
       const doc = new jsPDF();
-      const splitText = doc.splitTextToSize(aiSummary, 180); // 180 is the max width
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      const textWidth = pageWidth - 2 * margin;
 
-      // Add title
-      doc.setFontSize(16);
-      doc.text("AI Generated Medical Summary", 20, 20);
+      let y = 20; // Starting Y position
+      const lineHeight = 7;
 
-      // Add date
+      // Parse and format the summary content
+      const lines = aiSummary.split("\n");
+      let currentFont = "normal";
+
+      for (let line of lines) {
+        // Handle headings
+        if (line.startsWith("# ")) {
+          doc.setFontSize(18);
+          doc.setFont("helvetica", "bold");
+          const text = line.substring(2);
+          doc.text(text, margin, y);
+          y += lineHeight * 1.5;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(12);
+          continue;
+        }
+
+        if (line.startsWith("## ")) {
+          doc.setFontSize(16);
+          doc.setFont("helvetica", "bold");
+          const text = line.substring(3);
+          doc.text(text, margin, y);
+          y += lineHeight * 1.3;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(12);
+          continue;
+        }
+
+        if (line.startsWith("### ")) {
+          doc.setFontSize(14);
+          doc.setFont("helvetica", "bold");
+          const text = line.substring(4);
+          doc.text(text, margin, y);
+          y += lineHeight * 1.2;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(12);
+          continue;
+        }
+
+        // Handle bullet points and numbered lists
+        if (line.match(/^\d+\.\s/)) {
+          const number = line.split(".")[0];
+          const text = line.substring(number.length + 2);
+          const wrappedText = doc.splitTextToSize(text, textWidth - 10);
+          doc.text(number + ".", margin, y);
+          doc.text(wrappedText, margin + 10, y);
+          y += lineHeight * wrappedText.length;
+          continue;
+        }
+
+        if (line.match(/^\s*-\s/) || line.match(/^\s*\*\s/)) {
+          const indentLevel = line.search(/[^\s]/) / 2;
+          const bulletIndent = margin + indentLevel * 5;
+          const text = line.trim().substring(2);
+          const wrappedText = doc.splitTextToSize(
+            text,
+            textWidth - bulletIndent - 5
+          );
+
+          doc.circle(bulletIndent, y - 1.5, 1, "F");
+          doc.text(wrappedText, bulletIndent + 5, y);
+          y += lineHeight * wrappedText.length;
+          continue;
+        }
+
+        // Handle bold text
+        if (line.includes("**")) {
+          const parts = line.split("**");
+          let xPos = margin;
+
+          for (let i = 0; i < parts.length; i++) {
+            if (parts[i].trim() === "") continue;
+
+            if (i % 2 === 0) {
+              doc.setFont("helvetica", "normal");
+              const wrappedText = doc.splitTextToSize(parts[i], textWidth);
+              doc.text(wrappedText, xPos, y);
+              xPos += doc.getTextWidth(parts[i]);
+            } else {
+              doc.setFont("helvetica", "bold");
+              const wrappedText = doc.splitTextToSize(parts[i], textWidth);
+              doc.text(wrappedText, xPos, y);
+              xPos += doc.getTextWidth(parts[i]);
+              doc.setFont("helvetica", "normal");
+            }
+          }
+          y += lineHeight;
+          continue;
+        }
+
+        // Handle regular text
+        if (line.trim() !== "") {
+          const wrappedText = doc.splitTextToSize(line, textWidth);
+          doc.text(wrappedText, margin, y);
+          y += lineHeight * wrappedText.length;
+        } else {
+          // Empty line - add some spacing
+          y += lineHeight / 2;
+        }
+
+        // Check if we need a new page
+        if (y > doc.internal.pageSize.getHeight() - margin) {
+          doc.addPage();
+          y = margin;
+        }
+      }
+
+      // Add metadata
       doc.setFontSize(10);
-      doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, 30);
-
-      // Add main content
-      doc.setFontSize(12);
-      doc.text(splitText, 20, 40);
+      doc.setTextColor(100, 100, 100);
+      doc.text(
+        `Generated on: ${new Date().toLocaleString()}`,
+        margin,
+        doc.internal.pageSize.getHeight() - 10
+      );
 
       // Save the PDF
       doc.save("medical-ai-summary.pdf");
       console.log("AI Summary PDF downloaded successfully");
     } catch (error) {
       console.error("Error downloading AI Summary:", error);
-      setErrorMessage("Failed to download AI Summary");
+      toast({
+        title: "Error",
+        description: "Failed to download AI Summary",
+        variant: "destructive",
+      });
     }
   };
 
@@ -470,7 +476,7 @@ export default function YourRecords() {
         description: "Please wait while we delete your record.",
       });
 
-      const result = await actors.dataAsset.deleteDataAsset(assetID);
+      const result = await dataAsset.deleteDataAsset(assetID);
 
       if ("ok" in result) {
         setRecords(records.filter((record) => record.assetID !== assetID));
@@ -497,26 +503,32 @@ export default function YourRecords() {
     }
   };
 
+  // Modify the setExpandedCard call to also reset the AI summary
+  const handleCardClick = (assetID) => {
+    setExpandedCard(assetID);
+    setAiSummary(""); // Reset AI summary when opening a new card
+  };
+
   if (loading) {
     return <LoadingScreen />;
   }
 
   return (
     <div>
-      <div className="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col items-center justify-center p-8">
-          <div className="mt-4 w-full">
-            <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
+      <div className="max-w-6xl mx-auto py-4 sm:py-12 px-2 sm:px-6 lg:px-8">
+        <div className="flex flex-col items-center justify-center p-2 sm:p-8">
+          <div className="mt-2 sm:mt-4 w-full">
+            <div className="max-w-6xl mx-auto p-2 sm:p-6 lg:p-8">
               {/* Title Section */}
-              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1 sm:mb-2">
                 Your Health Records
               </h1>
-              <p className="text-gray-400 mb-6">
+              <p className="text-gray-400 mb-3 sm:mb-6">
                 Choose the documents below to share or sell the data.
               </p>
 
               {/* Search Section */}
-              <div className="relative mb-6">
+              <div className="relative mb-3 sm:mb-6">
                 <Search
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
                   size={20}
@@ -531,7 +543,7 @@ export default function YourRecords() {
               </div>
 
               {/* Filter Buttons */}
-              <div className="flex flex-wrap gap-2 mb-6">
+              <div className="flex flex-wrap gap-1 sm:gap-2 mb-3 sm:mb-6">
                 <button
                   className={`rounded-full px-4 py-2 text-sm flex items-center gap-2 transition-colors ${
                     activeTab === "all"
@@ -601,38 +613,32 @@ export default function YourRecords() {
               </div>
 
               {/* Cards Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-6">
                 {filteredRecords.map((record) => (
                   <Card
                     key={record.assetID}
-                    className="relative bg-gray-900 border border-gray-800 rounded-lg overflow-hidden"
+                    className="relative bg-gray-900 border border-gray-800 rounded-lg overflow-hidden hover:border-gray-700 transition-colors"
                   >
-                    <div className="p-4">
-                      <div className="flex flex-col items-center">
-                        <div className="text-blue-500 mb-4 flex justify-center">
+                    <div className="p-3 sm:p-5 flex flex-col h-full">
+                      <div className="flex flex-col items-center flex-grow">
+                        <div className="text-blue-500 mb-3">
                           {getIconByCategory(record.metadata.category)}
                         </div>
-                        <h3 className="text-white font-medium mb-2 line-clamp-1 text-center">
+                        <h3 className="text-white font-medium mb-3 line-clamp-2 text-center break-all">
                           {record.title}
                         </h3>
-                        <div className="mt-auto space-y-3 w-full">
+                        <div className="mt-auto w-full space-y-3">
                           <div className="flex flex-wrap justify-center gap-2 text-xs">
-                            <span className="bg-gray-800 text-gray-300 px-2 py-1 rounded-full">
+                            <span className="bg-gray-800 text-gray-300 px-2.5 py-1 rounded-full">
                               {record.date}
                             </span>
-                            <span className="bg-gray-800 text-blue-400 px-2 py-1 rounded-full">
+                            <span className="bg-gray-800 text-blue-400 px-2.5 py-1 rounded-full">
                               {record.metadata.format}
                             </span>
                           </div>
                           <button
-                            onClick={() => {
-                              console.log(
-                                "Setting expandedCard to:",
-                                record.assetID
-                              );
-                              setExpandedCard(record.assetID);
-                            }}
-                            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg transition-colors text-sm"
+                            onClick={() => handleCardClick(record.assetID)}
+                            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2.5 rounded-lg transition-colors text-sm font-medium"
                           >
                             More Details
                           </button>
@@ -644,149 +650,19 @@ export default function YourRecords() {
               </div>
 
               {/* Details Modal */}
-              <Dialog
-                open={expandedCard !== null}
-                onOpenChange={() => {
-                  console.log(
-                    "Closing dialog, expandedCard was:",
-                    expandedCard
-                  );
-                  setExpandedCard(null);
-                }}
-              >
-                <DialogContent className="bg-gray-900 text-white border border-gray-800 w-[90vw] max-w-[600px] max-h-[85vh] overflow-y-auto">
-                  {expandedCard &&
-                    (() => {
-                      const record = records.find(
-                        (r) => r.assetID === expandedCard
-                      );
-                      console.log("Found record:", record);
-
-                      if (!record) return null;
-
-                      return (
-                        <div className="relative">
-                          <DialogHeader className="pb-4 space-y-1.5">
-                            <DialogTitle className="text-xl font-semibold text-white">
-                              {record.title}
-                            </DialogTitle>
-                          </DialogHeader>
-
-                          <div className="grid gap-6">
-                            <div className="flex items-center justify-center p-4">
-                              {getIconByCategory(record.metadata.category)}
-                            </div>
-
-                            <div className="space-y-6">
-                              <div>
-                                <h4 className="text-gray-400 mb-2.5 font-medium">
-                                  Description
-                                </h4>
-                                <p className="text-white text-sm leading-relaxed">
-                                  {record.metadata.description}
-                                </p>
-                              </div>
-
-                              <div>
-                                <h4 className="text-gray-400 mb-2.5 font-medium">
-                                  Keywords
-                                </h4>
-                                <div className="flex flex-wrap gap-2">
-                                  {record.metadata.tags.map((tag, index) => (
-                                    <span
-                                      key={index}
-                                      className="bg-gray-800 text-blue-400 px-3 py-1 rounded-full text-xs"
-                                    >
-                                      {tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                                <DownloadFile
-                                  dataAssetShardPrincipal={
-                                    record.dataAssetShardPrincipal
-                                  }
-                                  dataStorageShardPrincipal={
-                                    record.dataStorageShardPrincipal
-                                  }
-                                  uniqueID={record.assetID}
-                                  title={record.title}
-                                  format={record.metadata.format}
-                                  accessLevel="owned"
-                                  className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-                                />
-
-                                <EditFile
-                                  data={record.dataStorageShardPrincipal}
-                                  uniqueID={record.assetID}
-                                  title={record.title}
-                                  format={record.metadata.format}
-                                />
-
-                                <ShareDataFunc
-                                  assetID={record.assetID}
-                                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-                                />
-
-                                <Button
-                                  onClick={() => handleDelete(record.assetID)}
-                                  className="w-full bg-red-500 hover:bg-red-600 text-white py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-                                >
-                                  <Trash2 size={16} />
-                                  Delete
-                                </Button>
-
-                                <Button
-                                  onClick={() =>
-                                    generateAISummary(record.assetID)
-                                  }
-                                  disabled={isGeneratingSummary}
-                                  className="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-                                >
-                                  {isGeneratingSummary
-                                    ? "Analyzing..."
-                                    : "AI Summary"}
-                                </Button>
-
-                                <Button
-                                  onClick={generateAllPDFsSummary}
-                                  disabled={isGeneratingSummary}
-                                  className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium col-span-full"
-                                >
-                                  {isGeneratingSummary
-                                    ? "Analyzing All PDFs..."
-                                    : "Summarize All PDFs"}
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-
-                          {aiSummary && (
-                            <div className="mt-4">
-                              <h4 className="text-gray-400 mb-2.5 font-medium">
-                                AI Summary
-                              </h4>
-                              <div className="bg-gray-800 p-4 rounded-lg">
-                                <pre className="whitespace-pre-wrap text-sm text-white">
-                                  {aiSummary}
-                                </pre>
-                                <Button
-                                  onClick={downloadAISummary}
-                                  className="mt-4 w-full bg-green-500 hover:bg-green-600 text-white py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-                                >
-                                  <Download size={16} />
-                                  Download Summary
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                </DialogContent>
-              </Dialog>
+              {expandedCard && (
+                <AssetDetailsDialog
+                  isOpen={expandedCard !== null}
+                  onClose={() => setExpandedCard(null)}
+                  record={records.find((r) => r.assetID === expandedCard)}
+                  getIconByCategory={getIconByCategory}
+                  handleDelete={handleDelete}
+                  generateAISummary={generateAISummary}
+                  isGeneratingSummary={isGeneratingSummary}
+                  aiSummary={aiSummary}
+                  downloadAISummary={downloadAISummary}
+                />
+              )}
             </div>
           </div>
         </div>

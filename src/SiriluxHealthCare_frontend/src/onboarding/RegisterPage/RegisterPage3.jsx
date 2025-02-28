@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
 import { ChevronLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import ActorContext from "../../ActorContext";
+import useActorStore from "../../State/Actors/ActorStore";
 import LoadingScreen from "../../LoadingScreen";
 import OnboardingBanner from "../../OnboardingBanner";
 // import * as vetkd from "ic-vetkd-utils";
@@ -26,7 +26,7 @@ const formSchema = z.object({
 });
 
 export default function RegisterPage3Content() {
-  const { actors } = useContext(ActorContext);
+  const { facility } = useActorStore();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     facultyName: "",
@@ -92,7 +92,7 @@ export default function RegisterPage3Content() {
       );
 
       // Call the correct backend method
-      const result = await actors.facility.createFacilityRequest(
+      const result = await facility.createFacilityRequest(
         licenseInfoArray,
         demographicInfoArray,
         servicesOfferedInfoArray

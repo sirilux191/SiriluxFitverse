@@ -14,19 +14,19 @@ actor class ProfessionalShard() {
     private var professionalMap : BTree.BTree<Text, Types.HealthIDProfessional> = BTree.init<Text, Types.HealthIDProfessional>(null);
     private stable var permittedPrincipal : [Principal] = [Principal.fromText(CanisterIDs.professionalServiceCanisterID)];
 
-    public shared ({ caller }) func insertProfessional(professionalID : Text, professional : Types.HealthIDProfessional) : async Result.Result<(), Text> {
+    public shared ({ caller }) func insertProfessional(professionalID : Text, professional : Types.HealthIDProfessional) : async Result.Result<Text, Text> {
 
         if (not isPermitted(caller)) {
             return #err("You are not permitted to call this function");
         };
         if (BTree.has(professionalMap, Text.compare, professionalID)) {
-            #err("Professional with ID " # professionalID # " already exists");
+            return #err("Professional with ID " # professionalID # " already exists");
         } else {
             let insertResult = BTree.insert(professionalMap, Text.compare, professionalID, professional);
             switch (insertResult) {
                 case null {
                     if (BTree.has(professionalMap, Text.compare, professionalID)) {
-                        #ok(());
+                        #ok("Professional inserted successfully");
                     } else {
                         #err("Failed to insert professional with ID " # professionalID);
                     };
@@ -49,16 +49,14 @@ actor class ProfessionalShard() {
         };
     };
 
-    public shared ({ caller }) func updateProfessional(professionalID : Text, professional : Types.HealthIDProfessional) : async Result.Result<(), Text> {
+    public shared ({ caller }) func updateProfessional(professionalID : Text, professional : Types.HealthIDProfessional) : async Result.Result<Text, Text> {
         if (not isPermitted(caller)) {
             return #err("You are not permitted to call this function");
         };
         switch (BTree.get(professionalMap, Text.compare, professionalID)) {
             case (?_) {
-                switch (BTree.insert(professionalMap, Text.compare, professionalID, professional)) {
-                    case (?_) { #ok(()) };
-                    case null { #err("Failed to update professional") };
-                };
+                ignore BTree.insert(professionalMap, Text.compare, professionalID, professional);
+                return #ok("Professional updated successfully " # professionalID);
             };
             case null {
                 #err("Professional not found");
@@ -66,13 +64,17 @@ actor class ProfessionalShard() {
         };
     };
 
-    public shared ({ caller }) func deleteProfessional(professionalID : Text) : async Result.Result<(), Text> {
+    public shared ({ caller }) func deleteProfessional(professionalID : Text) : async Result.Result<Text, Text> {
         if (not isPermitted(caller)) {
             return #err("You are not permitted to call this function");
         };
         switch (BTree.delete(professionalMap, Text.compare, professionalID)) {
-            case (?_) { #ok(()) };
-            case null { #err("Professional not found") };
+            case (?_) {
+                #ok("Professional deleted successfully " # professionalID);
+            };
+            case null {
+                #err("Professional not found");
+            };
         };
     };
 
@@ -103,12 +105,12 @@ actor class ProfessionalShard() {
             return #err("You are not permitted to call this function");
         };
 
-        let principalToRemoveObj = Principal.fromText(principalToRemove);
+        let principalToRemoveTemp = Principal.fromText(principalToRemove);
         let permittedPrincipalBuffer = Buffer.fromArray<Principal>(
             Array.filter(
                 permittedPrincipal,
                 func(p : Principal) : Bool {
-                    not Principal.equal(p, principalToRemoveObj);
+                    not Principal.equal(p, principalToRemoveTemp);
                 },
             )
         );

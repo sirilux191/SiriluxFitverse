@@ -24,9 +24,19 @@ import {
 import { Loader2Icon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import useNFTStore from "../../State/CryptoAssets/NFTStore";
+import useWalletStore from "../../State/CryptoAssets/WalletStore";
+import { Principal } from "@dfinity/principal";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const GamificationTab = () => {
-  const { actors } = useActorStore();
+  const { gamificationSystem, identityManager } = useActorStore();
   const { nfts, loading: nftsLoading, fetchNFTs } = useNFTStore();
   const [professionalInfo, setProfessionalInfo] = useState({
     id: "",
@@ -37,7 +47,7 @@ const GamificationTab = () => {
 
   const [availableSlots, setAvailableSlots] = useState([]);
   const [multipleSlots, setMultipleSlots] = useState([
-    { date: null, time: "", start: "", capacity: "1" },
+    { date: null, time: "", start: "", capacity: "1", price: "0" },
   ]);
   const [selectedSlots, setSelectedSlots] = useState([]);
   const [slotRange, setSlotRange] = useState({
@@ -46,6 +56,7 @@ const GamificationTab = () => {
     startTime: "",
     endTime: "",
     capacity: "1",
+    price: "0",
   });
   const [currentPage, setCurrentPage] = useState(1);
   const DATES_PER_PAGE = 5;
@@ -54,6 +65,11 @@ const GamificationTab = () => {
   const [isLoadingVisits, setIsLoadingVisits] = useState(false);
   const [isLoadingBookedSlots, setIsLoadingBookedSlots] = useState(false);
   const [selectedAvatarId, setSelectedAvatarId] = useState(null);
+  const [confirmationDialog, setConfirmationDialog] = useState({
+    isOpen: false,
+    type: null, // 'complete' or 'reject'
+    visit: null,
+  });
 
   useEffect(() => {
     fetchProfessionalInfo();
@@ -62,13 +78,13 @@ const GamificationTab = () => {
 
   const fetchProfessionalInfo = async () => {
     try {
-      const identityResult = await actors.identityManager.getIdentityBySelf();
+      const identityResult = await identityManager.getIdentity([]);
       if (!identityResult.ok) {
         throw new Error("Failed to get identity");
       }
 
       const professionalId = identityResult.ok[0];
-      const result = await actors.gamificationSystem.getProfessionalInfoSelf();
+      const result = await gamificationSystem.getProfessionalInfoSelf();
 
       console.log("Service Info Result:", result);
 
@@ -104,7 +120,7 @@ const GamificationTab = () => {
 
   const fetchAvailableSlots = async () => {
     try {
-      const result = await actors.gamificationSystem.getAvailableSlotsSelf();
+      const result = await gamificationSystem.getAvailableSlotsSelf();
       console.log("Available Slots Result:", result);
       if (result.ok) {
         setAvailableSlots(result.ok);
@@ -124,7 +140,7 @@ const GamificationTab = () => {
   const handleUpdateInfo = async (e) => {
     e.preventDefault();
     try {
-      const identityResult = await actors.identityManager.getIdentityBySelf();
+      const identityResult = await identityManager.getIdentity([]);
       if (!identityResult.ok) {
         throw new Error("Failed to get identity");
       }
@@ -141,7 +157,7 @@ const GamificationTab = () => {
       console.log("Updating with data:", updateData);
 
       const result =
-        await actors.gamificationSystem.updateProfessionalInfo(updateData);
+        await gamificationSystem.updateProfessionalInfo(updateData);
 
       if (result.ok) {
         toast({
@@ -167,12 +183,22 @@ const GamificationTab = () => {
     const currentDate = new Date(slotRange.startDate);
     const endDate = new Date(slotRange.endDate);
 
+    // Validate inputs
+    if (
+      !currentDate ||
+      !endDate ||
+      !slotRange.startTime ||
+      !slotRange.endTime
+    ) {
+      throw new Error("Please fill in all date and time fields");
+    }
+
     while (currentDate <= endDate) {
       const [startHour, startMinute] = slotRange.startTime.split(":");
       const [endHour, endMinute] = slotRange.endTime.split(":");
 
       let currentTime = new Date(currentDate);
-      currentTime.setHours(parseInt(startHour), parseInt(startMinute));
+      currentTime.setHours(parseInt(startHour, 10), parseInt(startMinute));
 
       const endTime = new Date(currentDate);
       endTime.setHours(parseInt(endHour), parseInt(endMinute));
@@ -180,8 +206,9 @@ const GamificationTab = () => {
       while (currentTime < endTime) {
         slots.push({
           entityId: professionalInfo.id || "",
-          start: currentTime.getTime() * 1000000,
+          start: BigInt(currentTime.getTime() * 1000000),
           capacity: parseInt(slotRange.capacity, 10),
+          price: parseInt(slotRange.price, 10) || 0,
         });
         currentTime = new Date(currentTime.getTime() + 30 * 60000); // Add 30 minutes
       }
@@ -196,8 +223,9 @@ const GamificationTab = () => {
     e.preventDefault();
     try {
       const slots = generateSlotsFromRange();
+      console.log("Adding slots:", slots);
       const result =
-        await actors.gamificationSystem.addMultipleAvailabilitySlots(slots);
+        await gamificationSystem.addMultipleAvailabilitySlots(slots);
       if (result.ok) {
         toast({
           title: "Success",
@@ -210,6 +238,7 @@ const GamificationTab = () => {
           startTime: "",
           endTime: "",
           capacity: "1",
+          price: "0",
         });
       } else {
         throw new Error(result.err);
@@ -218,7 +247,7 @@ const GamificationTab = () => {
       console.error("Error adding slots:", error);
       toast({
         title: "Error",
-        description: "Failed to add availability slots",
+        description: "Failed to add availability slots: " + error.message,
         variant: "destructive",
       });
     }
@@ -264,7 +293,7 @@ const GamificationTab = () => {
   const addSlotField = () => {
     setMultipleSlots([
       ...multipleSlots,
-      { date: null, time: "", start: "", capacity: "1" },
+      { date: null, time: "", start: "", capacity: "1", price: "0" },
     ]);
   };
 
@@ -277,11 +306,23 @@ const GamificationTab = () => {
 
   const handleRemoveMultipleSlots = async () => {
     try {
-      const result =
-        await actors.gamificationSystem.removeMultipleAvailabilitySlots(
-          professionalInfo.id,
-          selectedSlots
-        );
+      if (selectedSlots.length === 0) {
+        toast({
+          title: "Error",
+          description: "No slots selected for removal",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Convert BigInt to number for backend
+      const slotTimesAsNumbers = selectedSlots.map((slot) => Number(slot));
+
+      const result = await gamificationSystem.removeMultipleAvailabilitySlots(
+        professionalInfo.id,
+        slotTimesAsNumbers
+      );
+
       if (result.ok) {
         toast({
           title: "Success",
@@ -296,7 +337,7 @@ const GamificationTab = () => {
       console.error("Error removing slots:", error);
       toast({
         title: "Error",
-        description: "Failed to remove selected slots",
+        description: "Failed to remove selected slots: " + error.message,
         variant: "destructive",
       });
     }
@@ -379,6 +420,7 @@ const GamificationTab = () => {
             entityId: professionalInfo.id || "",
             start: BigInt(dateTime.getTime() * 1000000),
             capacity: parseInt(slot.capacity, 10) || 1,
+            price: parseInt(slot.price, 10) || 0,
           };
         });
 
@@ -391,17 +433,18 @@ const GamificationTab = () => {
         return;
       }
 
+      console.log("Adding individual slots:", formattedSlots);
       const result =
-        await actors.gamificationSystem.addMultipleAvailabilitySlots(
-          formattedSlots
-        );
+        await gamificationSystem.addMultipleAvailabilitySlots(formattedSlots);
       if (result.ok) {
         toast({
           title: "Success",
           description: "Multiple availability slots added successfully",
         });
         fetchAvailableSlots();
-        setMultipleSlots([{ date: null, time: "", start: "", capacity: "1" }]);
+        setMultipleSlots([
+          { date: null, time: "", start: "", capacity: "1", price: "0" },
+        ]);
       } else {
         throw new Error(result.err);
       }
@@ -409,7 +452,7 @@ const GamificationTab = () => {
       console.error("Error adding slots:", error);
       toast({
         title: "Error",
-        description: "Failed to add availability slots",
+        description: "Failed to add availability slots: " + error.message,
         variant: "destructive",
       });
     }
@@ -418,7 +461,7 @@ const GamificationTab = () => {
   const fetchVisits = async () => {
     setIsLoadingVisits(true);
     try {
-      const result = await actors.gamificationSystem.getEntityVisits();
+      const result = await gamificationSystem.getEntityVisits();
       if (result.ok) {
         setVisits(result.ok);
       } else {
@@ -443,7 +486,7 @@ const GamificationTab = () => {
   const fetchBookedSlots = async () => {
     setIsLoadingBookedSlots(true);
     try {
-      const result = await actors.gamificationSystem.getBookedSlotsSelf();
+      const result = await gamificationSystem.getBookedSlotsSelf();
       if (result.ok) {
         console.log(result.ok);
         setBookedSlots(result.ok);
@@ -496,26 +539,22 @@ const GamificationTab = () => {
     }
 
     try {
-      const result = await actors.gamificationSystem.processVisitCompletion(
-        visitId,
-        selectedAvatarId
-      );
-      if (result.ok) {
-        toast({
-          description: "Visit completed successfully",
-        });
-        // Refresh the lists
-        fetchVisits();
-        fetchBookedSlots();
-        setSelectedAvatarId(null);
-      } else {
-        throw new Error(result.err);
+      const visitResult = await gamificationSystem.getVisitById(visitId);
+      if (visitResult.err) {
+        throw new Error(visitResult.err);
       }
+
+      // Instead of window.confirm, show the modal
+      setConfirmationDialog({
+        isOpen: true,
+        type: "complete",
+        visit: visitResult.ok,
+      });
     } catch (error) {
-      console.error("Error completing visit:", error);
+      console.error("Error fetching visit:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to complete visit",
+        description: error.message || "Failed to fetch visit details",
         variant: "destructive",
       });
     }
@@ -523,37 +562,193 @@ const GamificationTab = () => {
 
   const handleRejectVisit = async (visitId) => {
     try {
-      const result =
-        await actors.gamificationSystem.rejectVisitAndRestoreHP(visitId);
-      if (result.ok) {
-        toast({
-          title: "Success",
-          description: "Visit rejected successfully",
-        });
-        // Refresh the lists
-        fetchVisits();
-        fetchBookedSlots();
-      } else {
-        throw new Error(result.err);
+      const visitResult = await gamificationSystem.getVisitById(visitId);
+      if (visitResult.err) {
+        throw new Error(visitResult.err);
       }
+
+      // Instead of window.confirm, show the modal
+      setConfirmationDialog({
+        isOpen: true,
+        type: "reject",
+        visit: visitResult.ok,
+      });
     } catch (error) {
-      console.error("Error rejecting visit:", error);
+      console.error("Error fetching visit:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to reject visit",
+        description: error.message || "Failed to fetch visit details",
         variant: "destructive",
       });
     }
   };
 
+  const handleConfirmAction = async () => {
+    const { type, visit } = confirmationDialog;
+
+    try {
+      if (type === "complete") {
+        const result = await gamificationSystem.processVisitCompletion(
+          visit.visitId,
+          selectedAvatarId
+        );
+        if (result.ok) {
+          toast({
+            description: "Visit completed successfully",
+          });
+          fetchVisits();
+          fetchBookedSlots();
+          setSelectedAvatarId(null);
+        } else {
+          throw new Error(result.err);
+        }
+      } else if (type === "reject") {
+        const walletStore = useWalletStore.getState();
+        await walletStore.approveSpender({
+          spender: {
+            owner: Principal.fromText(
+              process.env.CANISTER_ID_GAMIFICATIONSYSTEM
+            ),
+            subaccount: [],
+          },
+          amount: Number(visit.payment),
+          memo: `Reject visit ${visit.visitId}`,
+        });
+
+        const result = await gamificationSystem.rejectVisitAndRestoreHP(
+          visit.visitId
+        );
+        if (result.ok) {
+          toast({
+            title: "Success",
+            description: "Visit rejected successfully",
+          });
+          fetchVisits();
+          fetchBookedSlots();
+        } else {
+          throw new Error(result.err);
+        }
+      }
+    } catch (error) {
+      console.error("Error processing visit:", error);
+      toast({
+        title: "Error",
+        description: error.message || `Failed to ${type} visit`,
+        variant: "destructive",
+      });
+    } finally {
+      setConfirmationDialog({ isOpen: false, type: null, visit: null });
+    }
+  };
+
   const handleRefreshNFTs = async () => {
     console.log("Current NFTs:", nfts);
-    await fetchNFTs(actors);
+    await fetchNFTs();
     console.log("Refreshed NFTs:", nfts);
+  };
+
+  // Add this confirmation dialog component before the return statement
+  const ConfirmationDialog = () => {
+    const { isOpen, type, visit } = confirmationDialog;
+    if (!visit) return null;
+
+    const visitDate = new Date(Number(visit.timestamp.slotTime) / 1000000);
+    const selectedAvatar = nfts.find((a) => a.id === selectedAvatarId);
+
+    return (
+      <Dialog
+        open={isOpen}
+        onOpenChange={(open) =>
+          setConfirmationDialog((prev) => ({ ...prev, isOpen: open }))
+        }
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl">
+              {type === "complete" ? "Complete Visit" : "Reject Visit"}
+            </DialogTitle>
+            <DialogDescription className="pt-4">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Visit ID</p>
+                    <p className="font-medium">#{Number(visit.visitId)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Patient ID</p>
+                    <p className="font-medium">{visit.userId}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-muted-foreground">Date & Time</p>
+                    <p className="font-medium">
+                      {visitDate.toLocaleDateString(undefined, {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}{" "}
+                      at{" "}
+                      {visitDate.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                  {type === "complete" && selectedAvatar && (
+                    <div className="col-span-2">
+                      <p className="text-muted-foreground">Selected Avatar</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        {selectedAvatar.image && (
+                          <img
+                            src={selectedAvatar.image}
+                            alt={selectedAvatar.name}
+                            className="w-8 h-8 rounded"
+                          />
+                        )}
+                        <p className="font-medium">{selectedAvatar.name}</p>
+                      </div>
+                    </div>
+                  )}
+                  {type === "reject" && (
+                    <div className="col-span-2">
+                      <p className="text-muted-foreground">Refund Amount</p>
+                      <p className="font-medium">
+                        {Number(visit.payment)} tokens
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 mt-6">
+            <Button
+              variant="outline"
+              onClick={() =>
+                setConfirmationDialog({
+                  isOpen: false,
+                  type: null,
+                  visit: null,
+                })
+              }
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={type === "reject" ? "destructive" : "default"}
+              onClick={handleConfirmAction}
+            >
+              {type === "complete" ? "Complete Visit" : "Reject Visit"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
   };
 
   return (
     <div className="container mx-auto py-6">
+      <ConfirmationDialog />
       <Tabs defaultValue="information">
         <TabsList className="w-full">
           <TabsTrigger
@@ -681,20 +876,37 @@ const GamificationTab = () => {
                             }))
                           }
                         />
-                        <div>
-                          <Label>Capacity per slot</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={slotRange.capacity}
-                            onChange={(e) =>
-                              setSlotRange((prev) => ({
-                                ...prev,
-                                capacity: e.target.value,
-                              }))
-                            }
-                            className="w-24"
-                          />
+                        <div className="flex gap-4">
+                          <div>
+                            <Label>Capacity per slot</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={slotRange.capacity}
+                              onChange={(e) =>
+                                setSlotRange((prev) => ({
+                                  ...prev,
+                                  capacity: e.target.value,
+                                }))
+                              }
+                              className="w-24"
+                            />
+                          </div>
+                          <div>
+                            <Label>Price (tokens)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={slotRange.price}
+                              onChange={(e) =>
+                                setSlotRange((prev) => ({
+                                  ...prev,
+                                  price: e.target.value,
+                                }))
+                              }
+                              className="w-24"
+                            />
+                          </div>
                         </div>
                       </div>
                       <Button
@@ -757,6 +969,19 @@ const GamificationTab = () => {
                                   "capacity",
                                   e.target.value
                                 )
+                              }
+                              className="w-24"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`price-${index}`}>Price</Label>
+                            <Input
+                              id={`price-${index}`}
+                              type="number"
+                              min="0"
+                              value={slot.price || "0"}
+                              onChange={(e) =>
+                                handleSlotChange(index, "price", e.target.value)
                               }
                               className="w-24"
                             />
@@ -990,12 +1215,14 @@ const GamificationTab = () => {
         <TabsContent value="visits">
           <div className="grid gap-6">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Select NFT</CardTitle>
+              <CardHeader className="flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2">
+                <CardTitle className="text-lg">Select NFT</CardTitle>
                 <Button
                   variant="outline"
                   onClick={handleRefreshNFTs}
                   disabled={nftsLoading}
+                  size="sm"
+                  className="w-full xs:w-auto"
                 >
                   {nftsLoading ? (
                     <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
@@ -1012,28 +1239,30 @@ const GamificationTab = () => {
                       Loading NFTs...
                     </p>
                   ) : (
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 gap-3">
                       {nfts.map((nft) => (
                         <div
                           key={nft.id}
-                          className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                          className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                             selectedAvatarId === nft.id
                               ? "border-primary bg-accent"
                               : "hover:bg-accent/50"
                           }`}
                           onClick={() => setSelectedAvatarId(nft.id)}
                         >
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
                             {nft.image && (
                               <img
                                 src={nft.image}
                                 alt={nft.name}
-                                className="w-12 h-12 rounded"
+                                className="w-10 h-10 rounded"
                               />
                             )}
-                            <div>
-                              <p className="font-medium">{nft.name}</p>
-                              <p className="text-sm text-muted-foreground">
+                            <div className="overflow-hidden">
+                              <p className="font-medium text-sm truncate">
+                                {nft.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">
                                 Type: {nft.type} • ID: {nft.id}
                               </p>
                             </div>
@@ -1052,12 +1281,14 @@ const GamificationTab = () => {
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Pending Visits</CardTitle>
+              <CardHeader className="flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2">
+                <CardTitle className="text-lg">Pending Visits</CardTitle>
                 <Button
                   variant="outline"
                   onClick={fetchBookedSlots}
                   disabled={isLoadingBookedSlots}
+                  size="sm"
+                  className="w-full xs:w-auto"
                 >
                   {isLoadingBookedSlots ? (
                     <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
@@ -1067,7 +1298,7 @@ const GamificationTab = () => {
                   Refresh
                 </Button>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-3 sm:px-6">
                 {isLoadingBookedSlots ? (
                   <div className="flex justify-center py-8">
                     <Loader2Icon className="h-8 w-8 animate-spin" />
@@ -1077,25 +1308,25 @@ const GamificationTab = () => {
                     No pending visits found
                   </p>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {bookedSlots.map((slot, index) => (
                       <div
                         key={index}
-                        className="flex flex-col p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                        className="flex flex-col p-3 border rounded-lg hover:bg-accent/50 transition-colors"
                       >
-                        <div className="flex justify-between items-start mb-4">
+                        <div className="flex flex-col xs:flex-row justify-between items-start mb-3 gap-2">
                           <div>
-                            <p className="font-medium">
+                            <p className="font-medium text-sm">
                               {new Date(
                                 Number(slot.start) / 1000000
                               ).toLocaleDateString(undefined, {
-                                weekday: "long",
+                                weekday: "short",
                                 year: "numeric",
-                                month: "long",
+                                month: "short",
                                 day: "numeric",
                               })}
                             </p>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               {new Date(
                                 Number(slot.start) / 1000000
                               ).toLocaleTimeString([], {
@@ -1104,32 +1335,41 @@ const GamificationTab = () => {
                               })}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <p className="text-sm font-medium">
+                          <div className="text-left xs:text-right w-full xs:w-auto">
+                            <p className="text-xs font-medium">
                               Visit ID: {Number(slot.visitId)}
                             </p>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               Capacity: {Number(slot.capacity)}
                             </p>
+                            <p className="text-xs text-muted-foreground truncate max-w-[180px]">
+                              User ID: {slot.userId || "Unknown"}
+                            </p>
+                            {slot.payment !== undefined && (
+                              <p className="text-xs text-muted-foreground">
+                                Payment: {Number(slot.payment)} tokens
+                              </p>
+                            )}
                           </div>
                         </div>
 
-                        <div className="flex justify-end gap-2">
+                        <div className="flex flex-col xs:flex-row justify-end gap-2">
                           <Button
                             variant="default"
                             size="sm"
                             onClick={() => handleCompleteVisit(slot.visitId)}
                             disabled={!selectedAvatarId}
-                            className="flex items-center gap-2"
+                            className="flex items-center gap-1 w-full xs:w-auto text-xs"
                           >
                             {selectedAvatarId
-                              ? `Complete with ${nfts.find((a) => a.id === selectedAvatarId)?.name}`
+                              ? `Complete with ${nfts.find((a) => a.id === selectedAvatarId)?.name?.substring(0, 8)}${nfts.find((a) => a.id === selectedAvatarId)?.name?.length > 8 ? "..." : ""}`
                               : "Select an avatar above"}
                           </Button>
                           <Button
                             variant="destructive"
                             size="sm"
                             onClick={() => handleRejectVisit(slot.visitId)}
+                            className="w-full xs:w-auto text-xs"
                           >
                             Reject
                           </Button>
@@ -1142,12 +1382,14 @@ const GamificationTab = () => {
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>All Visits</CardTitle>
+              <CardHeader className="flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2">
+                <CardTitle className="text-lg">All Visits</CardTitle>
                 <Button
                   variant="outline"
                   onClick={fetchVisits}
                   disabled={isLoadingVisits}
+                  size="sm"
+                  className="w-full xs:w-auto"
                 >
                   {isLoadingVisits ? (
                     <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
@@ -1157,7 +1399,7 @@ const GamificationTab = () => {
                   Refresh
                 </Button>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-3 sm:px-6">
                 {isLoadingVisits ? (
                   <div className="flex justify-center py-8">
                     <Loader2Icon className="h-8 w-8 animate-spin" />
@@ -1167,26 +1409,29 @@ const GamificationTab = () => {
                     No visits found
                   </p>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {visits.map((visit, index) => (
                       <div
                         key={index}
-                        className="p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                        className="p-3 border rounded-lg hover:bg-accent/50 transition-colors"
                       >
-                        <div className="flex justify-between items-start mb-2">
+                        <div className="flex flex-col xs:flex-row justify-between items-start mb-2 gap-2">
                           <div>
-                            <p className="font-medium">
+                            <p className="font-medium text-sm">
                               Visit ID: {Number(visit.visitId)}
                             </p>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs text-muted-foreground truncate max-w-[180px]">
                               User ID: {visit.userId}
                             </p>
                           </div>
-                          <Badge variant={getStatusVariant(visit.status)}>
+                          <Badge
+                            variant={getStatusVariant(visit.status)}
+                            className="mt-1 xs:mt-0 text-xs"
+                          >
                             {Object.keys(visit.status)[0]}
                           </Badge>
                         </div>
-                        <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
+                        <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
                           <div>
                             <p className="text-muted-foreground">Mode</p>
                             <p>{Object.keys(visit.visitMode)[0]}</p>
@@ -1194,6 +1439,10 @@ const GamificationTab = () => {
                           <div>
                             <p className="text-muted-foreground">Avatar ID</p>
                             <p>{Number(visit.avatarId)}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Payment</p>
+                            <p>{Number(visit.payment)} tokens</p>
                           </div>
                           {visit.meetingLink && (
                             <div className="col-span-2">
@@ -1204,7 +1453,7 @@ const GamificationTab = () => {
                                 href={visit.meetingLink}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-500 hover:underline"
+                                className="text-blue-500 hover:underline break-all text-xs"
                               >
                                 {visit.meetingLink}
                               </a>
@@ -1212,31 +1461,74 @@ const GamificationTab = () => {
                           )}
                           <div className="col-span-2">
                             <p className="text-muted-foreground">Timestamps</p>
-                            <div className="grid grid-cols-2 gap-2 mt-1">
+                            <div className="grid grid-cols-1 xs:grid-cols-2 gap-1 mt-1">
                               {visit.timestamp.slotTime && (
-                                <p>
+                                <p className="text-xs">
                                   Slot:{" "}
                                   {new Date(
                                     Number(visit.timestamp.slotTime) / 1000000
-                                  ).toLocaleString()}
+                                  ).toLocaleString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
                                 </p>
                               )}
                               {visit.timestamp.bookingTime && (
-                                <p>
+                                <p className="text-xs">
                                   Booked:{" "}
                                   {new Date(
                                     Number(visit.timestamp.bookingTime) /
                                       1000000
-                                  ).toLocaleString()}
+                                  ).toLocaleString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
                                 </p>
                               )}
                               {visit.timestamp.completionTime && (
-                                <p>
+                                <p className="text-xs">
                                   Completed:{" "}
                                   {new Date(
                                     Number(visit.timestamp.completionTime) /
                                       1000000
-                                  ).toLocaleString()}
+                                  ).toLocaleString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </p>
+                              )}
+                              {visit.timestamp.cancellationTime && (
+                                <p className="text-xs">
+                                  Cancelled:{" "}
+                                  {new Date(
+                                    Number(visit.timestamp.cancellationTime) /
+                                      1000000
+                                  ).toLocaleString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </p>
+                              )}
+                              {visit.timestamp.rejectionTime && (
+                                <p className="text-xs">
+                                  Rejected:{" "}
+                                  {new Date(
+                                    Number(visit.timestamp.rejectionTime) /
+                                      1000000
+                                  ).toLocaleString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
                                 </p>
                               )}
                             </div>

@@ -21,13 +21,13 @@ export function ShareDataFunc({ assetID }) {
   const [hours, setHours] = useState(1);
   const [open, setOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const { actors } = useActorStore();
+  const { dataAsset } = useActorStore();
 
   const handleShare = async () => {
     try {
       setSharing(true);
       console.log(assetID);
-      const result = await actors.dataAsset.shareDataAsset(
+      const result = await dataAsset.shareDataAsset(
         assetID,
         userId,
         Number(hours)

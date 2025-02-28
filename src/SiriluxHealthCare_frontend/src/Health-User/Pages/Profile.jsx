@@ -17,7 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToastProgressStore } from "../../State/ProgressStore/ToastProgressStore";
 
 export default function ProfileContent() {
-  const { actors } = useActorStore();
+  const { user, identityManager } = useActorStore();
   const { userProfile, loading, fetchUserProfile, updateUserProfile } =
     useUserProfileStore();
   const { progress, setProgress } = useToastProgressStore();
@@ -34,8 +34,8 @@ export default function ProfileContent() {
   const [pincode, setPincode] = useState("");
 
   useEffect(() => {
-    fetchUserProfile(actors);
-  }, [actors, fetchUserProfile]);
+    fetchUserProfile(user, identityManager);
+  }, [user, fetchUserProfile]);
 
   useEffect(() => {
     const toastId = "profile-loading-toast";
@@ -116,7 +116,12 @@ export default function ProfileContent() {
         weight,
       };
 
-      const result = await updateUserProfile(actors, demoInfo, basicHealthPara);
+      const result = await updateUserProfile(
+        user,
+        identityManager,
+        demoInfo,
+        basicHealthPara
+      );
 
       toast({
         id: toastId,
@@ -200,12 +205,12 @@ export default function ProfileContent() {
                   </label>
                   <div className="mt-1">
                     <Input
-                      disabled
                       className="border"
                       id="dob"
                       placeholder="mm/dd/yyyy"
                       value={dob}
                       onChange={(e) => setDob(e.target.value)}
+                      type="date"
                     />
                   </div>
                 </div>

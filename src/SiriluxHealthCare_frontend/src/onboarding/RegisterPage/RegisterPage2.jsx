@@ -15,7 +15,7 @@ import LoadingScreen from "../../LoadingScreen";
 import OnboardingBanner from "../../OnboardingBanner";
 
 import { z } from "zod";
-import ActorContext from "../../ActorContext";
+import useActorStore from "../../State/Actors/ActorStore";
 
 // Define the Zod schema
 const formSchema = z.object({
@@ -52,7 +52,7 @@ const formSchema = z.object({
 });
 
 export default function RegisterPage2Content() {
-  const { actors } = useContext(ActorContext);
+  const { professional } = useActorStore();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
@@ -138,58 +138,7 @@ export default function RegisterPage2Content() {
         certificationInfoJson
       );
 
-      // // Fetch the encrypted key
-      // const seed = window.crypto.getRandomValues(new Uint8Array(32));
-      // const tsk = new vetkd.TransportSecretKey(seed);
-      // const encryptedKeyResult =
-      //   await actors.professional.encrypted_symmetric_key_for_professional(
-      //     Object.values(tsk.public_key())
-      //   );
-
-      // let encryptedKey = "";
-
-      // Object.keys(encryptedKeyResult).forEach((key) => {
-      //   if (key === "err") {
-      //     toast({
-      //       title: "Error",
-      //       description: encryptedKeyResult[key],
-      //       variant: "destructive",
-      //     });
-      //     setLoading(false);
-      //     return;
-      //   }
-      //   if (key === "ok") {
-      //     encryptedKey = encryptedKeyResult[key];
-      //   }
-      // });
-
-      // if (!encryptedKey) {
-      //   setLoading(false);
-      //   return;
-      // }
-
-      // const pkBytesHex =
-      //   await actors.professional.symmetric_key_verification_key();
-      // const principal = await actors.professional.whoami();
-      // const aesGCMKey = tsk.decrypt_and_hash(
-      //   hex_decode(encryptedKey),
-      //   hex_decode(pkBytesHex),
-      //   new TextEncoder().encode(principal),
-      //   32,
-      //   new TextEncoder().encode("aes-256-gcm")
-      // );
-
-      // const encryptedDataDemo = await aes_gcm_encrypt(demoInfoArray, aesGCMKey);
-      // const encryptedDataOccupation = await aes_gcm_encrypt(
-      //   occupationInfoArray,
-      //   aesGCMKey
-      // );
-      // const encryptedDataCertification = await aes_gcm_encrypt(
-      //   certificationInfoArray,
-      //   aesGCMKey
-      // );
-
-      const result = await actors.professional.createProfessionalRequest(
+      const result = await professional.createProfessionalRequest(
         demoInfoArray,
         occupationInfoArray,
         certificationInfoArray

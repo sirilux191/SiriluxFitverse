@@ -31,7 +31,7 @@ import { hex_decode } from "./VETKey/VetKeyFunctions";
 
 const FileUpload = () => {
   const {
-    actors,
+    dataAsset,
     createStorageShardActorExternal,
     createDataAssetShardActorExternal,
   } = useActorStore();
@@ -126,48 +126,6 @@ const FileUpload = () => {
     }
   };
 
-  const uploadToDataStorageShard = async (
-    encryptedData,
-    uniqueID,
-    storagePrincipal
-  ) => {
-    try {
-      // Create storage shard actor using the store method
-      const storageShard = createStorageShardActorExternal(storagePrincipal); //storagePrincipal is the principal of the storage shard canister
-      if (!storageShard) {
-        throw new Error("Failed to create storage shard actor");
-      }
-
-      // Convert encrypted data to chunks of 1.9MB
-      const CHUNK_SIZE = 1.9 * 1024 * 1024; // 1.9MB in bytes
-      const totalChunks = Math.ceil(encryptedData.length / CHUNK_SIZE);
-
-      // Start chunk upload process
-      const startResult = await storageShard.startChunkUpload(
-        uniqueID,
-        totalChunks
-      );
-      if ("err" in startResult) {
-        throw new Error(startResult.err);
-      }
-
-      // Upload chunks
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, encryptedData.length);
-        const chunk = encryptedData.slice(start, end);
-
-        const uploadResult = await storageShard.uploadChunk(uniqueID, i, chunk);
-        console.log(uploadResult);
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Error uploading to DataStorageShard:", error);
-      throw error;
-    }
-  };
-
   const handleUpload = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -177,7 +135,13 @@ const FileUpload = () => {
         throw new Error("No valid file uploaded. Please upload a valid file.");
       }
 
+      toast({
+        title: "Upload Started",
+        description: "Preparing file for upload...",
+      });
+
       // Step 1: Get upload location and unique ID from DataAsset canister
+
       const metadata = {
         category: category,
         description: description,
@@ -185,7 +149,7 @@ const FileUpload = () => {
         format: file.file.type,
       };
 
-      const dataAsset = {
+      const dataAssetFile = {
         assetID: "",
         title: file.file.name,
         dataAssetShardPrincipal: "",
@@ -193,7 +157,7 @@ const FileUpload = () => {
         metadata: metadata,
       };
 
-      const result = await actors.dataAsset.uploadDataAsset(dataAsset);
+      const result = await dataAsset.uploadDataAsset(dataAssetFile);
       let uniqueID = "";
       let assetShardPrincipal = "";
       let storageShardPrincipal = "";
@@ -248,6 +212,11 @@ const FileUpload = () => {
         new TextEncoder().encode("aes-256-gcm")
       );
 
+      toast({
+        title: "Upload Progress",
+        description: "Encrypting file data...",
+      });
+
       // Step 3: Split file into chunks and encrypt each chunk
       const ENCRYPTION_OVERHEAD = 28; // 12 bytes for IV + 16 bytes for auth tag
       const MAX_CHUNK_SIZE = 1.9 * 1000 * 1000; // 1.9MB max for encrypted chunk
@@ -273,6 +242,9 @@ const FileUpload = () => {
         throw new Error(startResult.err);
       }
 
+      // Modify the chunk upload section to show progress
+      let uploadedChunks = 0;
+
       // Process and upload each chunk
       for (let i = 0; i < totalChunks; i++) {
         const start = i * CHUNK_SIZE;
@@ -288,7 +260,16 @@ const FileUpload = () => {
           i,
           encryptedChunk
         );
-        console.log(uploadResult);
+
+        uploadedChunks++;
+        const progress = Math.round((uploadedChunks / totalChunks) * 100);
+
+        // Show toast at 20% intervals
+        toast({
+          title: "Upload Progress",
+          description: `Uploading file: ${progress}% complete`,
+        });
+
         if ("err" in uploadResult) {
           throw new Error(
             `Failed to upload chunk ${i + 1}: ${uploadResult.err}`
@@ -298,8 +279,7 @@ const FileUpload = () => {
 
       toast({
         title: "Success",
-
-        description: "File uploaded successfully",
+        description: "File uploaded successfully!",
       });
     } catch (error) {
       handleError(error);
@@ -328,8 +308,6 @@ const FileUpload = () => {
     iv_and_ciphertext.set(ciphertext, iv.length);
     return iv_and_ciphertext;
   };
-  // const hex_encode = (bytes) =>
-  //   bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, "0"), "");
 
   const handleRemoveFile = () => {
     setFile(null);
