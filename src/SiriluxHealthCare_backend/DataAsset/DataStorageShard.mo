@@ -24,6 +24,7 @@ actor class DataStorageShard() {
 
     private stable var dataStoreAccess : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
     private stable var dataReadPermittedPrincipals : BTree.BTree<Text, BTree.BTree<Principal, Time.Time>> = BTree.init<Text, BTree.BTree<Principal, Time.Time>>(null);
+
     // Main storage map for completed data
     private stable var dataStore : BTree.BTree<Text, Blob> = BTree.init<Text, Blob>(null);
     // Temporary storage for chunks being uploaded
@@ -50,51 +51,6 @@ actor class DataStorageShard() {
         return #ok("Access revoked");
     };
 
-    public shared ({ caller }) func insertData(id : Text, data : Blob) : async Result.Result<Text, Text> {
-        switch (BTree.get(dataStoreAccess, Text.compare, id)) {
-            case (?value) {
-                if (value != caller) {
-                    return #err("Not permitted");
-                };
-            };
-            case (null) {
-                return #err("Not permitted");
-            };
-        };
-
-        let dataSize = data.size();
-
-        switch (BTree.get(dataStore, Text.compare, id)) {
-            case (?existingData) {
-                let existingDataSize : Int = existingData.size();
-                // let newDataSize : Int = data.size();
-                let totalSize : Int = existingDataSize - dataSize;
-                switch (await subscriptionManager.updateDataStorageUsedMap(caller, totalSize)) {
-                    case (#ok(_timeRemaining)) {
-                        ignore BTree.insert(dataStore, Text.compare, id, data);
-                        return #ok("Data inserted");
-                    };
-                    case (#err(err)) {
-                        return #err(err);
-                    };
-                };
-            };
-            case null {
-
-            };
-        };
-
-        switch (await subscriptionManager.updateDataStorageUsedMap(caller, dataSize)) {
-            case (#ok(_)) {
-                ignore BTree.insert(dataStore, Text.compare, id, data);
-                return #ok("Data inserted");
-            };
-            case (#err(err)) {
-                return #err(err);
-            };
-        };
-    };
-
     // Initialize chunk upload
     public shared ({ caller }) func startChunkUpload(id : Text, totalChunks : Nat) : async Result.Result<Text, Text> {
         switch (BTree.get(dataStoreAccess, Text.compare, id)) {
@@ -109,41 +65,36 @@ actor class DataStorageShard() {
         };
 
         switch (BTree.get(dataStore, Text.compare, id)) {
-            case (?existingData) {
-                let existingDataSize : Int = existingData.size();
-                let newDataSize : Int = totalChunks * 2_000_000;
-                let totalSize : Int = newDataSize - existingDataSize;
-                // Check Only Don't Update
+            case (?_existingData) {
+                return #err("Data already exists");
+            };
+            case null {
+                let totalSize = 1_900_000 * totalChunks;
                 switch (await subscriptionManager.checkDataStorageUsedMap(caller, totalSize)) {
                     case (#ok(_)) {
-
+                        switch (BTree.get(chunksInProgress, Text.compare, id)) {
+                            case (?_) {
+                                return #err("Upload already in progress for this ID");
+                            };
+                            case null {
+                                let chunkBuffer = Buffer.Buffer<Blob>(totalChunks);
+                                ignore BTree.insert(
+                                    chunksInProgress,
+                                    Text.compare,
+                                    id,
+                                    {
+                                        chunks = chunkBuffer;
+                                        totalChunks = totalChunks;
+                                    },
+                                );
+                                return #ok("Upload started");
+                            };
+                        };
                     };
                     case (#err(err)) {
                         return #err(err);
                     };
                 };
-            };
-            case null {
-
-            };
-        };
-
-        switch (BTree.get(chunksInProgress, Text.compare, id)) {
-            case (?_) {
-                return #err("Upload already in progress for this ID");
-            };
-            case null {
-                let chunkBuffer = Buffer.Buffer<Blob>(totalChunks);
-                ignore BTree.insert(
-                    chunksInProgress,
-                    Text.compare,
-                    id,
-                    {
-                        chunks = chunkBuffer;
-                        totalChunks = totalChunks;
-                    },
-                );
-                return #ok("Upload started");
             };
         };
     };
@@ -167,6 +118,7 @@ actor class DataStorageShard() {
                     return #err("Invalid chunk index");
                 };
                 uploadData.chunks.add(chunk);
+                Debug.print("Chunk Size" # Nat.toText(chunk.size()));
                 Debug.print("Chunk Index: " # Nat.toText(chunkIndex));
                 Debug.print("Total Chunks: " # Nat.toText(uploadData.totalChunks));
 
@@ -177,39 +129,24 @@ actor class DataStorageShard() {
                     Debug.print("Complete Data: " # Nat.toText(completeData.size()));
                     switch (BTree.get(dataStore, Text.compare, id)) {
 
-                        case (?existingData) {
-                            Debug.print("Existing Data: " # Nat.toText(existingData.size()));
-                            let existingDataSize : Int = existingData.size();
-
-                            let totalSize : Int = completeData.size() - existingDataSize;
-                            Debug.print("Total Size: " # Nat.toText(Int.abs(totalSize)));
-                            switch (await subscriptionManager.updateDataStorageUsedMap(caller, totalSize)) {
+                        case (?_existingData) {
+                            return #err("Data already exists");
+                        };
+                        case null {
+                            switch (await subscriptionManager.updateDataStorageUsedMap(caller, completeData.size())) {
                                 case (#ok(_)) {
+
                                     ignore BTree.insert(dataStore, Text.compare, id, completeData);
                                     ignore BTree.delete(chunksInProgress, Text.compare, id);
-                                    return #ok("Chunk uploaded");
+                                    return #ok("Final Chunk uploaded");
                                 };
                                 case (#err(err)) {
                                     return #err(err);
                                 };
                             };
                         };
-                        case null {
+                    };
 
-                        };
-                    };
-                    Debug.print("Test 1");
-                    switch (await subscriptionManager.updateDataStorageUsedMap(caller, completeData.size())) {
-                        case (#ok(_)) {
-                            Debug.print("Test 2");
-                            ignore BTree.insert(dataStore, Text.compare, id, completeData);
-                            ignore BTree.delete(chunksInProgress, Text.compare, id);
-                            return #ok("Chunk uploaded");
-                        };
-                        case (#err(err)) {
-                            return #err(err);
-                        };
-                    };
                 };
                 return #ok("Chunk uploaded");
             };
@@ -283,24 +220,6 @@ actor class DataStorageShard() {
         };
     };
 
-    // Original getData function remains for backward compatibility
-    public shared query ({ caller }) func getData(id : Text) : async Result.Result<Blob, Text> {
-        switch (BTree.get(dataStoreAccess, Text.compare, id)) {
-            case (?value) {
-                if (value != caller) {
-                    return #err("Not permitted");
-                };
-            };
-            case (null) {
-                return #err("Not permitted");
-            };
-        };
-        switch (BTree.get(dataStore, Text.compare, id)) {
-            case (?data) { return #ok(data) };
-            case null { return #err("Data not found") };
-        };
-    };
-
     // Delete stored data
     public shared ({ caller }) func deleteData(id : Text) : async Result.Result<Text, Text> {
         switch (BTree.get(dataStoreAccess, Text.compare, id)) {
@@ -354,15 +273,6 @@ actor class DataStorageShard() {
         };
     };
 
-    private func isPermitted(principal : Principal) : Bool {
-        for (permittedPrincipal in permittedPrincipals.vals()) {
-            if (permittedPrincipal == principal) {
-                return true;
-            };
-        };
-        return false;
-    };
-
     public shared ({ caller }) func grantReadPermission(id : Text, principal : Principal, time : Int) : async Result.Result<Text, Text> {
         if (not isPermitted(caller)) {
             return #err("Not permitted");
@@ -393,31 +303,6 @@ actor class DataStorageShard() {
             case (?value) {
                 ignore BTree.delete(value, Principal.compare, principal);
                 return #ok("Read permission revoked");
-            };
-            case null {
-                return #err("Read permission not found");
-            };
-        };
-    };
-
-    public shared ({ caller }) func getDataforReadPermittedPrincipal(id : Text) : async Result.Result<Blob, Text> {
-        switch (BTree.get(dataReadPermittedPrincipals, Text.compare, id)) {
-            case (?value) {
-                let tempPermittedPrincipals = BTree.get(value, Principal.compare, caller);
-                switch (tempPermittedPrincipals) {
-                    case (?time) {
-                        if (Time.now() > time) {
-                            return #err("Read permission expired");
-                        };
-                        switch (BTree.get(dataStore, Text.compare, id)) {
-                            case (?data) { return #ok(data) };
-                            case null { return #err("Data not found") };
-                        };
-                    };
-                    case null {
-                        return #err("Read permission not found");
-                    };
-                };
             };
             case null {
                 return #err("Read permission not found");
@@ -463,5 +348,14 @@ actor class DataStorageShard() {
                 return #err("Read permission not found test 2");
             };
         };
+    };
+
+    private func isPermitted(principal : Principal) : Bool {
+        for (permittedPrincipal in permittedPrincipals.vals()) {
+            if (permittedPrincipal == principal) {
+                return true;
+            };
+        };
+        return false;
     };
 };

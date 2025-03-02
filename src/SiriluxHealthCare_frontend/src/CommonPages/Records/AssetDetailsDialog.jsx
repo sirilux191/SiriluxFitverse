@@ -156,6 +156,7 @@ export default function AssetDetailsDialog({
               </Button>
             </div>
 
+            {/* ADD input for question */}
             <div className="mt-3">
               {isSupportedForAI ? (
                 <Button

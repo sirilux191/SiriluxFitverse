@@ -1,5 +1,4 @@
 import Array "mo:base/Array";
-import Debug "mo:base/Debug";
 import Float "mo:base/Float";
 import Int "mo:base/Int";
 import Nat "mo:base/Nat";
@@ -27,13 +26,17 @@ actor class SubscriptionManager() = this {
 
     private stable var principalTimerMap : BTree.BTree<Principal, Nat> = BTree.init<Principal, Nat>(?128); // Principal Timer Map (Principal, Timer)
 
-    private let allDataServiceDataStorageShards : BTree.BTree<Principal, ()> = BTree.init<Principal, ()>(?128);
+    private let allDataServiceShards : BTree.BTree<Principal, ()> = BTree.init<Principal, ()>(?128);
 
     private let TOKEN_PER_DATA_MB_PER_SECOND : Nat = 1; // 1 token per 1MB / Second
-    // Token storage and expiration time (5 minutes in nanoseconds)
-    private let TOKEN_EXPIRATION = 300_000_000_000;
+    private let FREE_DATA_MB : Nat = 100; // 100MB
+    private let FREE_DATA_GB_PREMIUM : Nat = 5; // 5GB
+    private let TOKEN_EXPIRATION = 300_000_000_000; // Token storage and expiration time (5 minutes in nanoseconds)
     private let AI_TOKEN_GENERATION_COST = 1; // 1 tokens
     private let PREMIUM_STATUS_COST = 1000; // 1000 tokens
+
+    private let BYTES_PER_MB : Nat = 1_000_000;
+    private let BYTES_PER_GB : Nat = 1_000_000_000;
     private stable var tokenMap : BTree.BTree<Text, (Principal, Int)> = BTree.init<Text, (Principal, Int)>(null);
 
     private stable var permittedPrincipals : [Principal] = [Principal.fromText(CanisterIDs.dataAssetCanisterID)]; // Add permitted principals here
@@ -43,7 +46,7 @@ actor class SubscriptionManager() = this {
             case (null) {
                 {
                     tokens = 0;
-                    dataMB = 0;
+                    dataBytes = 0;
                     lastUpdateTime = Time.now();
                     isPremium = false;
                 };
@@ -63,7 +66,7 @@ actor class SubscriptionManager() = this {
             to = { owner = Principal.fromActor(this); subaccount = null };
             amount = PREMIUM_STATUS_COST * 100_000_000;
             fee = null;
-            memo = ?Text.encodeUtf8("Buy Premium : " # debug_show PREMIUM_STATUS_COST);
+            memo = ?Text.encodeUtf8("Buy Premium Status");
             created_at_time = null;
         });
 
@@ -77,9 +80,9 @@ actor class SubscriptionManager() = this {
         };
 
         let updatedBalance : Balance = {
-            tokens = balance.tokens - PREMIUM_STATUS_COST;
-            dataMB = balance.dataMB;
-            lastUpdateTime = Time.now();
+            tokens = balance.tokens;
+            dataBytes = balance.dataBytes;
+            lastUpdateTime = balance.lastUpdateTime;
             isPremium = true;
         };
         ignore BTree.insert(subscriberMap, Principal.compare, caller, updatedBalance);
@@ -114,7 +117,7 @@ actor class SubscriptionManager() = this {
                     };
                     amount = AI_TOKEN_GENERATION_COST * 10_000_000; // 0.1 token
                     fee = null;
-                    memo = ?Text.encodeUtf8("Generate AI Token: " # debug_show AI_TOKEN_GENERATION_COST);
+                    memo = ?Text.encodeUtf8("Generate AI Token");
                     created_at_time = null;
                 });
 
@@ -142,7 +145,7 @@ actor class SubscriptionManager() = this {
     };
 
     // Verify a token (used by the cloud function)
-    public query func verifyCloudFunctionToken(token : Text, principalText : Text) : async Result.Result<Bool, Text> {
+    public func verifyCloudFunctionToken(token : Text, principalText : Text) : async Result.Result<Bool, Text> {
         switch (BTree.get(tokenMap, Text.compare, token)) {
             case (null) {
                 return #err("Invalid token");
@@ -167,7 +170,7 @@ actor class SubscriptionManager() = this {
     };
 
     public shared ({ caller }) func updateDataStorageUsedMap(principal : Principal, usedSpace : Int) : async Result.Result<Types.TimeRemaining, Text> {
-        let shardsPrincipal = BTree.get(allDataServiceDataStorageShards, Principal.compare, caller);
+        let shardsPrincipal = BTree.get(allDataServiceShards, Principal.compare, caller);
         switch (shardsPrincipal) {
             case (null) {
                 return #err("Caller is not a data storage shard");
@@ -182,44 +185,64 @@ actor class SubscriptionManager() = this {
                     case null {
                         {
                             tokens = 0;
-                            dataMB = 0;
+                            dataBytes = 0;
                             lastUpdateTime = currentTime;
                             isPremium = false;
                         };
                     };
                 };
 
-                // Calculate elapsed time and token consumption
                 let elapsedNano = currentTime - currentBalance.lastUpdateTime;
-                let elapsedSeconds = Int.div(elapsedNano, 1_000_000_000);
-                var tokensConsumed : Int = 0;
-                if (currentBalance.dataMB <= 100) {
-                    // No tokens consumed for first 100MB
+                let elapsedSeconds = (elapsedNano / 1_000_000_000);
+
+                var tokensConsumed : Nat = 0;
+
+                if (currentBalance.isPremium) {
+
+                    // Tokens consumed for remaining data
+                    let usedBytesTillNow : Int = (currentBalance.dataBytes) - (FREE_DATA_GB_PREMIUM * BYTES_PER_GB);
+                    if (usedBytesTillNow > 0) {
+                        let currentBalanceMBUsedTillNow = Int.abs(usedBytesTillNow) / (BYTES_PER_MB);
+                        tokensConsumed := (TOKEN_PER_DATA_MB_PER_SECOND) * (Int.abs(elapsedSeconds)) * (currentBalanceMBUsedTillNow);
+                    };
+
                 } else {
-                    tokensConsumed := (TOKEN_PER_DATA_MB_PER_SECOND) * (Int.abs(elapsedSeconds)) * currentBalance.dataMB;
+
+                    // Tokens consumed for remaining data
+                    let usedBytesTillNow : Int = (currentBalance.dataBytes) - (FREE_DATA_MB * BYTES_PER_MB);
+                    if (usedBytesTillNow > 0) {
+                        let currentBalanceMBUsedTillNow = Int.abs(usedBytesTillNow) / (BYTES_PER_MB);
+                        tokensConsumed := (TOKEN_PER_DATA_MB_PER_SECOND) * (Int.abs(elapsedSeconds)) * (currentBalanceMBUsedTillNow);
+                    };
+
                 };
 
-                // Calculate new data size in MB, minimum 1MB if there's any data
-                var newDataMB = usedSpace / 1_000_000; // Convert bytes to MB
-                if (usedSpace > 0 and newDataMB == 0) {
-                    // If file exists but is less than 1MB, count it as 1MB
-                    newDataMB := 1;
+                var changeDataBytes = (usedSpace);
+
+                var newDataBytes = (currentBalance.dataBytes) + (changeDataBytes);
+                if (newDataBytes < 0) {
+                    newDataBytes := 0;
                 };
 
                 // Update balance
                 let updatedBalance : Types.Balance = {
-                    tokens = currentBalance.tokens - Int.abs(tokensConsumed);
-                    dataMB = Int.abs(newDataMB + currentBalance.dataMB);
+                    tokens = currentBalance.tokens - tokensConsumed;
+                    dataBytes = Int.abs(newDataBytes);
                     lastUpdateTime = currentTime;
                     isPremium = currentBalance.isPremium;
                 };
-                Debug.print("Updated Balance: " # debug_show updatedBalance);
 
-                let remainingSeconds = Float.fromInt((updatedBalance.tokens) / ((TOKEN_PER_DATA_MB_PER_SECOND) * (updatedBalance.dataMB)));
+                var remainingSeconds : Float = 0.0;
+
+                if ((updatedBalance.dataBytes / BYTES_PER_MB) == 0) {
+                    remainingSeconds := Float.fromInt((updatedBalance.tokens) / ((TOKEN_PER_DATA_MB_PER_SECOND) * ((updatedBalance.dataBytes / BYTES_PER_MB) + 1))); // +1 for not to divide by 0
+                } else {
+                    remainingSeconds := Float.fromInt((updatedBalance.tokens) / ((TOKEN_PER_DATA_MB_PER_SECOND) * ((updatedBalance.dataBytes / BYTES_PER_MB))));
+                };
 
                 ignore BTree.insert(subscriberMap, Principal.compare, principal, updatedBalance);
 
-                if (updatedBalance.dataMB <= 100) {
+                if (updatedBalance.dataBytes <= (FREE_DATA_MB * BYTES_PER_MB)) {
                     switch (BTree.get(principalTimerMap, Principal.compare, principal)) {
                         case (?value) {
                             Timer.cancelTimer(value);
@@ -228,7 +251,7 @@ actor class SubscriptionManager() = this {
                             // No timer to cancel
                         };
                     };
-                } else if (updatedBalance.isPremium and (updatedBalance.dataMB < 1000)) {
+                } else if (updatedBalance.isPremium and (updatedBalance.dataBytes < (FREE_DATA_GB_PREMIUM * BYTES_PER_GB))) {
                     switch (BTree.get(principalTimerMap, Principal.compare, principal)) {
                         case (?value) {
                             Timer.cancelTimer(value);
@@ -237,9 +260,6 @@ actor class SubscriptionManager() = this {
                             // No timer to cancel
                         };
                     };
-                } else if (remainingSeconds <= (24.0 * 60.0 * 60.0 * 1)) {
-                    //Less than 1 Days
-                    return #err("Remaining time after updating storage is less than 1 Days Add Tokens or Update Storage");
                 } else {
                     let triggerAfter : Nat = Int.abs(Float.toInt(remainingSeconds));
                     let id = Timer.setTimer<system>(
@@ -264,13 +284,14 @@ actor class SubscriptionManager() = this {
 
     };
 
-    public shared ({ caller }) func checkDataStorageUsedMap(principal : Principal, usedSpace : Int) : async Result.Result<Types.TimeRemaining, Text> {
-        let shardsPrincipal = BTree.get(allDataServiceDataStorageShards, Principal.compare, caller);
+    public shared query ({ caller }) func checkDataStorageUsedMap(principal : Principal, usedSpace : Int) : async Result.Result<Types.TimeRemaining, Text> {
+        let shardsPrincipal = BTree.get(allDataServiceShards, Principal.compare, caller);
         switch (shardsPrincipal) {
             case (null) {
                 return #err("Caller is not a data storage shard");
             };
             case (?_) {
+
                 let currentTime = Time.now();
 
                 // Get or initialize subscriber balance
@@ -279,51 +300,69 @@ actor class SubscriptionManager() = this {
                     case null {
                         {
                             tokens = 0;
-                            dataMB = 0;
+                            dataBytes = 0;
                             lastUpdateTime = currentTime;
                             isPremium = false;
                         };
                     };
                 };
 
-                // Calculate elapsed time and token consumption
                 let elapsedNano = currentTime - currentBalance.lastUpdateTime;
-                let elapsedSeconds = Int.div(elapsedNano, 1_000_000_000);
-                var tokensConsumed : Int = 0;
-                if (currentBalance.dataMB <= 100) {
-                    // No tokens consumed for first 100MB
+                let elapsedSeconds = (elapsedNano / 1_000_000_000);
+
+                var tokensConsumed : Nat = 0;
+
+                if (currentBalance.isPremium) {
+
+                    // Tokens consumed for remaining data
+                    let usedBytesTillNow : Int = (currentBalance.dataBytes) - (FREE_DATA_GB_PREMIUM * BYTES_PER_GB);
+                    if (usedBytesTillNow > 0) {
+                        let currentBalanceMBUsedTillNow = Int.abs(usedBytesTillNow) / (BYTES_PER_MB);
+                        tokensConsumed := (TOKEN_PER_DATA_MB_PER_SECOND) * (Int.abs(elapsedSeconds)) * (currentBalanceMBUsedTillNow);
+                    };
+
                 } else {
-                    tokensConsumed := (TOKEN_PER_DATA_MB_PER_SECOND) * (Int.abs(elapsedSeconds)) * currentBalance.dataMB;
+
+                    // Tokens consumed for remaining data
+                    let usedBytesTillNow : Int = (currentBalance.dataBytes) - (FREE_DATA_MB * BYTES_PER_MB);
+                    if (usedBytesTillNow > 0) {
+                        let currentBalanceMBUsedTillNow = Int.abs(usedBytesTillNow) / (BYTES_PER_MB);
+                        tokensConsumed := (TOKEN_PER_DATA_MB_PER_SECOND) * (Int.abs(elapsedSeconds)) * (currentBalanceMBUsedTillNow);
+                    };
+
                 };
 
-                // Calculate new data size in MB, minimum 1MB
-                var newDataMB = usedSpace / 1_000_000; // Convert bytes to MB
-                if (usedSpace > 0 and newDataMB == 0) {
-                    // If file exists but is less than 1MB, count it as 1MB
-                    newDataMB := 1;
+                var changeDataBytes = (usedSpace);
+
+                var newDataBytes = (currentBalance.dataBytes) + (changeDataBytes);
+                if (newDataBytes < 0) {
+                    newDataBytes := 0;
                 };
 
-                // Calculate hypothetical updated balance
-                let hypotheticalBalance : Balance = {
-                    tokens = currentBalance.tokens - Int.abs(tokensConsumed);
-                    dataMB = Int.abs(newDataMB + currentBalance.dataMB);
+                // Update balance
+                let hypotheticalUpdatedBalance : Types.Balance = {
+                    tokens = currentBalance.tokens - tokensConsumed;
+                    dataBytes = Int.abs(newDataBytes);
                     lastUpdateTime = currentTime;
                     isPremium = currentBalance.isPremium;
                 };
 
                 var remainingSeconds : Float = 0.0;
-                if (hypotheticalBalance.dataMB > 0 and hypotheticalBalance.tokens > 0) {
-                    remainingSeconds := Float.fromInt((hypotheticalBalance.tokens)) / (Float.fromInt(TOKEN_PER_DATA_MB_PER_SECOND) * Float.fromInt(hypotheticalBalance.dataMB));
+
+                if ((hypotheticalUpdatedBalance.dataBytes / BYTES_PER_MB) == 0) {
+                    remainingSeconds := Float.fromInt((hypotheticalUpdatedBalance.tokens) / ((TOKEN_PER_DATA_MB_PER_SECOND) * ((hypotheticalUpdatedBalance.dataBytes / BYTES_PER_MB) + 1))); // +1 for not to divide by 0
+                } else {
+                    remainingSeconds := Float.fromInt((hypotheticalUpdatedBalance.tokens) / ((TOKEN_PER_DATA_MB_PER_SECOND) * ((hypotheticalUpdatedBalance.dataBytes / BYTES_PER_MB))));
                 };
 
-                if (currentBalance.dataMB <= 100) {
+                if (hypotheticalUpdatedBalance.dataBytes <= (FREE_DATA_MB * BYTES_PER_MB)) {
                     return #ok({
                         seconds = remainingSeconds;
                         minutes = remainingSeconds / 60.0;
                         hours = remainingSeconds / (60.0 * 60.0);
                         days = remainingSeconds / (24.0 * 60.0 * 60.0);
                     });
-                } else if (currentBalance.isPremium and (currentBalance.dataMB < 1000)) {
+                } else if (hypotheticalUpdatedBalance.isPremium and (hypotheticalUpdatedBalance.dataBytes <= (FREE_DATA_GB_PREMIUM * BYTES_PER_GB))) {
                     return #ok({
                         seconds = remainingSeconds;
                         minutes = remainingSeconds / 60.0;
@@ -357,38 +396,6 @@ actor class SubscriptionManager() = this {
         };
     };
 
-    public shared query ({ caller }) func getRemainingStorageTime(principalText : ?Text) : async Result.Result<Types.TimeRemaining, Text> {
-        let principal = switch (principalText) {
-            case (?text) { Principal.fromText(text) };
-            case null { caller };
-        };
-
-        switch (BTree.get(subscriberMap, Principal.compare, principal)) {
-            case (?balance) {
-                if (balance.tokens <= 0 or balance.dataMB <= 0) {
-                    return #ok({
-                        seconds = 0.0;
-                        minutes = 0.0;
-                        hours = 0.0;
-                        days = 0.0;
-                    });
-                };
-
-                let remainingSeconds = Float.fromInt(balance.tokens) / ((Float.fromInt(TOKEN_PER_DATA_MB_PER_SECOND)) * Float.fromInt(balance.dataMB));
-
-                #ok({
-                    seconds = remainingSeconds;
-                    minutes = remainingSeconds / 60.0;
-                    hours = remainingSeconds / (60.0 * 60.0);
-                    days = remainingSeconds / (24.0 * 60.0 * 60.0);
-                });
-            };
-            case null {
-                #err("No balance found for principal");
-            };
-        };
-    };
-
     public shared ({ caller }) func addTokensToBalance(amount : Nat) : async Result.Result<Text, Text> {
 
         let result = await icrcLedger.icrc2_transfer_from({
@@ -410,13 +417,13 @@ actor class SubscriptionManager() = this {
             };
         };
 
-        let tokensToadd = Int.abs(Float.toInt((Float.fromInt(amount) * 24 * 60 * 60 * 30) / 100));
+        let tokensToadd = Int.abs(((amount) * 24 * 60 * 60 * 30) / 100); // 30 days for 100 tokens
 
         switch (BTree.get(subscriberMap, Principal.compare, caller)) {
             case (?balance) {
                 let updatedBalance : Balance = {
                     tokens = balance.tokens + tokensToadd;
-                    dataMB = balance.dataMB;
+                    dataBytes = balance.dataBytes;
                     lastUpdateTime = balance.lastUpdateTime;
                     isPremium = balance.isPremium;
                 };
@@ -426,7 +433,7 @@ actor class SubscriptionManager() = this {
             case null {
                 let newBalance : Balance = {
                     tokens = (tokensToadd);
-                    dataMB = 0; // Initialize with 100MB
+                    dataBytes = 0;
                     lastUpdateTime = Time.now();
                     isPremium = false;
                 };
@@ -436,11 +443,15 @@ actor class SubscriptionManager() = this {
         };
     };
 
+    public query func getPremiumPrice() : async Nat {
+        PREMIUM_STATUS_COST;
+    };
+
     public shared ({ caller }) func addAllDataServiceShards(principal : Principal) : async Result.Result<Text, Text> {
         if (not isPermitted(caller)) {
             return #err("You are not permitted to perform this operation");
         };
-        ignore BTree.insert(allDataServiceDataStorageShards, Principal.compare, principal, ());
+        ignore BTree.insert(allDataServiceShards, Principal.compare, principal, ());
         #ok("Successfully added data storage shard");
     };
 
@@ -448,7 +459,7 @@ actor class SubscriptionManager() = this {
         if (not isPermitted(caller)) {
             return #err("You are not permitted to perform this operation");
         };
-        ignore BTree.delete(allDataServiceDataStorageShards, Principal.compare, principal);
+        ignore BTree.delete(allDataServiceShards, Principal.compare, principal);
         #ok("Successfully removed data storage shard");
     };
 
@@ -490,4 +501,5 @@ actor class SubscriptionManager() = this {
             case null { false };
         };
     };
+
 };

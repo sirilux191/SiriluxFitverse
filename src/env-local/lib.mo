@@ -11,7 +11,7 @@ module {
     public let facilityServiceCanisterID : Text = ("asrmz-lmaaa-aaaaa-qaaeq-cai");
 
     public let dataAssetCanisterID : Text = ("a3shf-5eaaa-aaaaa-qaafa-cai");
-    public let subscriptionManagerCanisterID : Text = ("a3shf-5eaaa-aaaaa-qaafa-cai");
+    public let subscriptionManagerCanisterID : Text = ("ctiya-peaaa-aaaaa-qaaja-cai");
 
     public let gamificationSystemCanisterID : Text = ("ajuq4-ruaaa-aaaaa-qaaga-cai");
     public let wellnessAvatarNFTCanisterID : Text = ("a4tbr-q4aaa-aaaaa-qaafq-cai");

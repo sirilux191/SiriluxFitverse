@@ -1,5 +1,6 @@
 import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
+import Debug "mo:base/Debug";
 import Error "mo:base/Error";
 import Cycles "mo:base/ExperimentalCycles";
 import Int "mo:base/Int";
@@ -18,6 +19,7 @@ import CanisterTypes "../Types/CanisterTypes";
 import Interface "../utility/ic-management-interface";
 import DataAssetShard "DataAssetShard";
 import DataStorageShard "DataStorageShard";
+
 actor class DataAssetService() = this {
 
     type DataAsset = Types.DataAsset;
@@ -154,7 +156,6 @@ actor class DataAssetService() = this {
                                 let deleteResult = await assetShard.deleteDataAsset(userID, timestamp);
                                 switch (deleteResult) {
                                     case (#ok(_)) {
-
                                         return #err(e);
                                     };
                                     case (#err(e)) {
@@ -359,6 +360,8 @@ actor class DataAssetService() = this {
         };
     };
 
+    // Revoke Share access to a data asset
+
     private func incrementTotalAssetCount() : () {
         totalAssetCount += 1;
     };
@@ -492,7 +495,7 @@ actor class DataAssetService() = this {
                 let shardIndex = n / itemsPerShard;
                 prefix # Nat.toText(shardIndex + 1);
             };
-            case null { prefix # "0" };
+            case null { Debug.trap("Unable to get Shard") };
         };
     };
 

@@ -93,7 +93,7 @@ actor FacilityService {
                 let uuidResult = await generateUUID();
 
                 let approvedFacility : HealthIDFacility = {
-                    IDNum = idResult;
+                    IDNum = idResult # "@siriluxservice";
                     UUID = uuidResult;
                     MetaData = facility.MetaData;
                 };

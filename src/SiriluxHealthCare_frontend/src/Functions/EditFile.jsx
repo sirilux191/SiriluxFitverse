@@ -28,17 +28,17 @@ const EditFile = ({
   const resetProgress = useToastProgressStore((state) => state.resetProgress);
   const progress = useToastProgressStore((state) => state.progress);
   const [metadata, setMetadata] = useState({
-    category: category,
+    category: category || "Reports",
     description: "",
     tags: "",
   });
 
-  // Add this useEffect to update metadata when dialog opens
+  // Update metadata when dialog opens
   useEffect(() => {
     if (isOpen) {
       setMetadata((prev) => ({
         ...prev,
-        category: category,
+        category: category || "Reports",
       }));
     }
   }, [isOpen, category]);
