@@ -47,6 +47,13 @@ actor class GamificationSystem() = this {
     };
     type Value = ICRC7.Value;
 
+    let MINT_COST : Nat = 500;
+    let ICRC_DECIMALS : Nat = 100_000_000;
+
+    // Add commission percentage (5%)
+    private let COMMISSION_PERCENTAGE : Nat = 5;
+    private let MIN_VISIT_PRICE : Nat = 5; // Minimum price of 5 tokens
+
     private let wellnessAvatarNFT : WellnessAvatarNFT.WellnessAvatarNFT = actor (CanisterIDs.wellnessAvatarNFTCanisterID);
 
     private let icrcLedger : ICRC2.Service = actor (CanisterIDs.icrc_ledger_canister_id);
@@ -86,11 +93,35 @@ actor class GamificationSystem() = this {
     private let identityManager : IdentityManager.IdentityManager = actor (env.identityManagerCanisterID);
 
     // Minting function with default values
-    public shared ({ caller }) func mintWellnessAvatar(mintNFTPrincipal : Text, memo : ?Blob, avatarType : GamificationTypes.AvatarType, imageURL : Text) : async [SetNFTResult] {
+    public shared ({ caller }) func mintWellnessAvatar(
+        mintNFTPrincipal : Text,
+        memo : ?Blob,
+        avatarType : GamificationTypes.AvatarType,
+    ) : async [SetNFTResult] {
+
+        let result = await icrcLedger.icrc2_transfer_from({
+            from = { owner = caller; subaccount = null };
+            spender_subaccount = null;
+            to = { owner = Principal.fromActor(this); subaccount = null };
+            amount = MINT_COST * ICRC_DECIMALS; // 8 decimals
+            fee = null;
+            memo = ?Text.encodeUtf8("MINT_AVATAR Cost: " # debug_show MINT_COST);
+            created_at_time = null;
+        });
+
+        switch (result) {
+            case (#Err(e)) return [#Err(#GenericError { error_code = 1; message = "Insufficient funds for minting: " # debug_show e })];
+            case _ {};
+        };
+
         let currentTokenId = await wellnessAvatarNFT.icrc7_total_supply();
         let tokenId = currentTokenId + 1;
 
-        let defaultMetadata = GamificationTypes.createAvatarDefaultMetadata(tokenId, GamificationTypes.defaultAttributes(avatarType), imageURL);
+        let defaultMetadata = GamificationTypes.createAvatarDefaultMetadata(
+            tokenId,
+            GamificationTypes.defaultAttributes(avatarType),
+            GamificationTypes.getAvatarImageURL(avatarType),
+        );
 
         let request : SetNFTRequest = [{
             owner = ?{
@@ -104,15 +135,38 @@ actor class GamificationSystem() = this {
             created_at_time = null;
         }];
 
-        return await wellnessAvatarNFT.icrcX_mint(caller, request);
-
+        return await wellnessAvatarNFT.icrcX_mint(Principal.fromText(Types.admin), request);
     };
 
-    public shared ({ caller }) func mintProfessionalNFT(mintNFTPrincipal : Text, memo : ?Blob, specialization : GamificationTypes.ProfessionalSpecialization, imageURL : Text) : async [SetNFTResult] {
+    public shared ({ caller }) func mintProfessionalNFT(
+        mintNFTPrincipal : Text,
+        memo : ?Blob,
+        specialization : GamificationTypes.ProfessionalSpecialization,
+    ) : async [SetNFTResult] {
+
+        let result = await icrcLedger.icrc2_transfer_from({
+            from = { owner = caller; subaccount = null };
+            spender_subaccount = null;
+            to = { owner = Principal.fromActor(this); subaccount = null };
+            amount = MINT_COST * ICRC_DECIMALS; // 8 decimals
+            fee = null;
+            memo = ?Text.encodeUtf8("MINT_PROFESSIONAL Cost: " # debug_show MINT_COST);
+            created_at_time = null;
+        });
+
+        switch (result) {
+            case (#Err(e)) return [#Err(#GenericError { error_code = 1; message = "Insufficient funds for minting: " # debug_show e })];
+            case _ {};
+        };
+
         let currentTokenId = await wellnessAvatarNFT.icrc7_total_supply();
         let tokenId = currentTokenId + 1;
 
-        let defaultMetadata = GamificationTypes.createProfessionalDefaultMetadata(tokenId, GamificationTypes.defaultProfessionalAttributes(specialization), imageURL);
+        let defaultMetadata = GamificationTypes.createProfessionalDefaultMetadata(
+            tokenId,
+            GamificationTypes.defaultProfessionalAttributes(specialization),
+            GamificationTypes.getProfessionalImageURL(specialization),
+        );
 
         let request : SetNFTRequest = [{
             owner = ?{
@@ -126,15 +180,38 @@ actor class GamificationSystem() = this {
             created_at_time = null;
         }];
 
-        return await wellnessAvatarNFT.icrcX_mint(caller, request);
-
+        return await wellnessAvatarNFT.icrcX_mint(Principal.fromText(Types.admin), request);
     };
 
-    public shared ({ caller }) func mintFacilityNFT(mintNFTPrincipal : Text, memo : ?Blob, services : GamificationTypes.FacilityServices, imageURL : Text) : async [SetNFTResult] {
+    public shared ({ caller }) func mintFacilityNFT(
+        mintNFTPrincipal : Text,
+        memo : ?Blob,
+        services : GamificationTypes.FacilityServices,
+    ) : async [SetNFTResult] {
+
+        let result = await icrcLedger.icrc2_transfer_from({
+            from = { owner = caller; subaccount = null };
+            spender_subaccount = null;
+            to = { owner = Principal.fromActor(this); subaccount = null };
+            amount = MINT_COST * ICRC_DECIMALS; // 8 decimals
+            fee = null;
+            memo = ?Text.encodeUtf8("MINT_FACILITY Cost: " # debug_show MINT_COST);
+            created_at_time = null;
+        });
+
+        switch (result) {
+            case (#Err(e)) return [#Err(#GenericError { error_code = 1; message = "Insufficient funds for minting: " # debug_show e })];
+            case _ {};
+        };
+
         let currentTokenId = await wellnessAvatarNFT.icrc7_total_supply();
         let tokenId = currentTokenId + 1;
 
-        let defaultMetadata = GamificationTypes.createFacilityDefaultMetadata(tokenId, GamificationTypes.defaultFacilityAttributes(services), imageURL);
+        let defaultMetadata = GamificationTypes.createFacilityDefaultMetadata(
+            tokenId,
+            GamificationTypes.defaultFacilityAttributes(services),
+            GamificationTypes.getFacilityImageURL(services),
+        );
 
         let request : SetNFTRequest = [{
             owner = ?{
@@ -148,8 +225,7 @@ actor class GamificationSystem() = this {
             created_at_time = null;
         }];
 
-        return await wellnessAvatarNFT.icrcX_mint(caller, request);
-
+        return await wellnessAvatarNFT.icrcX_mint(Principal.fromText(Types.admin), request);
     };
 
     public shared ({ caller }) func initiateVisit(idToVisit : Text, slotTime : Time.Time, visitMode : GamificationTypes.VisitMode, avatarId : Nat) : async Result.Result<Nat, Text> {
@@ -549,7 +625,7 @@ actor class GamificationSystem() = this {
 
     public shared ({ caller }) func updateProfessionalInfo(professionalInfo : ProfessionalInfo) : async Result.Result<Text, Text> {
         // Check caller's identity
-        let identityResult = await identityManager.getIdentity(caller);
+        let identityResult = await identityManager.getIdentity(?caller);
 
         switch (identityResult) {
             case (#err(msg)) {
@@ -574,7 +650,7 @@ actor class GamificationSystem() = this {
 
     public shared ({ caller }) func updateFacilityInfo(facilityInfo : FacilityInfo) : async Result.Result<Text, Text> {
         // Check caller's identity
-        let identityResult = await identityManager.getIdentity(caller);
+        let identityResult = await identityManager.getIdentity(?caller);
 
         switch (identityResult) {
             case (#err(msg)) {
@@ -633,7 +709,7 @@ actor class GamificationSystem() = this {
 
     public shared ({ caller }) func removeMultipleAvailabilitySlots(entityId : Text, startTimes : [Time.Time]) : async Result.Result<Text, Text> {
         // Check caller's identity
-        let identityResult = await identityManager.getIdentity(caller);
+        let identityResult = await identityManager.getIdentity(?caller);
 
         switch (identityResult) {
             case (#err(msg)) {
@@ -678,7 +754,7 @@ actor class GamificationSystem() = this {
 
     public shared ({ caller }) func addMultipleAvailabilitySlots(slots : [AvailabilitySlot]) : async Result.Result<Text, Text> {
         // Check caller's identity
-        let identityResult = await identityManager.getIdentity(caller);
+        let identityResult = await identityManager.getIdentity(?caller);
 
         switch (identityResult) {
             case (#err(msg)) {
@@ -699,6 +775,12 @@ actor class GamificationSystem() = this {
                         continue l;
                     };
 
+                    // Validate price - must be at least 5 tokens
+                    if (slot.price < MIN_VISIT_PRICE) {
+                        errors := Array.append<Text>(errors, ["Price must be at least " # Nat.toText(MIN_VISIT_PRICE) # " tokens"]);
+                        continue l;
+                    };
+
                     // Check if the time is aligned to half-hour intervals
                     if (not isHalfHourAligned(slot.start)) {
                         errors := Array.append<Text>(errors, ["Slot " # Int.toText(slot.start) # " must start at half-hour intervals"]);
@@ -712,7 +794,7 @@ actor class GamificationSystem() = this {
                     };
 
                     // Check if the slot start time is in the past
-                    let currentTime = Time.now(); // Get the current time
+                    let currentTime = Time.now();
                     if (slot.start < currentTime) {
                         errors := Array.append<Text>(errors, ["Slot " # Int.toText(slot.start) # " cannot start in the past"]);
                         continue l;
@@ -747,7 +829,7 @@ actor class GamificationSystem() = this {
 
     public shared ({ caller }) func getProfessionalInfoSelf() : async Result.Result<ProfessionalInfo, Text> {
         // Check caller's identity
-        let identityResult = await identityManager.getIdentity(caller);
+        let identityResult = await identityManager.getIdentity(?caller);
 
         switch (identityResult) {
             case (#err(msg)) {
@@ -771,7 +853,7 @@ actor class GamificationSystem() = this {
 
     public shared ({ caller }) func getFacilityInfoSelf() : async Result.Result<FacilityInfo, Text> {
         // Check caller's identity
-        let identityResult = await identityManager.getIdentity(caller);
+        let identityResult = await identityManager.getIdentity(?caller);
 
         switch (identityResult) {
             case (#err(msg)) {
@@ -795,7 +877,7 @@ actor class GamificationSystem() = this {
 
     public shared ({ caller }) func getAvailableSlotsSelf() : async Result.Result<[AvailabilitySlot], Text> {
         // Check caller's identity
-        let identityResult = await identityManager.getIdentity(caller);
+        let identityResult = await identityManager.getIdentity(?caller);
 
         switch (identityResult) {
             case (#err(msg)) {
@@ -857,17 +939,6 @@ actor class GamificationSystem() = this {
         filtered_list;
     };
 
-    // Add these helper functions
-    private func isProfessionalID(id : Text) : Bool {
-        let idLength = Text.size(id);
-        idLength == 12;
-    };
-
-    private func isFacilityID(id : Text) : Bool {
-        let idLength = Text.size(id);
-        idLength == 10;
-    };
-
     // Update the bookSlotAndCreateVisit function
     private func bookSlotAndCreateVisit(
         userPrincipal : Principal,
@@ -883,7 +954,7 @@ actor class GamificationSystem() = this {
         };
 
         // Verify user identity
-        let userIdentityResult = await identityManager.getIdentity(userPrincipal);
+        let userIdentityResult = await identityManager.getIdentity(?userPrincipal);
         switch (userIdentityResult) {
             case (#err(msg)) {
                 return #err("User identity verification failed: " # msg);
@@ -900,6 +971,67 @@ actor class GamificationSystem() = this {
                                     return #err("Slot is already booked");
                                 };
 
+                                // Process payment if the slot has a price
+                                if (availabilitySlot.price > 5) {
+                                    // Calculate commission amount (5% of price)
+                                    let commissionAmount = (Float.fromInt(availabilitySlot.price) * Float.fromInt(COMMISSION_PERCENTAGE)) / 100;
+                                    let providerAmount : Nat = Int.abs(Int.max(0, Float.toInt(Float.fromInt(availabilitySlot.price) - commissionAmount)));
+
+                                    // Transfer payment from user to this canister
+                                    let paymentResult = await icrcLedger.icrc2_transfer_from({
+                                        from = {
+                                            owner = userPrincipal;
+                                            subaccount = null;
+                                        };
+                                        spender_subaccount = null;
+                                        to = {
+                                            owner = Principal.fromActor(this);
+                                            subaccount = null;
+                                        };
+                                        amount = availabilitySlot.price * ICRC_DECIMALS;
+                                        fee = null;
+                                        memo = ?Text.encodeUtf8("VISIT_PAYMENT: " # Int.toText(availabilitySlot.price));
+                                        created_at_time = null;
+                                    });
+
+                                    switch (paymentResult) {
+                                        case (#Err(e)) {
+                                            return #err("Payment failed: " # debug_show e);
+                                        };
+                                        case (#Ok(_)) {
+                                            // Transfer provider's share (minus commission)
+                                            let entityPrincipal = await getEntityPrincipal(idToVisit);
+                                            switch (entityPrincipal) {
+                                                case (#err(e)) {
+                                                    return #err(e);
+                                                };
+                                                case (#ok(principal)) {
+                                                    let transferResult = await icrcLedger.icrc1_transfer({
+                                                        to = {
+                                                            owner = principal;
+                                                            subaccount = null;
+                                                        };
+                                                        from_subaccount = null;
+                                                        amount = providerAmount * ICRC_DECIMALS;
+                                                        fee = null;
+                                                        memo = ?Text.encodeUtf8("Commission: " # Float.toText(commissionAmount));
+                                                        created_at_time = null;
+                                                    });
+
+                                                    switch (transferResult) {
+                                                        case (#Err(e)) {
+                                                            return #err("Provider payment failed: " # debug_show e);
+                                                        };
+                                                        case (#Ok(_)) {};
+                                                    };
+                                                };
+                                            };
+                                        };
+                                    };
+                                } else {
+                                    return #err("Slot has no price");
+                                };
+
                                 // Generate meeting link for online visits
                                 let meetingLink = switch (visitMode) {
                                     case (#Online) {
@@ -908,7 +1040,7 @@ actor class GamificationSystem() = this {
                                     case (#Offline) { null };
                                 };
 
-                                // Create the visit with meeting link
+                                // Create the visit
                                 let visit : Visit = {
                                     visitId = nextVisitId;
                                     userId = userId;
@@ -924,10 +1056,11 @@ actor class GamificationSystem() = this {
                                         rejectionTime = null;
                                     };
                                     avatarId = avatarId;
-                                    meetingLink = meetingLink; // Add meeting link
+                                    meetingLink = meetingLink;
+                                    payment = availabilitySlot.price;
                                 };
 
-                                // Create a BookedSlot instead of using AvailabilitySlot
+                                // Create a BookedSlot
                                 let bookedSlot : BookedSlot = {
                                     entityId = idToVisit;
                                     start = slotTime;
@@ -935,7 +1068,7 @@ actor class GamificationSystem() = this {
                                     capacity = availabilitySlot.capacity;
                                 };
 
-                                // Book the slot with correct type
+                                // Book the slot
                                 var entityBookedSlots = switch (BTree.get(bookedSlots, Text.compare, idToVisit)) {
                                     case (?existing) { existing };
                                     case null {
@@ -994,7 +1127,7 @@ actor class GamificationSystem() = this {
     };
 
     public shared ({ caller }) func getBookedSlotsSelf() : async Result.Result<[BookedSlot], Text> {
-        let identityResult = await identityManager.getIdentity(caller);
+        let identityResult = await identityManager.getIdentity(?caller);
 
         switch (identityResult) {
             case (#err(msg)) {
@@ -1023,7 +1156,7 @@ actor class GamificationSystem() = this {
     };
 
     public shared ({ caller }) func getUserVisits() : async Result.Result<[Visit], Text> {
-        let identityResult = await identityManager.getIdentity(caller);
+        let identityResult = await identityManager.getIdentity(?caller);
 
         switch (identityResult) {
             case (#err(msg)) {
@@ -1052,7 +1185,7 @@ actor class GamificationSystem() = this {
     };
 
     public shared ({ caller }) func getEntityVisits() : async Result.Result<[Visit], Text> {
-        let identityResult = await identityManager.getIdentity(caller);
+        let identityResult = await identityManager.getIdentity(?caller);
 
         switch (identityResult) {
             case (#err(msg)) {
@@ -1093,7 +1226,7 @@ actor class GamificationSystem() = this {
 
     private func completeVisit(professionalPrincipal : Principal, visitId : Nat) : async Result.Result<Visit, Text> {
 
-        let identityResult = await identityManager.getIdentity(professionalPrincipal);
+        let identityResult = await identityManager.getIdentity(?professionalPrincipal);
 
         switch (identityResult) {
             case (#err(msg)) {
@@ -1173,7 +1306,7 @@ actor class GamificationSystem() = this {
 
     private func rejectVisit(professionalPrincipal : Principal, visitId : Nat) : async Result.Result<Text, Text> {
 
-        let identityResult = await identityManager.getIdentity(professionalPrincipal);
+        let identityResult = await identityManager.getIdentity(?professionalPrincipal);
 
         switch (identityResult) {
             case (#err(msg)) {
@@ -1209,55 +1342,65 @@ actor class GamificationSystem() = this {
                         // Check if visit is in a valid state to reject
                         switch (visit.status) {
                             case (#Pending) {
-                                let updatedVisit = {
-                                    visit with
-                                    status = #Rejected;
-                                    timestamp = {
-                                        visit.timestamp with
-                                        rejectionTime = ?Time.now();
+                                // Process refund if applicable
+                                let refundResult = await refundVisitPayment(professionalPrincipal, visit);
+                                switch (refundResult) {
+                                    case (#err(msg)) {
+                                        return #err("Visit rejection failed: " # msg);
                                     };
-                                };
+                                    case (#ok(_)) {
+                                        let updatedVisit = {
+                                            visit with
+                                            status = #Rejected;
+                                            timestamp = {
+                                                visit.timestamp with
+                                                rejectionTime = ?Time.now();
+                                            };
+                                        };
 
-                                // Remove from bookedSlots and restore availability
-                                switch (visit.timestamp.slotTime) {
-                                    case (?slotTime) {
-                                        switch (BTree.get(bookedSlots, Text.compare, entityId)) {
-                                            case (?entitySlots) {
-                                                switch (BTree.get(entitySlots, Int.compare, slotTime)) {
-                                                    case (?bookedSlot) {
-                                                        // Remove from bookedSlots
-                                                        ignore BTree.delete(entitySlots, Int.compare, slotTime);
+                                        // Remove from bookedSlots and restore availability
+                                        switch (visit.timestamp.slotTime) {
+                                            case (?slotTime) {
+                                                switch (BTree.get(bookedSlots, Text.compare, entityId)) {
+                                                    case (?entitySlots) {
+                                                        switch (BTree.get(entitySlots, Int.compare, slotTime)) {
+                                                            case (?bookedSlot) {
+                                                                // Remove from bookedSlots
+                                                                ignore BTree.delete(entitySlots, Int.compare, slotTime);
 
-                                                        // Restore to availabilitySlots
-                                                        let availabilitySlot : AvailabilitySlot = {
-                                                            entityId = bookedSlot.entityId;
-                                                            start = bookedSlot.start;
-                                                            capacity = bookedSlot.capacity;
-                                                        };
+                                                                // Restore to availabilitySlots
+                                                                let availabilitySlot : AvailabilitySlot = {
+                                                                    entityId = bookedSlot.entityId;
+                                                                    start = bookedSlot.start;
+                                                                    capacity = bookedSlot.capacity;
+                                                                    price = visit.payment;
+                                                                };
 
-                                                        var entityAvailSlots = switch (BTree.get(availabilitySlots, Text.compare, entityId)) {
-                                                            case (?existing) {
-                                                                existing;
+                                                                var entityAvailSlots = switch (BTree.get(availabilitySlots, Text.compare, entityId)) {
+                                                                    case (?existing) {
+                                                                        existing;
+                                                                    };
+                                                                    case null {
+                                                                        let newTree = BTree.init<Time.Time, AvailabilitySlot>(null);
+                                                                        ignore BTree.insert(availabilitySlots, Text.compare, entityId, newTree);
+                                                                        newTree;
+                                                                    };
+                                                                };
+                                                                ignore BTree.insert(entityAvailSlots, Int.compare, slotTime, availabilitySlot);
                                                             };
-                                                            case null {
-                                                                let newTree = BTree.init<Time.Time, AvailabilitySlot>(null);
-                                                                ignore BTree.insert(availabilitySlots, Text.compare, entityId, newTree);
-                                                                newTree;
-                                                            };
+                                                            case null {};
                                                         };
-                                                        ignore BTree.insert(entityAvailSlots, Int.compare, slotTime, availabilitySlot);
                                                     };
                                                     case null {};
                                                 };
                                             };
                                             case null {};
                                         };
-                                    };
-                                    case null {};
-                                };
 
-                                ignore BTree.insert(visits, Nat.compare, visitId, updatedVisit);
-                                #ok("Visit rejected successfully");
+                                        ignore BTree.insert(visits, Nat.compare, visitId, updatedVisit);
+                                        #ok("Visit rejected successfully and payment refunded");
+                                    };
+                                };
                             };
                             case (#Completed) {
                                 #err("Cannot reject a completed visit");
@@ -1318,5 +1461,123 @@ actor class GamificationSystem() = this {
             };
         };
     };
+
+    // Update the helper functions for ID validation
+    private func isProfessionalID(id : Text) : Bool {
+        Text.contains(id, #text "@siriluxprof");
+    };
+
+    private func isFacilityID(id : Text) : Bool {
+        Text.contains(id, #text "@siriluxservice");
+    };
+
+    // Helper function to get entity principal from ID
+    private func getEntityPrincipal(entityId : Text) : async Result.Result<Principal, Text> {
+        let entityIdentityResult = await identityManager.getPrincipalByID(entityId);
+
+        switch (entityIdentityResult) {
+            case (#err(msg)) {
+                #err("Entity identity verification failed: " # msg);
+            };
+            case (#ok(principal)) {
+                #ok(principal);
+            };
+        };
+    };
+
+    // Add a function to refund payment if visit is rejected or cancelled
+    private func refundVisitPayment(professionalPrincipal : Principal, visit : Visit) : async Result.Result<Text, Text> {
+        if (visit.payment > 0) {
+            // Get the user's principal
+            let userIdentityResult = await identityManager.getPrincipalByID(visit.userId);
+            switch (userIdentityResult) {
+                case (#err(msg)) {
+                    return #err("User identity verification failed: " # msg);
+                };
+                case (#ok(principal)) {
+                    // Check if the canister has enough balance to refund
+                    let balanceResult = await icrcLedger.icrc1_balance_of({
+                        owner = Principal.fromActor(this);
+                        subaccount = null;
+                    });
+
+                    if (balanceResult < visit.payment * ICRC_DECIMALS) {
+                        return #err("Insufficient balance in canister to process refund");
+                    };
+
+                    // Refund the payment
+                    let refundResult = await icrcLedger.icrc2_transfer_from({
+                        from = {
+                            owner = professionalPrincipal;
+                            subaccount = null;
+                        };
+                        spender_subaccount = null;
+                        to = {
+                            owner = principal;
+                            subaccount = null;
+                        };
+                        amount = visit.payment * ICRC_DECIMALS;
+                        fee = null;
+                        memo = ?Text.encodeUtf8("VISIT_REFUND: Visit #" # Nat.toText(visit.visitId));
+                        created_at_time = null;
+                    });
+
+                    switch (refundResult) {
+                        case (#Err(e)) {
+                            return #err("Refund failed: " # debug_show e);
+                        };
+                        case (#Ok(_)) {
+                            return #ok("Payment refunded successfully");
+                        };
+                    };
+                };
+
+            };
+        } else {
+            return #ok("No payment to refund");
+        };
+    };
+
+    public shared ({ caller }) func getVisitById(visitId : Nat) : async Result.Result<Visit, Text> {
+        switch (BTree.get(visits, Nat.compare, visitId)) {
+            case (?visit) {
+                // Check if caller is authorized to view this visit
+                let identityResult = await identityManager.getIdentity(?caller);
+
+                switch (identityResult) {
+                    case (#err(msg)) {
+                        return #err("Identity verification failed: " # msg);
+                    };
+                    case (#ok(identity)) {
+                        let id = identity.0;
+                        let _role = identity.1;
+
+                        // Check if caller is the user who booked the visit
+                        let isUser = id == visit.userId;
+
+                        // Check if caller is the professional or facility for this visit
+                        let isProfessional = switch (visit.professionalId) {
+                            case (?profId) { id == profId };
+                            case null { false };
+                        };
+
+                        let isFacility = switch (visit.facilityId) {
+                            case (?facId) { id == facId };
+                            case null { false };
+                        };
+
+                        if (isUser or isProfessional or isFacility) {
+                            return #ok(visit);
+                        } else {
+                            return #err("Not authorized to view this visit");
+                        };
+                    };
+                };
+            };
+            case null {
+                return #err("Visit not found");
+            };
+        };
+    }
 
 };

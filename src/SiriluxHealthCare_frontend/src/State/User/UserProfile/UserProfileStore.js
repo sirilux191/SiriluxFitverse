@@ -15,14 +15,14 @@ export const useUserProfileStore = create(
       loading: false,
       error: null,
 
-      fetchUserProfile: async (actors, forceRefresh = false) => {
+      fetchUserProfile: async (user, identityManager, forceRefresh = false) => {
         if (!forceRefresh && get().userProfile) return;
         set({ loading: true, error: null });
         const { setProgress } = useToastProgressStore.getState();
 
         try {
           setProgress(5, "Initializing profile fetch...");
-          const result = await actors.user.readUser();
+          const result = await user.readUser();
 
           if (!result.ok) throw new Error(result.err);
           setProgress(15, "User data retrieved...");
@@ -41,7 +41,7 @@ export const useUserProfileStore = create(
 
           setProgress(35, "Getting encryption keys...");
           const encryptedKeyResult =
-            await actors.user.encrypted_symmetric_key_for_user(
+            await user.encrypted_symmetric_key_for_user(
               Object.values(tsk.public_key())
             );
 
@@ -49,8 +49,8 @@ export const useUserProfileStore = create(
 
           setProgress(45, "Processing encryption keys...");
           const encryptedKey = encryptedKeyResult.ok;
-          const pkBytesHex = await actors.user.symmetric_key_verification_key();
-          const principal = await actors.user.whoami();
+          const pkBytesHex = await user.symmetric_key_verification_key();
+          const principal = await identityManager.whoami();
 
           setProgress(55, "Generating decryption key...");
           const aesGCMKey = tsk.decrypt_and_hash(
@@ -113,7 +113,12 @@ export const useUserProfileStore = create(
         }
       },
 
-      updateUserProfile: async (actors, demoInfo, basicHealthPara) => {
+      updateUserProfile: async (
+        user,
+        identityManager,
+        demoInfo,
+        basicHealthPara
+      ) => {
         set({ loading: true, error: null });
         const { setProgress } = useToastProgressStore.getState();
 
@@ -135,7 +140,7 @@ export const useUserProfileStore = create(
           const seed = window.crypto.getRandomValues(new Uint8Array(32));
           const tsk = new vetkd.TransportSecretKey(seed);
           const encryptedKeyResult =
-            await actors.user.encrypted_symmetric_key_for_user(
+            await user.encrypted_symmetric_key_for_user(
               Object.values(tsk.public_key())
             );
 
@@ -144,8 +149,8 @@ export const useUserProfileStore = create(
 
           const encryptedKey = encryptedKeyResult.ok;
 
-          const pkBytesHex = await actors.user.symmetric_key_verification_key();
-          const principal = await actors.user.whoami();
+          const pkBytesHex = await user.symmetric_key_verification_key();
+          const principal = await identityManager.whoami();
 
           const aesGCMKey = tsk.decrypt_and_hash(
             hex_decode(encryptedKey),
@@ -166,7 +171,7 @@ export const useUserProfileStore = create(
           );
 
           setProgress(80, "Sending update to server...");
-          const result = await actors.user.updateUser({
+          const result = await user.updateUser({
             DemographicInformation: Object.values(encryptedDataDemo),
             BasicHealthParameters: Object.values(encryptedDataBasicHealth),
             BiometricData: [],

@@ -169,7 +169,7 @@ const DownloadFile = ({
           throw error;
         }
       }
-      console.log("decryptedChunks", decryptedChunks);
+
       // Combine decrypted chunks
       const totalLength = decryptedChunks.reduce(
         (sum, chunk) => sum + chunk.length,

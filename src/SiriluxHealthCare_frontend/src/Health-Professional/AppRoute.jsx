@@ -59,6 +59,7 @@ export default function AppRoute1() {
               path="/Assets"
               element={<CryptoAsset />}
             />
+
             <Route
               path="/Profile"
               element={<ProfileContent />}

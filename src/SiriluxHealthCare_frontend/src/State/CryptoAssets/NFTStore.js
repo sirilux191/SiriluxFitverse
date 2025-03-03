@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import useWalletStore from "./WalletStore";
 import { Principal } from "@dfinity/principal";
+import useActorStore from "../Actors/ActorStore";
 
 const useNFTStore = create(
   persist(
@@ -10,12 +11,17 @@ const useNFTStore = create(
       loading: false,
       error: null,
 
-      fetchNFTs: async (actors) => {
+      fetchNFTs: async () => {
         try {
           set({ loading: true, error: null });
+          const actorStore = useActorStore.getState();
+          const gamificationSystem = actorStore.gamificationSystem;
 
-          const avatarsResult =
-            await actors.gamificationSystem.getUserAvatarsSelf();
+          if (!gamificationSystem) {
+            throw new Error("Gamification system actor not initialized");
+          }
+
+          const avatarsResult = await gamificationSystem.getUserAvatarsSelf();
           const formattedAvatars = [];
 
           for (const [tokenId, metadata] of avatarsResult) {
@@ -139,16 +145,25 @@ const useNFTStore = create(
         }
       },
 
-      levelUpNFT: async (actors, tokenId, quality) => {
+      levelUpNFT: async (tokenId, quality) => {
         try {
           // Get NFT metadata to determine quality and cost
+          const actorStore = useActorStore.getState();
+          const gamificationSystem = actorStore.gamificationSystem;
+
+          if (!gamificationSystem) {
+            return {
+              success: false,
+              message: "Gamification system actor not initialized",
+            };
+          }
 
           const upgradeCost = getUpgradeCost(quality);
 
           // Approve the gamification system to spend tokens
           const walletStore = useWalletStore.getState();
           try {
-            await walletStore.approveSpender(actors, {
+            await walletStore.approveSpender({
               spender: {
                 owner: Principal.fromText(
                   process.env.CANISTER_ID_GAMIFICATIONSYSTEM
@@ -165,11 +180,11 @@ const useNFTStore = create(
             };
           }
 
-          const result = await actors.gamificationSystem.levelUpNFT(tokenId);
+          const result = await gamificationSystem.levelUpNFT(tokenId);
 
           if (result.ok) {
             // Refresh NFTs after successful level up
-            await get().fetchNFTs(actors);
+            await get().fetchNFTs();
             return { success: true, message: "NFT leveled up successfully" };
           } else {
             return { success: false, message: result.err };
@@ -183,12 +198,22 @@ const useNFTStore = create(
         }
       },
 
-      restoreHP: async (actors, tokenId, amount) => {
+      restoreHP: async (tokenId, amount) => {
         try {
+          const actorStore = useActorStore.getState();
+          const gamificationSystem = actorStore.gamificationSystem;
+
+          if (!gamificationSystem) {
+            return {
+              success: false,
+              message: "Gamification system actor not initialized",
+            };
+          }
+
           // Approve the gamification system to spend tokens
           const walletStore = useWalletStore.getState();
           try {
-            await walletStore.approveSpender(actors, {
+            await walletStore.approveSpender({
               spender: {
                 owner: Principal.fromText(
                   process.env.CANISTER_ID_GAMIFICATIONSYSTEM
@@ -205,14 +230,11 @@ const useNFTStore = create(
             };
           }
 
-          const result = await actors.gamificationSystem.restoreHP(
-            tokenId,
-            amount
-          );
+          const result = await gamificationSystem.restoreHP(tokenId, amount);
 
           if (result.ok) {
             // Refresh NFTs after successful HP restoration
-            await get().fetchNFTs(actors);
+            await get().fetchNFTs();
             return {
               success: true,
               message: `Successfully restored ${amount} HP`,
@@ -229,16 +251,26 @@ const useNFTStore = create(
         }
       },
 
-      transferNFT: async (actors, tokenId, principalAddress) => {
+      transferNFT: async (tokenId, principalAddress) => {
         try {
-          const result = await actors.gamificationSystem.transferNFT(
+          const actorStore = useActorStore.getState();
+          const gamificationSystem = actorStore.gamificationSystem;
+
+          if (!gamificationSystem) {
+            return {
+              success: false,
+              message: "Gamification system actor not initialized",
+            };
+          }
+
+          const result = await gamificationSystem.transferNFT(
             tokenId,
             principalAddress
           );
 
           if (result.ok) {
             // Refresh NFTs after successful transfer
-            await get().fetchNFTs(actors);
+            await get().fetchNFTs();
             return { success: true, message: "NFT transferred successfully" };
           } else {
             return { success: false, message: result.err };
@@ -248,6 +280,87 @@ const useNFTStore = create(
           return {
             success: false,
             message: error.message || "Failed to transfer NFT",
+          };
+        }
+      },
+
+      mintNFT: async (principalId, nftType, specificType) => {
+        try {
+          const actorStore = useActorStore.getState();
+          const gamificationSystem = actorStore.gamificationSystem;
+
+          if (!gamificationSystem) {
+            return {
+              success: false,
+              message: "Gamification system actor not initialized",
+            };
+          }
+
+          // Approve the gamification system to spend tokens
+          const walletStore = useWalletStore.getState();
+          const mintCost = 500; // Base cost for minting an NFT
+
+          try {
+            await walletStore.approveSpender({
+              spender: {
+                owner: Principal.fromText(
+                  process.env.CANISTER_ID_GAMIFICATIONSYSTEM
+                ),
+                subaccount: [],
+              },
+              amount: mintCost,
+              memo: `Mint ${nftType} NFT`,
+            });
+          } catch (approvalError) {
+            return {
+              success: false,
+              message: `Token approval failed: ${approvalError.message}`,
+            };
+          }
+
+          let result;
+          if (nftType === "avatar") {
+            const avatarTypeVariant = { [specificType]: null };
+            result = await gamificationSystem.mintWellnessAvatar(
+              principalId,
+              [],
+              avatarTypeVariant
+            );
+          } else if (nftType === "professional") {
+            const professionalTypeVariant = { [specificType]: null };
+            result = await gamificationSystem.mintProfessionalNFT(
+              principalId,
+              [],
+              professionalTypeVariant
+            );
+          } else if (nftType === "facility") {
+            const facilityTypeVariant = { [specificType]: null };
+            result = await gamificationSystem.mintFacilityNFT(
+              principalId,
+              [],
+              facilityTypeVariant
+            );
+          }
+
+          if (result && result[0]?.Ok) {
+            // Refresh NFTs after successful minting
+            await get().fetchNFTs();
+            return {
+              success: true,
+              message: `${nftType.charAt(0).toUpperCase() + nftType.slice(1)} NFT minted successfully`,
+            };
+          } else {
+            const error = result[0]?.Err || result[0]?.GenericError;
+            return {
+              success: false,
+              message: error?.message || "Unknown error occurred",
+            };
+          }
+        } catch (error) {
+          console.error(`Error minting ${nftType} NFT:`, error);
+          return {
+            success: false,
+            message: error.message || `Failed to mint ${nftType} NFT`,
           };
         }
       },

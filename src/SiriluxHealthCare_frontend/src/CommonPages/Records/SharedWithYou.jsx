@@ -28,7 +28,8 @@ export default function SharedWithYou() {
   const [loading, setLoading] = useState(true);
   const [loadingAsset, setLoadingAsset] = useState(false);
   const {
-    actors,
+    dataAsset,
+    identityManager,
     createSharedActivityShardActorExternal,
     createDataAssetShardActorExternal,
   } = useActorStore();
@@ -37,19 +38,18 @@ export default function SharedWithYou() {
   useEffect(() => {
     const fetchActivities = async () => {
       try {
-        let userIDResult = await actors.identityManager.getIdentityBySelf();
+        let userIDResult = await identityManager.getIdentity([]);
         if (!userIDResult.ok) {
           throw new Error("Failed to get user ID");
         }
         const userID = userIDResult.ok[0];
         // Get shared activity shard principals for this user
         const shardPrincipalsResult =
-          await actors.dataAsset.getUserSharedActivityShardsPrincipal(userID);
+          await dataAsset.getUserSharedActivityShardsPrincipal(userID);
         if (!shardPrincipalsResult.ok) {
           throw new Error("Failed to get shard principals");
         }
 
-        // Create actors for each shard and fetch activities
         const allActivities = [];
         for (const shardPrincipal of shardPrincipalsResult.ok) {
           const shardActor = await createSharedActivityShardActorExternal(
@@ -86,7 +86,7 @@ export default function SharedWithYou() {
       }
     };
     fetchActivities();
-  }, [actors]);
+  }, [dataAsset]);
 
   // Fetch asset details when clicking "More Details"
   const handleShowDetails = async (activity) => {
@@ -253,7 +253,7 @@ export default function SharedWithYou() {
               open={selectedActivity !== null}
               onOpenChange={() => setSelectedActivity(null)}
             >
-              <DialogContent className="bg-gray-900 text-white border border-gray-800 max-w-[800px] p-6">
+              <DialogContent className="bg-gray-900 text-white border border-gray-800 w-[95vw] max-w-[800px] p-6 overflow-hidden">
                 {loadingAsset ? (
                   <div className="text-center py-8">
                     Loading asset details...
@@ -271,9 +271,9 @@ export default function SharedWithYou() {
                   </div>
                 ) : (
                   selectedAsset && (
-                    <div className="space-y-6">
+                    <div className="space-y-6 overflow-y-auto max-h-[80vh]">
                       <DialogHeader>
-                        <DialogTitle className="text-xl font-semibold">
+                        <DialogTitle className="text-xl font-semibold break-all">
                           {selectedAsset.title}
                         </DialogTitle>
                       </DialogHeader>
@@ -285,20 +285,20 @@ export default function SharedWithYou() {
                       <div className="space-y-4">
                         <div>
                           <h4 className="text-gray-400 mb-2">Description</h4>
-                          <p className="text-sm text-gray-200">
+                          <p className="text-sm text-gray-200 break-all whitespace-pre-wrap">
                             {selectedAsset.description}
                           </p>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
-                          <span className="bg-gray-800 text-gray-300 px-3 py-1 rounded-full text-xs">
+                          <span className="bg-gray-800 text-gray-300 px-3 py-1 rounded-full text-xs break-all max-w-full">
                             Format: {selectedAsset.metadata.format}
                           </span>
-                          <span className="bg-gray-800 text-purple-400 px-3 py-1 rounded-full text-xs">
+                          <span className="bg-gray-800 text-purple-400 px-3 py-1 rounded-full text-xs break-all max-w-full">
                             Category: {selectedAsset.metadata.category}
                           </span>
                           <span
-                            className={`bg-gray-800 px-3 py-1 rounded-full text-xs ${
+                            className={`bg-gray-800 px-3 py-1 rounded-full text-xs break-all max-w-full ${
                               new Date(selectedActivity?.sharedTill) <
                               new Date()
                                 ? "text-red-400"

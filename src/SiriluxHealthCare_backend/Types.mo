@@ -92,7 +92,8 @@ module Types {
 
     public type Balance = {
         tokens : Nat;
-        dataMB : Nat;
+        dataBytes : Nat;
+        isPremium : Bool;
         lastUpdateTime : Time.Time;
     };
 
@@ -127,12 +128,4 @@ module Types {
         lastResetTime : Int;
     };
 
-    public type ServiceLimit = {
-        maxShares : Nat;
-        usedShares : Nat;
-        maxUploads : Nat;
-        usedUploads : Nat;
-        maxDeletes : Nat;
-        usedDeletes : Nat;
-    };
 };

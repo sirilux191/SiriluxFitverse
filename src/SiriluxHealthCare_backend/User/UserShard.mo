@@ -28,7 +28,7 @@ actor class UserShard() {
             switch (insertResult) {
                 case null {
                     if (BTree.has(userMap, Text.compare, userID)) {
-                        return #ok("User inserted successfully" # userID);
+                        return #ok("User inserted successfully " # userID);
                     } else {
                         return #err("Failed to insert user with user ID " # userID);
                     };
@@ -58,12 +58,8 @@ actor class UserShard() {
         };
         switch (BTree.get(userMap, Text.compare, userID)) {
             case (?_) {
-                switch (BTree.insert(userMap, Text.compare, userID, user)) {
-                    case (?_) {
-                        return #ok("User updated successfully" # userID);
-                    };
-                    case null { return #err("Failed to update user") };
-                };
+                ignore BTree.insert(userMap, Text.compare, userID, user);
+                return #ok("User updated successfully " # userID);
             };
             case null {
                 return #err("User not found");
@@ -72,12 +68,12 @@ actor class UserShard() {
     };
 
     // Function to delete a user
-    public shared ({ caller }) func deleteUser(userID : Text) : async Result.Result<(), Text> {
+    public shared ({ caller }) func deleteUser(userID : Text) : async Result.Result<Text, Text> {
         if (not isPermitted(caller)) {
             return #err("You are not permitted to call this function");
         };
         switch (BTree.delete(userMap, Text.compare, userID)) {
-            case (?_) { return #ok(()) };
+            case (?_) { return #ok("User deleted successfully " # userID) };
             case null { return #err("User not found") };
         };
     };

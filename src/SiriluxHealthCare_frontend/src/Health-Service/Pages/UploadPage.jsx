@@ -24,13 +24,18 @@ import lighthouse from "@lighthouse-web3/sdk";
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 
-import { useState, useContext } from "react";
+import { useState } from "react";
 
 import LoadingScreen from "../../LoadingScreen";
 import * as vetkd from "ic-vetkd-utils";
-import ActorContext from "../../ActorContext";
+
+import useActorStore from "../../State/Actors/ActorStore";
 export default function UploadContent() {
-  const { actors } = useContext(ActorContext);
+  const {
+    dataAsset,
+    createDataAssetShardActorExternal,
+    createStorageShardActorExternal,
+  } = useActorStore();
   const [formData, setFormData] = useState({
     dateOfCheckup: "",
     typeOfCheckup: "",
@@ -89,143 +94,140 @@ export default function UploadContent() {
 
     try {
       // Step 1: Upload/link an empty file to get a unique ID
-      const emptyDataAsset = {
-        assetID: "",
-        title: "Empty File",
-        description: "Placeholder for encryption",
-        data: "[]",
-        metadata: {
-          category: "",
-          tags: [],
-          format: "empty",
-        },
+      const metadata = {
+        category: category,
+        tags: [keywords],
+        description: description,
+        format: "application/pdf",
       };
 
-      const result = await actors.dataAsset.uploadDataAsset(emptyDataAsset);
+      const dataAssetFile = {
+        assetID: "",
+        title: "Generated Report",
+        dataAssetShardPrincipal: "",
+        dataStorageShardPrincipal: "",
+        metadata: metadata,
+      };
+
+      const result = await dataAsset.uploadDataAsset(dataAssetFile);
       let uniqueID = "";
+      let assetShardPrincipal = "";
+      let storageShardPrincipal = "";
 
       Object.keys(result).forEach((key) => {
         if (key === "err") {
           throw new Error(result[key]);
         }
         if (key === "ok") {
-          uniqueID = result[key];
+          [uniqueID, assetShardPrincipal, storageShardPrincipal] = result[key];
         }
       });
-      console.log(uniqueID);
-      console.log("This is unique ID: : " + uniqueID);
-      if (!uniqueID) {
-        throw new Error("Failed to get unique ID");
+
+      if (!uniqueID || !assetShardPrincipal || !storageShardPrincipal) {
+        throw new Error("Failed to get required upload information");
       }
 
-      // Step 2: Fetch the encrypted key using encrypted_symmetric_key_for_dataAsset
+      // Step 2: Create dataAssetShard actor and get encryption key
+      const dataAssetShard =
+        await createDataAssetShardActorExternal(assetShardPrincipal);
+      if (!dataAssetShard) {
+        throw new Error("Failed to create data asset shard actor");
+      }
+
       const seed = window.crypto.getRandomValues(new Uint8Array(32));
       const tsk = new vetkd.TransportSecretKey(seed);
+
+      // Get encrypted key from the asset shard
       const encryptedKeyResult =
-        await actors.dataAsset.getEncryptedSymmetricKeyForAsset(
+        await dataAssetShard.encrypted_symmetric_key_for_asset(
           uniqueID,
           Object.values(tsk.public_key())
         );
 
       let encryptedKey = "";
-
       Object.keys(encryptedKeyResult).forEach((key) => {
-        if (key === "err") {
-          throw new Error(encryptedKeyResult[key]);
-        }
-        if (key === "ok") {
-          encryptedKey = encryptedKeyResult[key];
-        }
+        if (key === "err") throw new Error(encryptedKeyResult[key]);
+        if (key === "ok") encryptedKey = encryptedKeyResult[key];
       });
-      console.log("encrypted key " + encryptedKey);
-      if (!encryptedKey) {
-        throw new Error("Failed to get encrypted key");
-      }
 
-      const pkBytesHex =
-        await actors.dataAsset.getSymmetricKeyVerificationKey(uniqueID);
-
-      let symmetricVerificiationKey = "";
-
-      Object.keys(pkBytesHex).forEach((key) => {
-        if (key === "err") {
-          throw new Error(pkBytesHex[key]);
-        }
-        if (key === "ok") {
-          symmetricVerificiationKey = pkBytesHex[key];
-        }
-      });
-      console.log("symmetric verification key " + symmetricVerificiationKey);
-      if (!symmetricVerificiationKey) {
-        throw new Error("Failed to get encrypted key");
-      }
+      // Get verification key from the asset shard
+      const symmetricVerificationKey =
+        await dataAssetShard.getSymmetricKeyVerificationKey();
 
       const aesGCMKey = tsk.decrypt_and_hash(
         hex_decode(encryptedKey),
-        hex_decode(symmetricVerificiationKey),
+        hex_decode(symmetricVerificationKey),
         new TextEncoder().encode(uniqueID),
         32,
         new TextEncoder().encode("aes-256-gcm")
       );
-      console.log(aesGCMKey);
 
-      // Step 3: Encrypt the user's file using the AES-GCM key
-      // Generate PDF
+      // Step 3: Generate PDF from form data
       const doc = new jsPDF();
       let pdfContent = "";
       for (const [key, value] of Object.entries(formData)) {
         pdfContent += `${key}: ${value}\n\n`;
       }
       doc.text(pdfContent, 10, 10);
-
-      // Save PDF as a file
       const pdfBlob = doc.output("blob");
       const pdfFile = new File([pdfBlob], "generated.pdf", {
         type: "application/pdf",
       });
 
+      // Step 4: Encrypt the PDF file
       const arrayBuffer = await pdfFile.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      const encryptedData = await aes_gcm_encrypt(uint8Array, aesGCMKey);
+      const fileData = new Uint8Array(arrayBuffer);
 
-      // Step 4: Upload encrypted data to Lighthouse
-      const encryptedBlob = new Blob([encryptedData]);
-      const encryptedFile = new File([encryptedBlob], "encrypted.bin", {
-        type: "application/octet-stream",
-      });
-      const lighthouseHash = await uploadToLighthouse(encryptedFile);
-
-      const metadata = {
-        category: category,
-        tags: [keywords],
-        format: pdfFile.type,
-      };
-
-      const dataAsset = {
-        assetID: uniqueID,
-        title: pdfFile.name,
-        description: description,
-        data: lighthouseHash,
-        metadata: metadata,
-      };
-
-      // Step 5: Update the data asset with the Lighthouse hash
-      const updateResult = await actors.dataAsset.updateDataAsset(
-        uniqueID,
-        dataAsset
+      // Create storage shard actor using the principal
+      const storageShard = await createStorageShardActorExternal(
+        storageShardPrincipal
       );
+      if (!storageShard) {
+        throw new Error("Failed to create storage shard actor");
+      }
 
-      Object.keys(updateResult).forEach((key) => {
-        if (key === "err") {
-          throw new Error(updateResult[key]);
+      // Calculate chunks for upload
+      const ENCRYPTION_OVERHEAD = 28; // 12 bytes for IV + 16 bytes for auth tag
+      const MAX_CHUNK_SIZE = 1.9 * 1000 * 1000; // 1.9MB max for encrypted chunk
+      const CHUNK_SIZE = MAX_CHUNK_SIZE - ENCRYPTION_OVERHEAD;
+      const totalChunks = Math.ceil(fileData.length / CHUNK_SIZE);
+
+      // Start chunk upload process
+      const startResult = await storageShard.startChunkUpload(
+        uniqueID,
+        totalChunks
+      );
+      if ("err" in startResult) {
+        throw new Error(startResult.err);
+      }
+
+      // Process and upload each chunk
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, fileData.length);
+        const chunk = fileData.slice(start, end);
+
+        // Encrypt the chunk
+        const encryptedChunk = await aes_gcm_encrypt(chunk, aesGCMKey);
+
+        // Upload the encrypted chunk
+        const uploadResult = await storageShard.uploadChunk(
+          uniqueID,
+          i,
+          encryptedChunk
+        );
+
+        if ("err" in uploadResult) {
+          throw new Error(
+            `Failed to upload chunk ${i + 1}: ${uploadResult.err}`
+          );
         }
-        if (key === "ok") {
-          toast({
-            title: "Success",
-            description: updateResult[key],
-            variant: "success",
-          });
-        }
+      }
+
+      toast({
+        title: "Success",
+        description: "Health data uploaded successfully!",
+        variant: "success",
       });
     } catch (error) {
       console.error("Error:", error);
@@ -259,8 +261,7 @@ export default function UploadContent() {
     iv_and_ciphertext.set(ciphertext, iv.length);
     return iv_and_ciphertext;
   };
-  // const hex_encode = (bytes) =>
-  //   bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, "0"), "");
+
   const hex_decode = (hexString) =>
     Uint8Array.from(
       hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))

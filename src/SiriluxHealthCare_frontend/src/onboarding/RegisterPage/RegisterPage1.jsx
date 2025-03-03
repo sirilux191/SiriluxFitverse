@@ -48,7 +48,7 @@ const formSchema = z.object({
 export default function RegisterPage1Content() {
   const navigate = useNavigate();
 
-  const { actors } = useActorStore();
+  const { user, identityManager } = useActorStore();
   const [formData, setFormData] = useState({
     name: "",
     dob: "",
@@ -108,10 +108,9 @@ export default function RegisterPage1Content() {
       // Step 2: Fetch the encrypted key using encrypted_symmetric_key_for_dataAsset
       const seed = window.crypto.getRandomValues(new Uint8Array(32));
       const tsk = new vetkd.TransportSecretKey(seed);
-      const encryptedKeyResult =
-        await actors.user.encrypted_symmetric_key_for_user(
-          Object.values(tsk.public_key())
-        );
+      const encryptedKeyResult = await user.encrypted_symmetric_key_for_user(
+        Object.values(tsk.public_key())
+      );
 
       let encryptedKey = "";
 
@@ -135,8 +134,8 @@ export default function RegisterPage1Content() {
         return;
       }
 
-      const pkBytesHex = await actors.user.symmetric_key_verification_key();
-      const principal = await actors.user.whoami();
+      const pkBytesHex = await user.symmetric_key_verification_key();
+      const principal = await identityManager.whoami();
       console.log(pkBytesHex);
       console.log(encryptedKey);
       const aesGCMKey = tsk.decrypt_and_hash(
@@ -153,7 +152,7 @@ export default function RegisterPage1Content() {
         basicHealthParaArray,
         aesGCMKey
       );
-      const result = await actors.user.createUser({
+      const result = await user.createUser({
         DemographicInformation: Object.values(encryptedDataDemo),
         BasicHealthParameters: Object.values(encryptedDataBasicHealth),
         BiometricData: [],
@@ -172,7 +171,7 @@ export default function RegisterPage1Content() {
         if (key == "ok") {
           toast({
             title: "Success",
-            description: "User ID No. :" + result[key],
+            description: result[key],
             variant: "success",
           });
           setLoading(false);

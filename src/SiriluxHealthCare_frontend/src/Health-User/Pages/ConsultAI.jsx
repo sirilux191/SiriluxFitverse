@@ -8,7 +8,7 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-
+import { Bot } from "lucide-react";
 const ConsultAI = () => {
   return (
     <div className="container mx-auto py-6">
@@ -22,30 +22,31 @@ const ConsultAI = () => {
 
       <Tabs
         defaultValue="ai-list"
-        className="space-y-4"
+        className="space-y-16 sm:space-y-6"
       >
-        <TabsList className="w-full">
+        <TabsList className="w-full grid grid-cols-1 sm:grid-cols-2 bg-transparent p-1 gap-2">
           <TabsTrigger
             value="ai-list"
-            className="w-1/2"
+            className="px-3 py-2 rounded-md bg-muted data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all"
           >
+            <Bot className="mr-2 h-4 w-4 hidden sm:inline-block" />
             AI Consultants
           </TabsTrigger>
           <TabsTrigger
             value="past-consultations"
-            className="w-1/2"
+            className="px-3 py-2 rounded-md bg-muted data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all"
           >
             Past Consultations
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="ai-list">
+        <TabsContent
+          value="ai-list"
+          className="mt-4"
+        >
           <Card className="text-center">
             <CardHeader>
-              <CardTitle>Available AI Consultants</CardTitle>
-              <CardDescription>
-                Choose an AI consultant based on your health needs
-              </CardDescription>
+              <CardTitle></CardTitle>
             </CardHeader>
             <CardContent>
               {/* AI List content will go here */}
@@ -54,7 +55,10 @@ const ConsultAI = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="past-consultations">
+        <TabsContent
+          value="past-consultations"
+          className="mt-4"
+        >
           <Card className="text-center">
             <CardHeader>
               <CardTitle>Past Consultations</CardTitle>

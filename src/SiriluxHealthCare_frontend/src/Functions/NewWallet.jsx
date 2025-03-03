@@ -21,7 +21,7 @@ import { Principal } from "@dfinity/principal";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function NewWallet() {
-  const { actors } = useActorStore();
+  const { token } = useActorStore();
   const {
     balance,
     transactions,
@@ -43,16 +43,16 @@ export default function NewWallet() {
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (actors) {
-      fetchTransactions(actors);
+    if (token) {
+      fetchTransactions();
 
-      fetchBalance(actors);
+      fetchBalance();
     }
-  }, [actors]);
+  }, [token]);
 
   const handleSend = async () => {
     try {
-      await sendTokens(actors, {
+      await sendTokens({
         to: { owner: Principal.fromText(recipient), subaccount: [] },
         amount: parseFloat(sendAmount),
         memo: memo,
@@ -73,7 +73,7 @@ export default function NewWallet() {
 
   const handleApprove = async () => {
     try {
-      await approveSpender(actors, {
+      await approveSpender({
         spender: { owner: Principal.fromText(spender), subaccount: [] },
         amount: parseFloat(approveAmount),
       });

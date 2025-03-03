@@ -17,19 +17,18 @@ import { createActor as createDataAssetShardActor } from "../../../../declaratio
 const useActorStore = create(
   persist(
     (set, get) => ({
-      actors: {
-        user: null,
-        professional: null,
-        facility: null,
-        dataAsset: null,
-        identityManager: null,
-        gamificationSystem: null,
-        token: null,
-        icrcIndex: null,
-        storageShard: null,
-        sharedActivity: null,
-        dataAssetShard: null,
-      },
+      user: null,
+      professional: null,
+      facility: null,
+      dataAsset: null,
+      identityManager: null,
+      gamificationSystem: null,
+      token: null,
+      icrcIndex: null,
+      storageShard: null,
+      sharedActivity: null,
+      dataAssetShard: null,
+
       isAuthenticated: false,
       authClient: null,
       initializationStatus: "uninitialized",
@@ -56,33 +55,30 @@ const useActorStore = create(
 
         try {
           set({
-            actors: {
-              user: createUserActor(process.env.CANISTER_ID_USER, { agent }),
-              professional: createProfessionalActor(
-                process.env.CANISTER_ID_PROFESSIONAL,
-                { agent }
-              ),
-              facility: createFacilityActor(process.env.CANISTER_ID_FACILITY, {
-                agent,
-              }),
-              dataAsset: createDataAssetActor(
-                process.env.CANISTER_ID_DATAASSET,
-                { agent }
-              ),
-              identityManager: createIdentityManagerActor(
-                process.env.CANISTER_ID_IDENTITY_MANAGER,
-                { agent }
-              ),
-              gamificationSystem: createGamificationSystemActor(
-                process.env.CANISTER_ID_GAMIFICATIONSYSTEM,
-                { agent }
-              ),
-              token: createTokenActor(process.env.CANISTER_ID_TOKEN, { agent }),
-              icrcIndex: createIcrcIndexActor(
-                process.env.CANISTER_ID_ICRC_INDEX_CANISTER,
-                { agent }
-              ),
-            },
+            user: createUserActor(process.env.CANISTER_ID_USER, { agent }),
+            professional: createProfessionalActor(
+              process.env.CANISTER_ID_PROFESSIONAL,
+              { agent }
+            ),
+            facility: createFacilityActor(process.env.CANISTER_ID_FACILITY, {
+              agent,
+            }),
+            dataAsset: createDataAssetActor(process.env.CANISTER_ID_DATAASSET, {
+              agent,
+            }),
+            identityManager: createIdentityManagerActor(
+              process.env.CANISTER_ID_IDENTITY_MANAGER,
+              { agent }
+            ),
+            gamificationSystem: createGamificationSystemActor(
+              process.env.CANISTER_ID_GAMIFICATIONSYSTEM,
+              { agent }
+            ),
+            token: createTokenActor(process.env.CANISTER_ID_TOKEN, { agent }),
+            icrcIndex: createIcrcIndexActor(
+              process.env.CANISTER_ID_ICRC_INDEX_CANISTER,
+              { agent }
+            ),
           });
         } catch (error) {
           console.error("Error initializing actors:", error);
@@ -106,19 +102,18 @@ const useActorStore = create(
       logout: async () => {
         const { authClient } = get();
         set({
-          actors: {
-            user: null,
-            professional: null,
-            facility: null,
-            dataAsset: null,
-            identityManager: null,
-            gamificationSystem: null,
-            token: null,
-            icrcIndex: null,
-            storageShard: null,
-            sharedActivity: null,
-            dataAssetShard: null,
-          },
+          user: null,
+          professional: null,
+          facility: null,
+          dataAsset: null,
+          identityManager: null,
+          gamificationSystem: null,
+          token: null,
+          icrcIndex: null,
+          storageShard: null,
+          sharedActivityShard: null,
+          dataAssetShard: null,
+
           isAuthenticated: false,
           authClient: null,
           initializationStatus: "uninitialized",

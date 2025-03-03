@@ -405,7 +405,7 @@ shared (_init_msg) actor class WellnessAvatarNFT(
     /////////
 
     public shared ({ caller }) func icrcX_mint(ownerNFTPrincipal : Principal, tokens : ICRC7.SetNFTRequest) : async [ICRC7.SetNFTResult] {
-        //permitted caller should only be allowed to call this function (to be added)
+        //permitted caller should only be allowed to call this function
         if (not isPermitted(caller)) {
             return [];
         };

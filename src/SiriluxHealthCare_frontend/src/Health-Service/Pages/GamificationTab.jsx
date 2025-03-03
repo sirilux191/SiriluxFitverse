@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import ActorContext from "../../ActorContext";
+import useActorStore from "../../State/Actors/ActorStore";
 import {
   CalendarIcon,
   PlusIcon,
@@ -34,7 +34,7 @@ import { Loader2Icon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const GamificationTab = () => {
-  const { actors } = useContext(ActorContext);
+  const { actors } = useActorStore();
   const [professionalInfo, setProfessionalInfo] = useState({
     id: "",
     name: "",

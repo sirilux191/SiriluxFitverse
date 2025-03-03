@@ -1,7 +1,6 @@
 import env "mo:env";
 
 module {
-
     public let admin : Text = (env.admin);
     // Canister IDs
     public let icrc_ledger_canister_id : Text = (env.icrc_ledger_canister_id);
@@ -15,8 +14,7 @@ module {
     public let facilityServiceCanisterID : Text = (env.facilityServiceCanisterID);
 
     public let dataAssetCanisterID : Text = (env.dataAssetCanisterID);
-    public let sharedActivityCanisterID : Text = (env.sharedActivityCanisterID);
 
     public let gamificationSystemCanisterID : Text = (env.gamificationSystemCanisterID);
-
+    public let subscriptionManagerCanisterID : Text = (env.subscriptionManagerCanisterID);
 };

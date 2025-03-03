@@ -93,7 +93,7 @@ actor FacilityService {
                 let uuidResult = await generateUUID();
 
                 let approvedFacility : HealthIDFacility = {
-                    IDNum = idResult;
+                    IDNum = idResult # "@siriluxservice";
                     UUID = uuidResult;
                     MetaData = facility.MetaData;
                 };
@@ -398,7 +398,7 @@ actor FacilityService {
         };
     };
 
-    public shared ({ caller }) func updateWasmModule(wasmModule : [Nat8]) : async Result.Result<(), Text> {
+    public shared ({ caller }) func updateFacilityShardWasmModule(wasmModule : [Nat8]) : async Result.Result<(), Text> {
         if (not (await isAdmin(caller))) {
             return #err("You are not Admin, only admin can perform this action");
         };

@@ -27,7 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useEffect, useState } from "react";
-import ActorContext from "../../ActorContext";
+import useActorStore from "../../State/Actors/ActorStore";
 
 const columns = [
   {
@@ -61,21 +61,41 @@ function RecentActivityTable() {
   const [columnVisibility, setColumnVisibility] = useState({});
   const [rowSelection, setRowSelection] = useState({});
   const [data, setData] = useState([]);
-  const { actors } = useContext(ActorContext);
+  const { identityManager, dataAsset, createSharedActivityShardActorExternal } =
+    useActorStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchSharedFilesList = async () => {
       try {
-        const result = await actors.sharedActivity.getSharedActivities();
-        console.log(result);
-        if (result.ok) {
-          setData(result.ok);
-          setLoading(false);
-        } else {
-          console.error("Error fetching shared files list:", result.err);
-          setLoading(false);
+        let userIDResult = await identityManager.getIdentity([]);
+        if (!userIDResult.ok) {
+          throw new Error("Failed to get user ID");
         }
+        const userID = userIDResult.ok[0];
+        // Get shared activity shard principals for this user
+        const shardPrincipalsResult =
+          await dataAsset.getUserSharedActivityShardsPrincipal(userID);
+        if (!shardPrincipalsResult.ok) {
+          throw new Error("Failed to get shard principals");
+        }
+
+        const allActivities = [];
+        for (const shardPrincipal of shardPrincipalsResult.ok) {
+          const shardActor = await createSharedActivityShardActorExternal(
+            shardPrincipal.toText()
+          );
+
+          const shardActivitiesResult =
+            await shardActor.getUserSharedActivities();
+
+          if (shardActivitiesResult.ok) {
+            allActivities.push(...shardActivitiesResult.ok);
+          }
+        }
+
+        setData(allActivities);
+        setLoading(false);
       } catch (error) {
         console.error("Error fetching shared files list:", error);
         setLoading(false);
@@ -83,7 +103,7 @@ function RecentActivityTable() {
     };
 
     fetchSharedFilesList();
-  }, [actors]);
+  }, [identityManager, dataAsset, createSharedActivityShardActorExternal]);
 
   const table = useReactTable({
     data: data,

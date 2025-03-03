@@ -15,7 +15,7 @@ import { toast } from "@/components/ui/use-toast";
 import useActorStore from "../State/Actors/ActorStore";
 
 function NFTManagement() {
-  const { actors } = useActorStore();
+  const { gamificationSystem } = useActorStore();
   const [userPrincipal, setUserPrincipal] = useState("");
   const [avatarType, setAvatarType] = useState("");
   const [professionalType, setProfessionalType] = useState("");
@@ -33,12 +33,13 @@ function NFTManagement() {
 
     try {
       const avatarTypeVariant = { [avatarType]: null };
-      const result = await actors.gamificationSystem.mintWellnessAvatar(
+      const result = await gamificationSystem.mintWellnessAvatar(
         userPrincipal,
         [],
         avatarTypeVariant,
         imageURL
       );
+      console.log(result);
 
       if (result[0]?.Ok) {
         toast({
@@ -69,13 +70,13 @@ function NFTManagement() {
 
     try {
       const professionalTypeVariant = { [professionalType]: null };
-      const result = await actors.gamificationSystem.mintProfessionalNFT(
+      const result = await gamificationSystem.mintProfessionalNFT(
         userPrincipal,
         [],
         professionalTypeVariant,
         imageURL
       );
-
+      console.log(result);
       if (result[0]?.Ok) {
         toast({
           title: "Professional NFT minted successfully",
@@ -105,13 +106,13 @@ function NFTManagement() {
 
     try {
       const facilityTypeVariant = { [facilityType]: null };
-      const result = await actors.gamificationSystem.mintFacilityNFT(
+      const result = await gamificationSystem.mintFacilityNFT(
         userPrincipal,
         [],
         facilityTypeVariant,
         imageURL
       );
-
+      console.log(result);
       if (result[0]?.Ok) {
         toast({
           title: "Facility NFT minted successfully",

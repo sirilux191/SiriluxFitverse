@@ -11,7 +11,7 @@ import {
 import useActorStore from "../../../State/Actors/ActorStore";
 
 const VisitsList = () => {
-  const { actors } = useActorStore();
+  const { gamificationSystem } = useActorStore();
   const [isLoadingVisits, setIsLoadingVisits] = useState(false);
   const [visits, setVisits] = useState([]);
 
@@ -36,7 +36,7 @@ const VisitsList = () => {
   const fetchVisits = async () => {
     setIsLoadingVisits(true);
     try {
-      const result = await actors.gamificationSystem.getUserVisits();
+      const result = await gamificationSystem.getUserVisits();
       if (result.ok) {
         setVisits(result.ok);
       } else {

@@ -14,6 +14,7 @@ import ConsultAI from "./Pages/ConsultAI";
 import NotFoundPage from "@/CommonPages/NotFoundPage";
 import AppBanner from "../AppBanner";
 
+import ConsultationPage from "./Pages/ConsultAI/ConsultationPage";
 export default function AppRoute1() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
 
@@ -63,6 +64,7 @@ export default function AppRoute1() {
               path="/Assets"
               element={<CryptoAsset />}
             />
+
             <Route
               path="/ConsultAI"
               element={<ConsultAI />}
@@ -75,7 +77,10 @@ export default function AppRoute1() {
               path="/Profile"
               element={<ProfileContent />}
             />
-
+            <Route
+              path="/consult/:id"
+              element={<ConsultationPage />}
+            />
             <Route
               path="*"
               element={<NotFoundPage />}

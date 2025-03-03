@@ -26,10 +26,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
 import useActorStore from "../State/Actors/ActorStore";
+import LoadingScreen from "../LoadingScreen";
 
 function FacilityApproval() {
-  const { actors } = useActorStore();
+  const { facility } = useActorStore();
   const [facilities, setFacilities] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,7 +46,7 @@ function FacilityApproval() {
 
   const fetchFacilities = async () => {
     try {
-      const result = await actors.facility.getPendingFacilityRequests();
+      const result = await facility.getPendingFacilityRequests();
       if (result.ok) {
         const formattedRequests = result.ok.map(([principal, data]) => {
           try {
@@ -96,9 +98,9 @@ function FacilityApproval() {
     try {
       let result;
       if (action === "approve") {
-        result = await actors.facility.approveFacilityRequest(id);
+        result = await facility.approveFacilityRequest(id);
       } else {
-        result = await actors.facility.rejectFacilityRequest(id);
+        result = await facility.rejectFacilityRequest(id);
       }
 
       if (result.ok) {
@@ -202,7 +204,7 @@ function FacilityApproval() {
   });
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <LoadingScreen />;
   }
 
   return (

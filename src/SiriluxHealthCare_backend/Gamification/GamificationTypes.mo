@@ -35,6 +35,7 @@ module {
         visitMode : VisitMode;
         status : VisitStatus;
         timestamp : VisitTimeStamps;
+        payment : VisitPrice;
         avatarId : Nat;
         meetingLink : ?Text; // Added field for online meetings
     };
@@ -60,8 +61,10 @@ module {
         entityId : Text; // professional or facility ID
         start : Time.Time;
         capacity : Nat;
+        price : VisitPrice;
     };
 
+    public type VisitPrice = Nat;
     public type BookedSlot = {
         entityId : Text; // professional or facility ID
         start : Time.Time;
@@ -498,6 +501,81 @@ module {
                 ]);
             },
         ]);
+    };
+
+    // Helper function to get default image URL for Avatar types
+    public func getAvatarImageURL(avatarType : AvatarType) : Text {
+        switch (avatarType) {
+            // Energy-focused avatars
+            case (#FitnessChampion) "https://gateway.lighthouse.storage/ipfs/bafkreiewezorjawfvdy57upgea5pbazdv7abvhkyqny5bdkangaovip23u";
+            case (#MetabolicMaestro) "https://gateway.lighthouse.storage/ipfs/bafkreiahak56opnjpcjcqj3gcme7temijd66g5jpjjukixvsjno2kseszu";
+            case (#StressBuster) "https://gateway.lighthouse.storage/ipfs/bafkreiapeeri6gifrfad3n7skecmafiykteuctzzkqd7rhu4ogluorcdiy";
+
+            // Focus-focused avatars
+            case (#MindfulnessMaster) "https://gateway.lighthouse.storage/ipfs/bafkreicltg77gjnfbsd4oglujhoetssm3rxz52kfrn4uxdxza4cdyqs2qy";
+            case (#PosturePro) "https://gateway.lighthouse.storage/ipfs/bafkreifwq6p7xhrcfexyavtfbijs356bglfdjdznkinjkv6bvfvss7rrjq";
+            case (#SleepOptimizer) "https://gateway.lighthouse.storage/ipfs/bafkreia4c5g4pn542te2hzt63x7vbxbwlto5mmk4w4rwr7hy7oq3fxng44";
+
+            // Vitality-focused avatars
+            case (#NutritionExpert) "https://gateway.lighthouse.storage/ipfs/bafkreidoq7gs3ib7ddar46gz2yowrlvuzce5uojwwfo2s5nyom4ygcmwuq";
+            case (#ImmuneGuardian) "https://gateway.lighthouse.storage/ipfs/bafkreihipoewmrsggqh2p2xrvjyqv5jslxn5jjx72wm5q6z76ji4rib3pe";
+            case (#AgingGracefully) "https://gateway.lighthouse.storage/ipfs/bafkreigr32fgzqmyzsofpcux4b3miv5uweopbbz42vb35fflofj4i7gb4a";
+
+            // Resilience-focused avatars
+            case (#HolisticHealer) "https://gateway.lighthouse.storage/ipfs/bafkreiff2z2ogqazgx5s4zltopm6y7oakmoxceqzqpigq3nn3p24abvp6q";
+            case (#RecoveryWarrior) "https://gateway.lighthouse.storage/ipfs/bafkreifce2jye7dwksjie27zvm4izvcj723tqfmjtx4vtoicqdflidihb4";
+            case (#ChronicCareChampion) "https://gateway.lighthouse.storage/ipfs/bafkreic5m32he2yulurw45pwlxmhe2vpvct4z6xavn2viptwsi5jzexym4";
+        };
+    };
+
+    // Helper function to get default image URL for Professional specializations
+    public func getProfessionalImageURL(specialization : ProfessionalSpecialization) : Text {
+        switch (specialization) {
+            // Energy-focused professionals
+            case (#PhysicalTrainer) "https://gateway.lighthouse.storage/ipfs/bafkreidawfxlmhecmdtcpqfwfs3daous2b7zjnx2we55l77ege6l75bzrm";
+            case (#SportsMedicineExpert) "https://gateway.lighthouse.storage/ipfs/bafkreieey25yk4laryxkrmveklfcdvvabtfunxgo7cgavanezdo6vnfefy";
+            case (#FitnessInstructor) "https://gateway.lighthouse.storage/ipfs/bafkreibibedzp2gzco33wdctw7u3tliq7tatmcve7aokokbuaje7up5fgy";
+
+            // Focus-focused professionals
+            case (#MentalHealthExpert) "https://gateway.lighthouse.storage/ipfs/bafkreihaax3keu3ojes3rciil66ha2nwia77t2sjtl326p7lexpebjnl5m";
+            case (#MeditationGuide) "https://gateway.lighthouse.storage/ipfs/bafkreicys22xnkfwiqjzaij5r3yfnzx3iardhlscs7kf6qooqgbtd5ex7q";
+            case (#CognitiveBehaviorist) "https://gateway.lighthouse.storage/ipfs/bafkreibaazatemrqlevlj7vtwz367im6gesxpuoionkqqdve25andqsil4";
+
+            // Vitality-focused professionals
+            case (#NutritionalAdvisor) "https://gateway.lighthouse.storage/ipfs/bafkreihc62uzsvjivkypqpdry6p6f3fue2rp3mzya6kt6ieqwettrzjrg4";
+            case (#FunctionalMedicineExpert) "https://gateway.lighthouse.storage/ipfs/bafkreiegloypyv5vrhqudmbvnlfuzvl7tr4nmih6akgfscrduqsqarwp6q";
+            case (#PreventiveCareSpecialist) "https://gateway.lighthouse.storage/ipfs/bafkreicycbt56vd4wtcrhdp3kc3bkme3mfvcbypvfdjaidvsonjlkm67ii";
+
+            // Resilience-focused professionals
+            case (#RehabilitationTherapist) "https://gateway.lighthouse.storage/ipfs/bafkreicml77brda47nzhgmommfp572u22d64jvasi4e2lgj5qugeoosvxe";
+            case (#ChronicCareSpecialist) "https://gateway.lighthouse.storage/ipfs/bafkreifufdemtjo6r3xwdhctlawjjugo7ebvnn6l43fpaggu4h63hsdxua";
+            case (#RecoveryExpert) "https://gateway.lighthouse.storage/ipfs/bafkreidib3fl2jf4kcwnrnextydwdbhbgmhl5jzn5pn4e477ze42czv76y";
+        };
+    };
+
+    // Helper function to get default image URL for Facility services
+    public func getFacilityImageURL(services : FacilityServices) : Text {
+        switch (services) {
+            // Energy-focused facilities
+            case (#FitnessCenter) "https://gateway.lighthouse.storage/ipfs/bafkreihkuhmrwziltq7lohnbdgxdl7kc5aaiswvwut6zw2nv6h3xbafvfq";
+            case (#SportsMedicineFacility) "https://gateway.lighthouse.storage/ipfs/bafkreid4detbmswupi6mtcdc4lobbib5hictue6427heu5a7fxtfwnoyti";
+            case (#AthleticTrainingCenter) "https://gateway.lighthouse.storage/ipfs/bafkreiciano5umt6epzfbx66tfzbzbqxnh36ushnwj4iflzo3emoh4glqy";
+
+            // Focus-focused facilities
+            case (#MentalHealthClinic) "https://gateway.lighthouse.storage/ipfs/bafkreibq773itck2wcfosxp44t42mfwvsz6wijhhb7a3qkhevl2uerl6pe";
+            case (#MeditationCenter) "https://gateway.lighthouse.storage/ipfs/bafkreibsceqbccykkw5a5yx45sow5cnzw5v3oafxxkjuhprks2ymru2p5e";
+            case (#CognitiveCareCenter) "https://gateway.lighthouse.storage/ipfs/bafkreidu5vg36hsixuwgilnclcpc5hpvhxfhclbfpxflb6pnbaug5vtvte";
+
+            // Vitality-focused facilities
+            case (#NutritionCenter) "https://gateway.lighthouse.storage/ipfs/bafkreieasr2vjvnudyaabuyao47q7s6ue5e7kyg2cn3i66wsib7vrmvc3m";
+            case (#WellnessRetreat) "https://gateway.lighthouse.storage/ipfs/bafkreigotqhidajlayz37qfgcw4arexn275vg2gg6kukdpaprxt3phv764";
+            case (#PreventiveHealthCenter) "https://gateway.lighthouse.storage/ipfs/bafkreiazdcjb5jsichjkfgvg4tilktclyjfvvps762vdpqld4zpsbbibjy";
+
+            // Resilience-focused facilities
+            case (#RehabilitationHospital) "https://gateway.lighthouse.storage/ipfs/bafkreidxc7teeckoc442jlrmvz5p72n47qojtxsnuioigq7lbavw3kq4py";
+            case (#RecoveryCenter) "https://gateway.lighthouse.storage/ipfs/bafkreidy3udhvun5z7z6tc4ezhsgxhzszlnskz5smuyutmrvf56sxjlane";
+            case (#ChronicCareClinic) "https://gateway.lighthouse.storage/ipfs/bafkreibxt4zhuskcpx3oclpuaza5snmcfyphj37n4dpjufgy4dpcqzsrfu";
+        };
     };
 
 };

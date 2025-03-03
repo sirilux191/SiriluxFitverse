@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/components/ui/use-toast";
 import { useToastProgressStore } from "../State/ProgressStore/ToastProgressStore";
 import useActorStore from "../State/Actors/ActorStore";
-import * as vetkd from "ic-vetkd-utils";
+
 import {
   Dialog,
   DialogContent,
@@ -13,130 +13,83 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const EditFile = ({ data, uniqueID, format, title }) => {
-  const { actors, createStorageShardActorExternal } = useActorStore();
+const EditFile = ({
+  dataAssetShardPrincipal,
+  uniqueID,
+  format,
+  title,
+  category,
+}) => {
+  const { createDataAssetShardActorExternal } = useActorStore();
   const [uploading, setUploading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
+
   const setProgress = useToastProgressStore((state) => state.setProgress);
   const resetProgress = useToastProgressStore((state) => state.resetProgress);
   const progress = useToastProgressStore((state) => state.progress);
+  const [metadata, setMetadata] = useState({
+    category: category || "Reports",
+    description: "",
+    tags: "",
+  });
 
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file && file.type === format) {
-      setSelectedFile(file);
-    } else {
-      toast({
-        title: "Invalid File Type",
-        description: `Please select a file with format: ${format}`,
-        variant: "destructive",
-      });
+  // Update metadata when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setMetadata((prev) => ({
+        ...prev,
+        category: category || "Reports",
+      }));
     }
+  }, [isOpen, category]);
+
+  // Extract timestamp from uniqueID (format: assetNum-userID-timestamp)
+  const getTimestamp = (uniqueID) => {
+    const parts = uniqueID.split("-");
+    return parts[2];
   };
 
-  const uploadToStorageShard = async (
-    file,
-    storagePrincipal,
-    uniqueID,
-    toastId
-  ) => {
-    const storageShard = createStorageShardActorExternal(storagePrincipal);
-    if (!storageShard) {
-      throw new Error("Failed to create storage shard actor");
+  const updateDataAssetMetadata = async (uniqueID, toastId) => {
+    const dataAssetShard = await createDataAssetShardActorExternal(
+      dataAssetShardPrincipal
+    );
+    if (!dataAssetShard) {
+      throw new Error("Failed to create data asset shard actor");
     }
 
-    try {
-      // Get encryption key setup
-      const seed = window.crypto.getRandomValues(new Uint8Array(32));
-      const tsk = new vetkd.TransportSecretKey(seed);
-      const encryptedKeyResult =
-        await actors.dataAsset.getEncryptedSymmetricKeyForAsset(
-          uniqueID,
-          Object.values(tsk.public_key())
-        );
+    const timestamp = getTimestamp(uniqueID);
 
-      let encryptedKey = "";
-      Object.keys(encryptedKeyResult).forEach((key) => {
-        if (key === "err") throw new Error(encryptedKeyResult[key]);
-        if (key === "ok") encryptedKey = encryptedKeyResult[key];
-      });
+    // Convert tags string to array
+    const tagsArray = metadata.tags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag !== "");
 
-      const pkBytesHex =
-        await actors.dataAsset.getSymmetricKeyVerificationKey(uniqueID);
-      let symmetricVerificationKey = "";
-      Object.keys(pkBytesHex).forEach((key) => {
-        if (key === "err") throw new Error(pkBytesHex[key]);
-        if (key === "ok") symmetricVerificationKey = pkBytesHex[key];
-      });
+    // Create new metadata object with format from props
+    const metadataToUpdate = {
+      ...metadata,
+      tags: tagsArray,
+      format: format, // Include format from props
+    };
 
-      const aesGCMKey = tsk.decrypt_and_hash(
-        hex_decode(encryptedKey),
-        hex_decode(symmetricVerificationKey),
-        new TextEncoder().encode(uniqueID),
-        32,
-        new TextEncoder().encode("aes-256-gcm")
-      );
+    const result = await dataAssetShard.updateDataAsset(
+      timestamp,
+      metadataToUpdate
+    );
+    console.log(result);
 
-      // Read and encrypt file
-      const fileData = await file.arrayBuffer();
-      const fileContent = new Uint8Array(fileData);
-
-      // Split into chunks and encrypt
-      const CHUNK_SIZE = 1.9 * 1000 * 1000; // 1.9MB
-      const totalChunks = Math.ceil(fileContent.length / CHUNK_SIZE);
-
-      // Start chunk upload - this will check storage space
-      const startResult = await storageShard.startChunkUpload(
-        uniqueID,
-        totalChunks
-      );
-      if ("err" in startResult) {
-        throw new Error(startResult.err);
-      }
-
-      setProgress(0, "Starting upload...", toastId);
-
-      // Upload chunks
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, fileContent.length);
-        const chunk = fileContent.slice(start, end);
-
-        // Encrypt chunk
-        const encryptedChunk = await aes_gcm_encrypt(chunk, aesGCMKey);
-
-        // Upload encrypted chunk
-        const uploadResult = await storageShard.uploadChunk(
-          uniqueID,
-          i,
-          encryptedChunk
-        );
-
-        if ("err" in uploadResult) {
-          throw new Error(uploadResult.err);
-        }
-
-        const progress = Math.round(((i + 1) / totalChunks) * 100);
-        setProgress(
-          progress,
-          `Uploading chunk ${i + 1} of ${totalChunks}...`,
-          toastId
-        );
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Storage shard error:", error);
-      throw error;
+    if (result.err) {
+      throw new Error(result.err);
     }
+
+    return true;
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) {
+    if (!metadata.category || !metadata.description || !metadata.tags) {
       toast({
-        title: "No File Selected",
-        description: "Please select a file to upload",
+        title: "Missing Fields",
+        description: "Please fill in all metadata fields",
         variant: "destructive",
       });
       return;
@@ -147,10 +100,9 @@ const EditFile = ({ data, uniqueID, format, title }) => {
       setUploading(true);
       resetProgress();
 
-      // Show initial toast
       toast({
         id: toastId,
-        title: "Uploading File",
+        title: "Updating File",
         description: (
           <div className="w-full space-y-2">
             <Progress
@@ -163,25 +115,24 @@ const EditFile = ({ data, uniqueID, format, title }) => {
         duration: Infinity,
       });
 
-      // Upload and encrypt data
-      await uploadToStorageShard(selectedFile, data, uniqueID, toastId);
+      // Update metadata in DataAssetShard
+      await updateDataAssetMetadata(uniqueID, toastId);
 
       // Success toast
       toast({
         id: toastId,
-        title: "Upload Complete",
-        description: "File updated successfully",
+        title: "Update Complete",
+        description: "File metadata updated successfully",
         duration: 3000,
       });
 
       setIsOpen(false);
-      setSelectedFile(null);
     } catch (error) {
-      console.error("Error uploading file:", error);
+      console.error("Error updating file:", error);
       toast({
         id: toastId,
-        title: "Upload Failed",
-        description: error.message || "Failed to upload file",
+        title: "Update Failed",
+        description: error.message || "Failed to update file",
         variant: "destructive",
         duration: 3000,
       });
@@ -191,65 +142,81 @@ const EditFile = ({ data, uniqueID, format, title }) => {
     }
   };
 
-  const aes_gcm_encrypt = async (data, rawKey) => {
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const aes_key = await window.crypto.subtle.importKey(
-      "raw",
-      rawKey,
-      "AES-GCM",
-      false,
-      ["encrypt"]
-    );
-    const ciphertext_buffer = await window.crypto.subtle.encrypt(
-      { name: "AES-GCM", iv: iv },
-      aes_key,
-      data
-    );
-    const ciphertext = new Uint8Array(ciphertext_buffer);
-    const iv_and_ciphertext = new Uint8Array(iv.length + ciphertext.length);
-    iv_and_ciphertext.set(iv, 0);
-    iv_and_ciphertext.set(ciphertext, iv.length);
-    return iv_and_ciphertext;
-  };
-
-  const hex_decode = (hexString) =>
-    Uint8Array.from(
-      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
-    );
-
   return (
     <>
       <Button
-        className="p-2 text-white"
+        className="p-2 text-white w-full sm:w-auto"
         onClick={() => setIsOpen(true)}
         disabled={uploading}
       >
-        <Pencil />
-        {uploading ? "Uploading..." : "Edit"}
+        <Pencil className="mr-2" />
+        {uploading ? "Updating..." : "Edit"}
       </Button>
 
       <Dialog
         open={isOpen}
         onOpenChange={setIsOpen}
       >
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="w-[90vw] max-w-[500px] p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>Edit File: {title}</DialogTitle>
+            <DialogTitle className="text-lg break-all">
+              Edit File: {title}
+            </DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="flex items-center gap-4">
-              <input
-                type="file"
-                accept={format}
-                onChange={handleFileChange}
-                className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
-              />
+          <div className="grid gap-3 py-3">
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium block mb-1">
+                  Category
+                </label>
+                <div className="w-full rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground">
+                  {metadata.category}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium block mb-1">
+                  Description
+                </label>
+                <textarea
+                  className="w-full min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  placeholder="Enter description"
+                  value={metadata.description}
+                  onChange={(e) =>
+                    setMetadata({ ...metadata, description: e.target.value })
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium block mb-1">
+                  Tags (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  placeholder="Enter tags (e.g., health, data, research)"
+                  value={metadata.tags}
+                  onChange={(e) =>
+                    setMetadata({ ...metadata, tags: e.target.value })
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium block mb-1">Format</label>
+                <div className="w-full rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground">
+                  {format}
+                </div>
+              </div>
             </div>
+
             <Button
               onClick={handleUpload}
-              disabled={!selectedFile || uploading}
+              disabled={uploading}
+              className="w-full mt-2"
             >
-              {uploading ? "Uploading..." : "Upload"}
+              {uploading ? "Updating..." : "Update Metadata"}
             </Button>
           </div>
         </DialogContent>

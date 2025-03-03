@@ -9,7 +9,7 @@ import { toast } from "@/components/ui/use-toast";
 import useActorStore from "../../State/Actors/ActorStore";
 
 export default function ProfileContent() {
-  const { actors } = useActorStore();
+  const { facility } = useActorStore();
   const [facilityData, setFacilityData] = useState(null);
   const [facultyName, setFacultyName] = useState("");
   const [registrationId, setRegistrationId] = useState("");
@@ -21,53 +21,10 @@ export default function ProfileContent() {
   const [serviceDesc, setServiceDesc] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const aes_gcm_encrypt = async (data, rawKey) => {
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const aes_key = await window.crypto.subtle.importKey(
-      "raw",
-      rawKey,
-      "AES-GCM",
-      false,
-      ["encrypt"]
-    );
-    const ciphertext_buffer = await window.crypto.subtle.encrypt(
-      { name: "AES-GCM", iv: iv },
-      aes_key,
-      data
-    );
-    const ciphertext = new Uint8Array(ciphertext_buffer);
-    const iv_and_ciphertext = new Uint8Array(iv.length + ciphertext.length);
-    iv_and_ciphertext.set(iv, 0);
-    iv_and_ciphertext.set(ciphertext, iv.length);
-    return iv_and_ciphertext;
-  };
-
-  const aes_gcm_decrypt = async (encryptedData, rawKey) => {
-    const iv = encryptedData.slice(0, 12);
-    const ciphertext = encryptedData.slice(12);
-    const aes_key = await window.crypto.subtle.importKey(
-      "raw",
-      rawKey,
-      "AES-GCM",
-      false,
-      ["decrypt"]
-    );
-    const decrypted_buffer = await window.crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: iv },
-      aes_key,
-      ciphertext
-    );
-    return new Uint8Array(decrypted_buffer);
-  };
-  const hex_decode = (hexString) =>
-    Uint8Array.from(
-      hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
-    );
-
   useEffect(() => {
     const fetchFacilityData = async () => {
       try {
-        const result = await actors.facility.getFacilityInfo();
+        const result = await facility.getFacilityInfo();
         if (result.ok) {
           const { IDNum, UUID, MetaData } = result.ok;
           const {
@@ -75,68 +32,6 @@ export default function ProfileContent() {
             ServicesOfferedInformation,
             LicenseInformation,
           } = MetaData;
-
-          // // Step 1: Retrieve the encrypted key using encrypted_symmetric_key_for_dataAsset
-
-          // const seed = window.crypto.getRandomValues(new Uint8Array(32));
-          // const tsk = new vetkd.TransportSecretKey(seed);
-          // const encryptedKeyResult =
-          //   await lyfelynkMVP_backend.encrypted_symmetric_key_for_user(
-          //     Object.values(tsk.public_key())
-          //   );
-
-          // let encryptedKey = "";
-
-          // Object.keys(encryptedKeyResult).forEach((key) => {
-          //   if (key === "err") {
-          //     alert(encryptedKeyResult[key]);
-          //     setLoading(false);
-          //     return;
-          //   }
-          //   if (key === "ok") {
-          //     encryptedKey = encryptedKeyResult[key];
-          //   }
-          // });
-
-          // if (!encryptedKey) {
-          //   setLoading(false);
-          //   return;
-          // }
-
-          // const pkBytesHex =
-          //   await lyfelynkMVP_backend.symmetric_key_verification_key();
-          // const principal = await lyfelynkMVP_backend.whoami();
-          // console.log(pkBytesHex);
-          // console.log(encryptedKey);
-          // const aesGCMKey = tsk.decrypt_and_hash(
-          //   hex_decode(encryptedKey),
-          //   hex_decode(pkBytesHex),
-          //   new TextEncoder().encode(principal),
-          //   32,
-          //   new TextEncoder().encode("aes-256-gcm")
-          // );
-          // console.log(aesGCMKey);
-          // const decryptedDataDemo = await aes_gcm_decrypt(
-          //   DemographicInformation,
-          //   aesGCMKey
-          // );
-          // const decryptedDataService = await aes_gcm_decrypt(
-          //   ServicesOfferedInformation,
-          //   aesGCMKey
-          // );
-          // const decryptedDataLicense = await aes_gcm_decrypt(
-          //   LicenseInformation,
-          //   aesGCMKey
-          // );
-          // const parsedDemographicInfo = JSON.parse(
-          //   String.fromCharCode.apply(null, decryptedDataDemo)
-          // );
-          // const parsedServicesOfferedInfo = JSON.parse(
-          //   String.fromCharCode.apply(null, decryptedDataService)
-          // );
-          // const parsedLicenseInfo = JSON.parse(
-          //   String.fromCharCode.apply(null, decryptedDataLicense)
-          // );
 
           const parsedDemographicInfo = JSON.parse(
             new TextDecoder().decode(DemographicInformation)
@@ -164,7 +59,7 @@ export default function ProfileContent() {
     };
 
     fetchFacilityData();
-  }, [actors.facility]);
+  }, [facility]);
 
   useEffect(() => {
     if (facilityData) {
@@ -213,7 +108,7 @@ export default function ProfileContent() {
       );
       const licenseInfoArray = new TextEncoder().encode(licenseInfoJson);
 
-      const result = await actors.facility.updateFacility(
+      const result = await facility.updateFacility(
         Object.values(demoInfoArray),
         Object.values(servicesOfferedInfoArray),
         Object.values(licenseInfoArray)

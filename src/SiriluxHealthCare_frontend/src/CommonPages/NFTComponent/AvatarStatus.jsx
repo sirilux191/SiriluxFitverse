@@ -2,7 +2,6 @@ import React from "react";
 import { ProgressIndicator } from "@/components/ui/progressIndicator";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import useActorStore from "@/State/Actors/ActorStore";
 import useNFTStore, { getUpgradeCost } from "@/State/CryptoAssets/NFTStore";
 import {
   User,
@@ -19,12 +18,11 @@ import {
 } from "lucide-react";
 
 const AvatarStatus = ({ avatar }) => {
-  const { actors } = useActorStore();
   const { levelUpNFT, restoreHP } = useNFTStore();
   const { toast } = useToast();
 
   const handleLevelUp = async () => {
-    const result = await levelUpNFT(actors, avatar.id, avatar.quality);
+    const result = await levelUpNFT(avatar.id, avatar.quality);
     toast({
       title: result.success ? "Success" : "Error",
       description: result.message,
@@ -33,7 +31,7 @@ const AvatarStatus = ({ avatar }) => {
   };
 
   const handleRestoreHP = async (amount) => {
-    const result = await restoreHP(actors, avatar.id, amount);
+    const result = await restoreHP(avatar.id, amount);
     toast({
       title: result.success ? "Success" : "Error",
       description: result.message,

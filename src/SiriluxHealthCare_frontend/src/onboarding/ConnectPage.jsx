@@ -10,20 +10,20 @@ export default function ConnectPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const navigate = useNavigate();
-  const { actors, isAuthenticated, login } = useActorStore();
+  const { identityManager, isAuthenticated, login } = useActorStore();
 
   useEffect(() => {
     const checkRegistration = async () => {
-      if (isAuthenticated && actors.identityManager) {
+      if (isAuthenticated && identityManager) {
         setIsLoading(true);
         try {
-          let resultOfRegistration =
-            await actors.identityManager.checkRegistration();
+          let resultOfRegistration = await identityManager.getIdentity([]);
+
           if (resultOfRegistration.ok) {
-            if (resultOfRegistration.ok == "Facility") {
+            if (resultOfRegistration.ok[1] == "Facility") {
               navigate(`/Health-Service/Profile`);
             } else {
-              navigate(`/Health-${resultOfRegistration.ok}/Profile`);
+              navigate(`/Health-${resultOfRegistration.ok[1]}/Profile`);
             }
           } else {
             navigate(`/Register`);
@@ -41,7 +41,7 @@ export default function ConnectPage() {
       }
     };
     checkRegistration();
-  }, [isAuthenticated, actors.identityManager]);
+  }, [isAuthenticated, identityManager]);
 
   const handleConnectClick = async () => {
     setIsLoading(true);
