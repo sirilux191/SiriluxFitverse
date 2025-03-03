@@ -8,6 +8,8 @@ import {
 import { useEffect } from "react";
 import { ThemeProvider } from "./components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
+import OfflineIndicator from "@/components/OfflineIndicator";
+import InstallPrompt from "@/components/InstallPrompt";
 
 import FirstPageContent from "./onboarding/FirstPage";
 import RegisterPage1Content from "./onboarding/RegisterPage/RegisterPage1";
@@ -37,6 +39,8 @@ function App() {
   return (
     <ThemeProvider>
       <Toaster />
+      <OfflineIndicator />
+      <InstallPrompt />
       <Router>
         <Routes>
           <Route

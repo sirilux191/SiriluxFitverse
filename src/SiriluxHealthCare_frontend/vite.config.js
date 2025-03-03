@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import wasm from "vite-plugin-wasm";
 import topLevelAwait from "vite-plugin-top-level-await";
 import environment from "vite-plugin-environment";
+import { VitePWA } from "vite-plugin-pwa";
 
 dotenv.config({ path: "../../.env" });
 
@@ -13,11 +14,115 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [
+    react(),
     wasm(),
     topLevelAwait(),
-    react(),
     environment("all", { prefix: "CANISTER_" }),
     environment("all", { prefix: "DFX_" }),
+    VitePWA({
+      registerType: "prompt",
+      injectRegister: "auto",
+      includeAssets: ["favicon.ico", "apple-touch-icon.png", "masked-icon.svg"],
+      manifest: {
+        name: "SiriluxHealthCare",
+        short_name: "Sirilux",
+        description: "Digitally Linking your health",
+        theme_color: "#367ed1",
+        background_color: "#ffffff",
+        display: "standalone",
+        orientation: "portrait",
+        start_url: "/",
+        screenshots: [
+          // Desktop screenshot (wide)
+          {
+            src: "/screenshots/desktop.png",
+            sizes: "1280x800",
+            type: "image/png",
+            form_factor: "wide",
+          },
+          // Mobile screenshot (narrow)
+          {
+            src: "/screenshots/mobile.png",
+            sizes: "750x1334",
+            type: "image/png",
+            form_factor: "narrow",
+          },
+        ],
+        icons: [
+          {
+            src: "/pwa-192x192.png",
+            sizes: "192x192",
+            type: "image/png",
+          },
+          {
+            src: "assets/pwa-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+          },
+          {
+            src: "assets/pwa-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "assets/pwa-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ],
+      },
+      devOptions: {
+        enabled: true,
+        type: "module",
+      },
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,jpg,jpeg}"],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts-cache",
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif)$/,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "images",
+              expiration: {
+                maxEntries: 60,
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+              },
+            },
+          },
+          {
+            urlPattern: new RegExp("^https://api."),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "api-cache",
+              networkTimeoutSeconds: 10,
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60, // 1 hour
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
+      },
+    }),
   ],
   build: {
     emptyOutDir: true,
@@ -84,15 +189,8 @@ export default defineConfig({
     ),
   },
   resolve: {
-    alias: [
-      {
-        find: "@",
-        replacement: path.resolve(__dirname, "./src"),
-      },
-      {
-        find: "declarations",
-        replacement: fileURLToPath(new URL("../declarations", import.meta.url)),
-      },
-    ],
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
   },
 });
