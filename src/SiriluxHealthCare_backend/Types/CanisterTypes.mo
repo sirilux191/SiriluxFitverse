@@ -4,7 +4,6 @@ import IdentityManager "../IdentityManager/IdentityManager";
 import CanisterIDs "CanisterIDs";
 
 module CanisterTypes {
-    public let admin : Text = CanisterIDs.admin;
 
     public type VETKD_SYSTEM_API = actor {
         vetkd_public_key : ({
@@ -28,7 +27,7 @@ module CanisterTypes {
     };
 
     public let identityManager : IdentityManager.IdentityManager = actor (CanisterIDs.identityManagerCanisterID);
-
     public let vetkd_system_api : VETKD_SYSTEM_API = actor (CanisterIDs.vetkdSystemCanisterID);
+
     public let dataStorageService : DataService = actor (CanisterIDs.dataAssetCanisterID);
 };

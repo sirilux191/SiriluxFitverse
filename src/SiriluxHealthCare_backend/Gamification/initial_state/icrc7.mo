@@ -1,8 +1,7 @@
 import Principal "mo:base/Principal";
 import ICRC7 "mo:icrc7-mo";
 
-import Types "../../Types";
-
+import CanisterIDs "../../Types/CanisterIDs";
 module {
   public let defaultConfig = func() : ICRC7.InitArgs {
     ?{
@@ -20,7 +19,7 @@ module {
       permitted_drift = null;
       tx_window = null;
       burn_account = null; //burned nfts are deleted
-      deployer = Principal.fromText(Types.admin);
+      deployer = Principal.fromText(CanisterIDs.canisterControllersAdmin);
       supported_standards = null;
     };
   };

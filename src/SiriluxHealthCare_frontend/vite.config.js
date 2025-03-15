@@ -32,22 +32,7 @@ export default defineConfig({
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
-        screenshots: [
-          // Desktop screenshot (wide)
-          {
-            src: "/screenshots/desktop.png",
-            sizes: "1280x800",
-            type: "image/png",
-            form_factor: "wide",
-          },
-          // Mobile screenshot (narrow)
-          {
-            src: "/screenshots/mobile.png",
-            sizes: "750x1334",
-            type: "image/png",
-            form_factor: "narrow",
-          },
-        ],
+
         icons: [
           {
             src: "/pwa-192x192.png",
@@ -121,6 +106,7 @@ export default defineConfig({
             },
           },
         ],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
       },
     }),
   ],
@@ -138,7 +124,10 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:4943",
+        target:
+          process.env.DFX_NETWORK === "local"
+            ? `http://127.0.0.1:4943`
+            : "https://ic0.app/",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, "/api"),
       },
@@ -177,16 +166,19 @@ export default defineConfig({
     "process.env.CANISTER_ID_ICRC_INDEX_CANISTER": JSON.stringify(
       process.env.CANISTER_ID_ICRC_INDEX_CANISTER
     ),
+    "process.env.CANISTER_ID_SUBSCRIPTION_MANAGER": JSON.stringify(
+      process.env.CANISTER_ID_SUBSCRIPTION_MANAGER
+    ),
+    "process.env.CANISTER_ID_AIAGENTSYSTEM": JSON.stringify(
+      process.env.CANISTER_ID_AIAGENTSYSTEM
+    ),
     "process.env.II_URL": JSON.stringify(
       process.env.DFX_NETWORK === "local"
         ? `http://${process.env.CANISTER_ID_INTERNET_IDENTITY}.localhost:4943/`
         : "https://identity.ic0.app/"
     ),
-    "process.env.OPENAI_API_KEY": JSON.stringify(process.env.OPENAI_API_KEY),
-    "process.env.VAPI_BOT_KEY": JSON.stringify(process.env.VAPI_BOT_KEY),
-    "process.env.CLOUD_FUNCTION_URL": JSON.stringify(
-      process.env.CLOUD_FUNCTION_URL
-    ),
+
+    "process.env.RAZORPAY_KEY_ID": JSON.stringify(process.env.RAZORPAY_KEY_ID),
   },
   resolve: {
     alias: {

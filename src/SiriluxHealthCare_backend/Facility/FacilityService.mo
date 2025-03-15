@@ -15,11 +15,12 @@ import Source "mo:uuid/async/SourceV4";
 import UUID "mo:uuid/UUID";
 
 import Types "../Types";
+import CanisterIDs "../Types/CanisterIDs";
 import CanisterTypes "../Types/CanisterTypes";
 import Interface "../utility/ic-management-interface";
 import FacilityShard "FacilityShard";
 
-actor FacilityService {
+actor class FacilityService() = this {
 
     type HealthIDFacility = Types.HealthIDFacility;
     let identityManager = CanisterTypes.identityManager;
@@ -29,7 +30,7 @@ actor FacilityService {
 
     private stable var totalFacilityCount : Nat = 0;
     private stable var shardCount : Nat = 0;
-    private let FACILITIES_PER_SHARD : Nat = 20_480;
+    private let FACILITIES_PER_SHARD : Nat = 2000;
     private let STARTING_FACILITY_ID : Nat = 1_000_000_000;
 
     private stable let shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
@@ -87,8 +88,10 @@ actor FacilityService {
         };
 
         switch (Map.get(pendingRequests, Map.phash, requestPrincipal)) {
+
             case (null) { return #err("Invalid request principal") };
             case (?facility) {
+
                 let idResult = await generateFacilityID();
                 let uuidResult = await generateUUID();
 
@@ -97,7 +100,9 @@ actor FacilityService {
                     UUID = uuidResult;
                     MetaData = facility.MetaData;
                 };
+
                 let registerResult = await registerFacility(idResult, approvedFacility, requestPrincipal);
+
                 switch (registerResult) {
                     case (#ok(_)) {
                         Map.delete(pendingRequests, Map.phash, requestPrincipal);
@@ -234,6 +239,7 @@ actor FacilityService {
     };
 
     public shared ({ caller }) func getFacilityInfo() : async Result.Result<HealthIDFacility, Text> {
+
         let idResult = await getFacilityID(caller);
         switch (idResult) {
             case (#ok(id)) {
@@ -267,17 +273,13 @@ actor FacilityService {
     //Shard Management
 
     private func generateFacilityID() : async Text {
+        totalFacilityCount += 1;
         (Nat.toText(STARTING_FACILITY_ID + totalFacilityCount));
     };
 
     private func generateUUID() : async Text {
         let g = Source.Source();
         UUID.toText(await g.new());
-    };
-
-    // Function to get the caller's principal ID
-    public shared query ({ caller }) func whoami() : async Text {
-        Principal.toText(caller);
     };
 
     public query func getTotalFacilityCountSignedUp() : async Nat {
@@ -315,7 +317,7 @@ actor FacilityService {
             case (?value) {
                 if (value >= STARTING_FACILITY_ID) {
                     let shardIndex = (Nat.max(0, value - STARTING_FACILITY_ID) / FACILITIES_PER_SHARD);
-                    return Nat.toText(shardIndex);
+                    return ("facility-shard-" # Nat.toText(shardIndex));
                 };
                 return ("not a valid Facility ID");
             };
@@ -360,10 +362,17 @@ actor FacilityService {
             return #err("Wasm module not set. Please update the Wasm module first.");
         };
 
+        let settings : Types.canister_settings = {
+            controllers = ?[Principal.fromText(CanisterIDs.canisterControllersAdmin), Principal.fromActor(this)];
+            compute_allocation = null;
+            memory_allocation = null;
+            freezing_threshold = null;
+        };
+
         try {
-            let cycles = 10 ** 12;
+            let cycles = 15 * 10 ** 11;
             Cycles.add<system>(cycles);
-            let newCanister = await ic.create_canister({ settings = null });
+            let newCanister = await ic.create_canister({ settings = ?settings });
             let canisterPrincipal = newCanister.canister_id;
 
             let installResult = await installCodeOnShard(canisterPrincipal);

@@ -20,7 +20,6 @@ import { toast } from "@/components/ui/use-toast";
 import FileUpload from "../../Functions/file-upload";
 import { DatePicker } from "@/Functions/DatePicker";
 import { jsPDF } from "jspdf";
-import lighthouse from "@lighthouse-web3/sdk";
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -244,35 +243,6 @@ export default function UploadContent() {
 
   const handleSelectChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
-  };
-
-  const uploadToLighthouse = async (file) => {
-    const progressCallback = (progressData) => {
-      let percentageDone =
-        100 - (progressData?.total / progressData?.uploaded)?.toFixed(2);
-      console.log(`Upload progress: ${percentageDone}%`);
-    };
-
-    try {
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(file);
-      const fileList = dataTransfer.files;
-      console.log(fileList);
-      const output = await lighthouse.upload(
-        fileList,
-        process.env.LIGHTHOUSEAPI,
-        null,
-        progressCallback
-      );
-      console.log("File Status:", output);
-      console.log(
-        "Visit at https://gateway.lighthouse.storage/ipfs/" + output.data.Hash
-      );
-      return output.data.Hash;
-    } catch (error) {
-      console.error("Error uploading to Lighthouse:", error);
-      throw error;
-    }
   };
 
   const handleSubmit = async (e) => {

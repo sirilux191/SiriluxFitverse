@@ -58,7 +58,7 @@ shared (_init_msg) actor class WellnessAvatarNFT(
     type RevokeCollectionApprovalResult = ICRC37.Service.RevokeCollectionApprovalResult;
 
     //Add a permitted principals that can call the canister
-    private let permittedPrincipals : [Principal] = [Principal.fromText(CanisterIDs.gamificationSystemCanisterID)];
+    private let permittedPrincipals : [Principal] = [Principal.fromText(CanisterIDs.gamificationSystemCanisterID), Principal.fromText(CanisterIDs.AIAgentSystemCanisterID)];
     //
 
     stable var init_msg = _init_msg; //preserves original initialization;

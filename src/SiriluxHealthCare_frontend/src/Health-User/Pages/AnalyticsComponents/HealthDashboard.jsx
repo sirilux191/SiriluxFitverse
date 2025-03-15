@@ -15,7 +15,7 @@ export default function HealthDashboard({ healthData }) {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center text-2xl font-bold text-blue-600 dark:text-blue-400">
+          <CardTitle className="flex items-center text-2xl font-bold text-green-600 dark:text-green-400">
             <Activity className="mr-2" />
             Body Metrics
           </CardTitle>

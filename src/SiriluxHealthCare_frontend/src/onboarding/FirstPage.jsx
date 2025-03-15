@@ -14,7 +14,7 @@ import useActorStore from "../State/Actors/ActorStore";
 
 export default function FirstPageContent() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useActorStore();
+  const { isAuthenticated, logout } = useActorStore();
 
   const checkRegistration = async (type) => {
     if (!isAuthenticated) {
@@ -26,6 +26,11 @@ export default function FirstPageContent() {
       return;
     }
     navigate(`/Register/${type}`);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/Connect");
   };
 
   return (
@@ -51,8 +56,18 @@ export default function FirstPageContent() {
               <h2 className="text-xl md:text-2xl font-bold text-black">
                 Get Started
               </h2>
+              {isAuthenticated && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLogout}
+                  className="text-xs px-2 py-1 h-8"
+                >
+                  Logout
+                </Button>
+              )}
             </div>
-            <p className="text-sm text-gray-500 mb-4">Login/Register As</p>
+            <p className="text-sm text-gray-500 mb-4">Register As</p>
             <div>
               <Button
                 className="flex justify-between items-center w-full border border-gray-300 p-3 rounded-md mb-2"

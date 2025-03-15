@@ -15,7 +15,6 @@ import ICRC7 "mo:icrc7-mo";
 import BTree "mo:stableheapbtreemap/BTree";
 
 import IdentityManager "../IdentityManager/IdentityManager";
-import Types "../Types";
 import CanisterIDs "../Types/CanisterIDs";
 import GamificationTypes "./GamificationTypes";
 import WellnessAvatarNFT "./WellnessAvatarNFT";
@@ -135,7 +134,7 @@ actor class GamificationSystem() = this {
             created_at_time = null;
         }];
 
-        return await wellnessAvatarNFT.icrcX_mint(Principal.fromText(Types.admin), request);
+        return await wellnessAvatarNFT.icrcX_mint(Principal.fromText(CanisterIDs.canisterControllersAdmin), request);
     };
 
     public shared ({ caller }) func mintProfessionalNFT(
@@ -180,7 +179,7 @@ actor class GamificationSystem() = this {
             created_at_time = null;
         }];
 
-        return await wellnessAvatarNFT.icrcX_mint(Principal.fromText(Types.admin), request);
+        return await wellnessAvatarNFT.icrcX_mint(Principal.fromText(CanisterIDs.canisterControllersAdmin), request);
     };
 
     public shared ({ caller }) func mintFacilityNFT(
@@ -225,7 +224,7 @@ actor class GamificationSystem() = this {
             created_at_time = null;
         }];
 
-        return await wellnessAvatarNFT.icrcX_mint(Principal.fromText(Types.admin), request);
+        return await wellnessAvatarNFT.icrcX_mint(Principal.fromText(CanisterIDs.canisterControllersAdmin), request);
     };
 
     public shared ({ caller }) func initiateVisit(idToVisit : Text, slotTime : Time.Time, visitMode : GamificationTypes.VisitMode, avatarId : Nat) : async Result.Result<Nat, Text> {
@@ -254,7 +253,14 @@ actor class GamificationSystem() = this {
                             case (#ok(visitId)) {
                                 return #ok(visitId);
                             };
-                            case (#err(e)) #err(e);
+                            case (#err(e)) {
+                                let refundHPResult = await wellnessAvatarNFT.icrcX_updateHP(Principal.fromText(CanisterIDs.canisterControllersAdmin), avatarId, 10);
+                                switch (refundHPResult) {
+                                    case (#ok(_)) { return #err(e) };
+                                    case (#err(_e)) { return #err(e) };
+                                };
+
+                            };
                         };
 
                     };
@@ -267,7 +273,7 @@ actor class GamificationSystem() = this {
     };
 
     private func depleteHPandVisitCountIncrease(tokenId : Nat) : async Result.Result<[ICRC7.UpdateNFTResult], Text> {
-        await wellnessAvatarNFT.icrcX_updateHPAndVisits(Principal.fromText(Types.admin), tokenId);
+        await wellnessAvatarNFT.icrcX_updateHPAndVisits(Principal.fromText(CanisterIDs.canisterControllersAdmin), tokenId);
     };
 
     public shared ({ caller }) func restoreHP(tokenId : Nat, amount : Nat) : async Result.Result<[ICRC7.UpdateNFTResult], Text> {
@@ -284,7 +290,7 @@ actor class GamificationSystem() = this {
 
         switch (result) {
             case (# Ok(_block_number)) {
-                return await wellnessAvatarNFT.icrcX_updateHP(Principal.fromText(Types.admin), tokenId, amount);
+                return await wellnessAvatarNFT.icrcX_updateHP(Principal.fromText(CanisterIDs.canisterControllersAdmin), tokenId, amount);
             };
             case (#Err(e)) {
                 return #err("Error transferring funds" # debug_show e);
@@ -424,7 +430,7 @@ actor class GamificationSystem() = this {
 
         // Update NFT metadata
         await wellnessAvatarNFT.icrcX_updateMetadata(
-            Principal.fromText(Types.admin),
+            Principal.fromText(CanisterIDs.canisterControllersAdmin),
             tokenId,
             updatedAttrs,
         );
@@ -447,7 +453,7 @@ actor class GamificationSystem() = this {
         };
 
         // Complete the visit first
-        switch (await wellnessAvatarNFT.icrcX_updateHPAndVisits(Principal.fromText(Types.admin), entityAvatarId)) {
+        switch (await wellnessAvatarNFT.icrcX_updateHPAndVisits(Principal.fromText(CanisterIDs.canisterControllersAdmin), entityAvatarId)) {
             case (#ok(_)) {};
             case (#err(msg)) { return #err(msg) };
         };
@@ -1443,7 +1449,7 @@ actor class GamificationSystem() = this {
             case (#ok(msg)) {
                 // If rejection successful, restore HP
                 let hpResult = await wellnessAvatarNFT.icrcX_updateHP(
-                    Principal.fromText(Types.admin),
+                    Principal.fromText(CanisterIDs.canisterControllersAdmin),
                     avatarId,
                     restoreAmount,
                 );
@@ -1504,7 +1510,6 @@ actor class GamificationSystem() = this {
                     if (balanceResult < visit.payment * ICRC_DECIMALS) {
                         return #err("Insufficient balance in canister to process refund");
                     };
-
                     // Refund the payment
                     let refundResult = await icrcLedger.icrc2_transfer_from({
                         from = {

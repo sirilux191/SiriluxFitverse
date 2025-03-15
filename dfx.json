@@ -1,16 +1,5 @@
 {
   "canisters": {
-    "internet_identity": {
-      "type": "custom",
-      "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
-      "wasm": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_dev.wasm.gz",
-      "remote": {
-        "id": {
-          "ic": "rdmx6-jaaaa-aaaaa-aaadq-cai"
-        }
-      },
-      "frontend": {}
-    },
     "icrc_ledger_canister": {
       "type": "custom",
       "candid": "https://github.com/dfinity/ic/releases/download/ledger-suite-icrc-2024-11-28/ledger.did",
@@ -31,10 +20,7 @@
       "main": "src/SiriluxHealthCare_backend/IdentityManager/IdentityManager.mo",
       "type": "motoko"
     },
-    "Subscription_Manager": {
-      "main": "src/SiriluxHealthCare_backend/Subscription/SubscriptionManager.mo",
-      "type": "motoko"
-    },
+
     "User": {
       "main": "src/SiriluxHealthCare_backend/User/UserService.mo",
       "type": "motoko"
@@ -79,7 +65,10 @@
       "main": "src/SiriluxHealthCare_backend/SharedActivitySystem/SharedActivityShard.mo",
       "type": "motoko"
     },
-
+    "Subscription_Manager": {
+      "main": "src/SiriluxHealthCare_backend/Subscription/SubscriptionManager.mo",
+      "type": "motoko"
+    },
     "WellnessAvatarNFT": {
       "main": "src/SiriluxHealthCare_backend/Gamification/WellnessAvatarNFT.mo",
       "type": "motoko"
@@ -88,32 +77,12 @@
       "main": "src/SiriluxHealthCare_backend/Gamification/GamificationSystem.mo",
       "type": "motoko"
     },
+    "AIAgentSystem": {
+      "main": "src/SiriluxHealthCare_backend/AIAgents/AIAgentSystem.mo",
+      "type": "motoko"
+    },
     "SiriluxHealthCare_frontend": {
-      "dependencies": [
-        "internet_identity",
-        "icrc_ledger_canister",
-        "vetkd_system_api",
-
-        "Identity_Manager",
-
-        "User",
-        "UserShard",
-
-        "Professional",
-        "ProfessionalShard",
-
-        "Facility",
-        "FacilityShard",
-
-        "DataAsset",
-        "DataAssetShard",
-        "DataStorageShard",
-
-        "SharedActivityShard",
-
-        "WellnessAvatarNFT",
-        "GamificationSystem"
-      ],
+      "dependencies": [],
       "source": ["src/SiriluxHealthCare_frontend/dist"],
       "type": "assets",
       "workspace": "SiriluxHealthCare_frontend"

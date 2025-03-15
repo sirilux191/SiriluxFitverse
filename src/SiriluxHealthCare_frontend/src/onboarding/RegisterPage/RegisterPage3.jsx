@@ -162,7 +162,7 @@ export default function RegisterPage3Content() {
   }
 
   return (
-    <section className="bg-[conic-gradient(at_bottom_right,_var(--tw-gradient-stops))] from-blue-700 via-blue-800 to-gray-900">
+    <section className="bg-gradient-to-br from-green-800 via-green-900 to-slate-900">
       <OnboardingBanner />
       <div className="px-6 flex justify-center items-center h-screen">
         <div className="flex flex-col lg:flex-row md:w-4/6">

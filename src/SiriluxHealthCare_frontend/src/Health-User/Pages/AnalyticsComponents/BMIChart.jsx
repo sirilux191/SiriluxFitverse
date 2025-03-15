@@ -8,14 +8,17 @@ export default function BMIChart({ bmi }) {
   ];
 
   const getBMIColor = (bmi) => {
-    if (bmi < 18.5) return "#3B82F6";
+    if (bmi < 18.5) return "#22C55E";
     if (bmi < 25) return "#10B981";
     if (bmi < 30) return "#F59E0B";
     return "#EF4444";
   };
 
   return (
-    <ResponsiveContainer width="70%" height={200}>
+    <ResponsiveContainer
+      width="70%"
+      height={200}
+    >
       <PieChart>
         <Pie
           data={data}

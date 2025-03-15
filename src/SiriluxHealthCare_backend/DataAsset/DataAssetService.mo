@@ -55,7 +55,7 @@ actor class DataAssetService() = this {
     private stable var sharedActivityShardCount : Nat = 0;
 
     private let ASSETS_PER_SHARD : Nat = 5_000;
-    private let DATA_FILE_PER__SHARD : Nat = 1_000;
+    private let DATA_FILE_PER__SHARD : Nat = 100;
     private let SHARED_ACTIVITY_PER_SHARD : Nat = 5_000;
 
     private stable var assetShards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(?8); // Asset Shards (Shard ID(asset-shard-0), Principal)
@@ -195,6 +195,10 @@ actor class DataAssetService() = this {
 
         switch (await userIDResult, await recipientPrincipalResult) {
             case (#ok(userID), #ok(recipientPrincipal)) {
+
+                if (userID == recipientID) {
+                    return #err("You cannot share an asset with yourself");
+                };
 
                 let parts = Text.split(assetID, #text("-"));
 
@@ -376,10 +380,17 @@ actor class DataAssetService() = this {
             return #err("Wasm module not set for " # getShardTypeString(shardType) # " shard. Please update the Wasm module first.");
         };
 
+        let settings : Types.canister_settings = {
+            controllers = ?[Principal.fromText(CanisterIDs.canisterControllersAdmin), Principal.fromActor(this)];
+            compute_allocation = null;
+            memory_allocation = null;
+            freezing_threshold = null;
+        };
+
         try {
-            let cycles = 10 ** 12;
+            let cycles = 15 * 10 ** 11;
             Cycles.add<system>(cycles);
-            let newCanister = await ic.create_canister({ settings = null });
+            let newCanister = await ic.create_canister({ settings = ?settings });
             let canisterPrincipal = newCanister.canister_id;
 
             let _installResult = await ic.install_code({
@@ -836,6 +847,14 @@ actor class DataAssetService() = this {
     // ===============================
     // Utility Functions
     // ===============================
+
+    public query func getTotalAssetCount() : async Nat {
+        return totalAssetCount;
+    };
+
+    public query func getTotalSharedActivityCount() : async Nat {
+        return totalSharedActivityCount;
+    };
 
     private func getWasmModule(shardType : ShardType) : [Nat8] {
         switch (shardType) {

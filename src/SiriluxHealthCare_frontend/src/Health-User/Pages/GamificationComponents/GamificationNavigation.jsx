@@ -14,11 +14,11 @@ const GamificationNavigationMenu = ({ activeTab, setActiveTab }) => {
       label: "Professionals",
       icon: <Briefcase className="h-4 w-4" />,
     },
-    {
-      id: "facilities",
-      label: "Facilities",
-      icon: <Building className="h-4 w-4" />,
-    },
+    // {
+    //   id: "facilities",
+    //   label: "Facilities",
+    //   icon: <Building className="h-4 w-4" />,
+    // },
     {
       id: "visits",
       label: "My Visits",

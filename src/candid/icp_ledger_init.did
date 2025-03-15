@@ -3,14 +3,14 @@
     token_symbol = "SIRI";
     token_name = "SIRILUX Healthcare";
     minting_account = record {
-      owner = principal "4fqyk-tdzzr-ghfve-73a6v-cqo6l-qya74-5ualz-xdzzz-ousm3-vt3yo-bae"
+      owner = principal "r6y3g-stm5t-mqzbn-mlhhh-pbf4b-m6jk6-4okhj-ajw55-lvkfj-w5w2v-sae"
     };
     transfer_fee = 0;
     metadata = vec {};
     initial_balances = vec {
       record {
         record {
-          owner = principal "4fqyk-tdzzr-ghfve-73a6v-cqo6l-qya74-5ualz-xdzzz-ousm3-vt3yo-bae";
+          owner = principal "r6y3g-stm5t-mqzbn-mlhhh-pbf4b-m6jk6-4okhj-ajw55-lvkfj-w5w2v-sae";
         };
         0;
       };
@@ -18,7 +18,7 @@
     archive_options = record {
       num_blocks_to_archive = 1000;
       trigger_threshold = 2000;
-      controller_id = principal "4fqyk-tdzzr-ghfve-73a6v-cqo6l-qya74-5ualz-xdzzz-ousm3-vt3yo-bae";
+      controller_id = principal "r6y3g-stm5t-mqzbn-mlhhh-pbf4b-m6jk6-4okhj-ajw55-lvkfj-w5w2v-sae";
       cycles_for_archive_creation = opt 1_000_000_000_000;
     };
     feature_flags = opt record {

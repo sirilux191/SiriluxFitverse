@@ -115,7 +115,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                   {isExpanded ? (
                     <button
                       onClick={toggleRecords}
-                      className="flex items-center justify-start w-full p-2 text-gray-900 rounded-lg dark:text-white transition-all duration-300 ease-in-out hover:bg-blue-100 dark:hover:bg-blue-900"
+                      className="flex items-center justify-start w-full p-2 text-gray-900 rounded-lg dark:text-white transition-all duration-300 ease-in-out hover:bg-green-100 dark:hover:bg-green-900"
                     >
                       <span>{link.icon}</span>
                       <span className="ml-3">{link.text}</span>
@@ -142,8 +142,8 @@ const Sidebar = ({ isOpen, onClose }) => {
                             className={({ isActive }) =>
                               `flex items-center ${
                                 isExpanded ? "justify-start" : "justify-center"
-                              } p-2 text-gray-900 rounded-lg dark:text-white transition-all duration-300 ease-in-out hover:bg-blue-100 dark:hover:bg-blue-900 ${
-                                isActive ? "bg-blue-400 dark:bg-blue-700" : ""
+                              } p-2 text-gray-900 rounded-lg dark:text-white transition-all duration-300 ease-in-out hover:bg-green-100 dark:hover:bg-green-900 ${
+                                isActive ? "bg-green-400 dark:bg-green-700" : ""
                               }`
                             }
                           >
@@ -169,8 +169,8 @@ const Sidebar = ({ isOpen, onClose }) => {
                   className={({ isActive }) =>
                     `flex items-center ${
                       isExpanded ? "justify-start" : "justify-center"
-                    } p-2 text-gray-900 rounded-lg dark:text-white transition-all duration-300 ease-in-out hover:bg-blue-100 dark:hover:bg-blue-900 ${
-                      isActive ? "bg-blue-400 dark:bg-blue-700" : ""
+                    } p-2 text-gray-900 rounded-lg dark:text-white transition-all duration-300 ease-in-out hover:bg-green-100 dark:hover:bg-green-900 ${
+                      isActive ? "bg-green-400 dark:bg-green-700" : ""
                     }`
                   }
                 >

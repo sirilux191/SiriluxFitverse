@@ -20,7 +20,6 @@ import { toast } from "@/components/ui/use-toast";
 import FileUpload from "../../Functions/file-upload";
 import { DatePicker } from "@/Functions/DatePicker";
 import { jsPDF } from "jspdf";
-import lighthouse from "@lighthouse-web3/sdk";
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -30,6 +29,193 @@ import LoadingScreen from "../../LoadingScreen";
 import * as vetkd from "ic-vetkd-utils";
 
 import useActorStore from "../../State/Actors/ActorStore";
+
+const generateBeautifulPDF = (formData, metadata) => {
+  const doc = new jsPDF();
+
+  // Set document properties
+  doc.setProperties({
+    title: "Health Report",
+    subject: "Medical Checkup and Prescription Details",
+    author: "Sirilux Healthcare",
+    creator: "Sirilux Healthcare Platform",
+  });
+
+  // Add a header with logo
+  doc.setFillColor(41, 98, 255);
+  doc.rect(0, 0, 210, 30, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(22);
+  doc.setFont("helvetica", "bold");
+  doc.text("SIRILUX HEALTHCARE", 105, 15, { align: "center" });
+  doc.setFontSize(12);
+  doc.text("Medical Report", 105, 23, { align: "center" });
+
+  // Add report title
+  doc.setTextColor(41, 98, 255);
+  doc.setFontSize(18);
+  doc.text("Health Checkup Report", 105, 40, { align: "center" });
+
+  // Add date
+  const today = new Date();
+  doc.setFontSize(10);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Generated on: ${today.toLocaleDateString()}`, 105, 47, {
+    align: "center",
+  });
+
+  // Add divider
+  doc.setDrawColor(200, 200, 200);
+  doc.line(20, 50, 190, 50);
+
+  // Health Checkup Section
+  doc.setFontSize(14);
+  doc.setTextColor(41, 98, 255);
+  doc.setFont("helvetica", "bold");
+  doc.text("Health Checkup Details", 20, 60);
+
+  // Add checkup details
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(60, 60, 60);
+  let yPos = 70;
+
+  // Format the checkup details
+  if (formData.dateOfCheckup) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Date of Checkup:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.dateOfCheckup, 80, yPos);
+    yPos += 8;
+  }
+
+  if (formData.typeOfCheckup) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Type of Checkup:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.typeOfCheckup, 80, yPos);
+    yPos += 8;
+  }
+
+  if (formData.healthcareProvider) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Healthcare Provider:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.healthcareProvider, 80, yPos);
+    yPos += 8;
+  }
+
+  if (formData.reasonForCheckup) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Reason for Checkup:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.reasonForCheckup, 80, yPos);
+    yPos += 8;
+  }
+
+  // Add divider
+  yPos += 5;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(20, yPos, 190, yPos);
+  yPos += 10;
+
+  // Prescription Section
+  doc.setFontSize(14);
+  doc.setTextColor(128, 0, 128); // Purple color for prescription section
+  doc.setFont("helvetica", "bold");
+  doc.text("Prescription Details", 20, yPos);
+  yPos += 10;
+
+  // Add prescription details
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(60, 60, 60);
+
+  if (formData.medicationName) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Medication Name(s):", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.medicationName, 80, yPos);
+    yPos += 8;
+  }
+
+  if (formData.dosage) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Dosage:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.dosage, 80, yPos);
+    yPos += 8;
+  }
+
+  if (formData.frequency) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Frequency:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.frequency, 80, yPos);
+    yPos += 8;
+  }
+
+  if (formData.prescribingDoctor) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Prescribing Doctor:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(formData.prescribingDoctor, 80, yPos);
+    yPos += 8;
+  }
+
+  // Add metadata section
+  yPos += 5;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(20, yPos, 190, yPos);
+  yPos += 10;
+
+  doc.setFontSize(14);
+  doc.setTextColor(60, 60, 60);
+  doc.setFont("helvetica", "bold");
+  doc.text("Report Metadata", 20, yPos);
+  yPos += 10;
+
+  doc.setFontSize(11);
+  if (metadata.category) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Category:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(metadata.category, 80, yPos);
+    yPos += 8;
+  }
+
+  if (metadata.tags && metadata.tags.length > 0) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Keywords:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(metadata.tags.join(", "), 80, yPos);
+    yPos += 8;
+  }
+
+  if (metadata.description) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Description:", 20, yPos);
+    doc.setFont("helvetica", "normal");
+
+    // Handle multi-line description
+    const splitDescription = doc.splitTextToSize(metadata.description, 110);
+    doc.text(splitDescription, 80, yPos);
+  }
+
+  // Add footer
+  doc.setFontSize(10);
+  doc.setTextColor(150, 150, 150);
+  doc.text(
+    "This is a confidential medical document generated by Sirilux Healthcare.",
+    105,
+    280,
+    { align: "center" }
+  );
+  doc.text("Page 1 of 1", 105, 285, { align: "center" });
+
+  return doc;
+};
+
 export default function UploadContent() {
   const {
     dataAsset,
@@ -59,35 +245,6 @@ export default function UploadContent() {
     setFormData({ ...formData, [field]: value });
   };
 
-  const uploadToLighthouse = async (file) => {
-    const progressCallback = (progressData) => {
-      let percentageDone =
-        100 - (progressData?.total / progressData?.uploaded)?.toFixed(2);
-      console.log(`Upload progress: ${percentageDone}%`);
-    };
-
-    try {
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(file);
-      const fileList = dataTransfer.files;
-      console.log(fileList);
-      const output = await lighthouse.upload(
-        fileList,
-        process.env.LIGHTHOUSEAPI,
-        null,
-        progressCallback
-      );
-      console.log("File Status:", output);
-      console.log(
-        "Visit at https://gateway.lighthouse.storage/ipfs/" + output.data.Hash
-      );
-      return output.data.Hash;
-    } catch (error) {
-      console.error("Error uploading to Lighthouse:", error);
-      throw error;
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -96,7 +253,7 @@ export default function UploadContent() {
       // Step 1: Upload/link an empty file to get a unique ID
       const metadata = {
         category: category,
-        tags: [keywords],
+        tags: keywords ? [keywords] : [],
         description: description,
         format: "application/pdf",
       };
@@ -163,12 +320,7 @@ export default function UploadContent() {
       );
 
       // Step 3: Generate PDF from form data
-      const doc = new jsPDF();
-      let pdfContent = "";
-      for (const [key, value] of Object.entries(formData)) {
-        pdfContent += `${key}: ${value}\n\n`;
-      }
-      doc.text(pdfContent, 10, 10);
+      const doc = generateBeautifulPDF(formData, metadata);
       const pdfBlob = doc.output("blob");
       const pdfFile = new File([pdfBlob], "generated.pdf", {
         type: "application/pdf",

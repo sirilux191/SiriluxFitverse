@@ -145,8 +145,8 @@ export default function SharedWithYou() {
       },
       MedicalImageData: {
         icon: ImageIcon,
-        bg: "bg-blue-500/20",
-        color: "text-blue-500",
+        bg: "bg-green-500/20",
+        color: "text-green-500",
       },
       MedicalStatData: {
         icon: BarChart2,

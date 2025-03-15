@@ -4,7 +4,7 @@ import { Dna, Footprints, GlassWater, Heart, User, Weight } from "lucide-react";
 import useActorStore from "../State/Actors/ActorStore";
 import LoadingScreen from "../LoadingScreen";
 import { toast } from "@/components/ui/use-toast";
-import * as vetkd from "ic-vetkd-utils";
+
 import { useUserProfileStore } from "../State/User/UserProfile/UserProfileStore";
 function HealthAnalyticsOld() {
   const { userProfile } = useUserProfileStore();
@@ -97,67 +97,69 @@ function HealthAnalyticsOld() {
   }
 
   return (
-    <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
+    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-8 space-y-0">
+        <CardHeader className="flex flex-row items-center justify-between pb-4 sm:pb-8 space-y-0">
           <CardTitle className="text-sm font-medium">Age</CardTitle>
           <User className="w-4 h-4 text-gray-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{age}</div>
+          <div className="text-xl sm:text-2xl font-bold">{age}</div>
         </CardContent>
       </Card>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-8 space-y-0">
+        <CardHeader className="flex flex-row items-center justify-between pb-4 sm:pb-8 space-y-0">
           <CardTitle className="text-sm font-medium">Gender</CardTitle>
           <Dna className="w-4 h-4 text-gray-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{gender}</div>
+          <div className="text-xl sm:text-2xl font-bold">{gender}</div>
         </CardContent>
       </Card>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-8 space-y-0">
+        <CardHeader className="flex flex-row items-center justify-between pb-4 sm:pb-8 space-y-0">
           <CardTitle className="text-sm font-medium">BMI</CardTitle>
           <Weight className="w-4 h-4 text-gray-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{calculateBMI()}</div>
+          <div className="text-xl sm:text-2xl font-bold">{calculateBMI()}</div>
         </CardContent>
       </Card>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-8 space-y-0">
+        <CardHeader className="flex flex-row items-center justify-between pb-4 sm:pb-8 space-y-0">
           <CardTitle className="text-sm font-medium">Health Status</CardTitle>
           <Heart className="w-4 h-4 text-gray-500" />
         </CardHeader>
         <CardContent>
           <div
-            className={`text-2xl font-bold px-2 rounded-sm ${getStatusColor()}`}
+            className={`text-xl sm:text-2xl font-bold px-2 rounded-sm ${getStatusColor()}`}
           >
             {getHealthStatus()}
           </div>
         </CardContent>
       </Card>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-8 space-y-0">
+        <CardHeader className="flex flex-row items-center justify-between pb-4 sm:pb-8 space-y-0">
           <CardTitle className="text-sm font-medium">
             Rec. Daily Steps
           </CardTitle>
           <Footprints className="w-4 h-4 text-gray-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{getRecommendedSteps()}</div>
+          <div className="text-xl sm:text-2xl font-bold">
+            {getRecommendedSteps()}
+          </div>
         </CardContent>
       </Card>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-8 space-y-0">
+        <CardHeader className="flex flex-row items-center justify-between pb-4 sm:pb-8 space-y-0">
           <CardTitle className="text-sm font-medium">
             Rec. Daily Water Intake
           </CardTitle>
           <GlassWater className="w-4 h-4 text-gray-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">
+          <div className="text-xl sm:text-2xl font-bold">
             {getRecommendedWaterIntake()}
           </div>
         </CardContent>

@@ -2,12 +2,22 @@ import React, { useState } from "react";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Building2, Database, Coins, Shield } from "lucide-react";
+import {
+  Users,
+  Building2,
+  Database,
+  Coins,
+  Shield,
+  Bot,
+  TicketCheck,
+} from "lucide-react";
 import ProfessionalApproval from "./ProfessionalApproval";
 import FacilityApproval from "./FacilityApproval";
 import ShardManagement from "./ShardManagement";
 import NFTManagement from "./NFTManagement";
 import AdminRegistration from "./AdminRegistration";
+import AIAgentManagement from "./AIAgentManagement";
+import RegistrationCodeManagement from "./RegistrationCodeManagement";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("professionals");
@@ -18,6 +28,12 @@ const AdminDashboard = () => {
     { id: "shards", label: "Shard Management", icon: <Database /> },
     { id: "nfts", label: "NFT Management", icon: <Coins /> },
     { id: "admin", label: "Admin Registration", icon: <Shield /> },
+    { id: "ai-agents", label: "AI Agent Management", icon: <Bot /> },
+    {
+      id: "registration-codes",
+      label: "Registration Codes",
+      icon: <TicketCheck />,
+    },
   ];
 
   return (
@@ -64,6 +80,12 @@ const AdminDashboard = () => {
               </TabsContent>
               <TabsContent value="admin">
                 <AdminRegistration />
+              </TabsContent>
+              <TabsContent value="ai-agents">
+                <AIAgentManagement />
+              </TabsContent>
+              <TabsContent value="registration-codes">
+                <RegistrationCodeManagement />
               </TabsContent>
             </Tabs>
           </CardContent>

@@ -90,13 +90,14 @@ export default function RegisterPage2Content() {
   };
 
   const registerProfessional = async () => {
+    setLoading(true);
+
     try {
       // Validate the form data
       formSchema.parse(formData);
       setErrors({});
       console.log(formData);
 
-      setLoading(true);
       const {
         name,
         dob,
@@ -172,43 +173,22 @@ export default function RegisterPage2Content() {
         setErrors(errorMap);
       } else {
         console.error("An unexpected error occurred:", error);
+        toast({
+          title: "Error",
+          description: "An unexpected error occurred. Please try again.",
+          variant: "destructive",
+        });
       }
       setLoading(false);
     }
   };
-
-  // const aes_gcm_encrypt = async (data, rawKey) => {
-  //   const iv = window.crypto.getRandomValues(new Uint8Array(12));
-  //   const aes_key = await window.crypto.subtle.importKey(
-  //     "raw",
-  //     rawKey,
-  //     "AES-GCM",
-  //     false,
-  //     ["encrypt"],
-  //   );
-  //   const ciphertext_buffer = await window.crypto.subtle.encrypt(
-  //     { name: "AES-GCM", iv: iv },
-  //     aes_key,
-  //     data,
-  //   );
-  //   const ciphertext = new Uint8Array(ciphertext_buffer);
-  //   const iv_and_ciphertext = new Uint8Array(iv.length + ciphertext.length);
-  //   iv_and_ciphertext.set(iv, 0);
-  //   iv_and_ciphertext.set(ciphertext, iv.length);
-  //   return iv_and_ciphertext;
-  // };
-
-  // const hex_decode = (hexString) =>
-  //   Uint8Array.from(
-  //     hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)),
-  //   );
 
   if (loading) {
     return <LoadingScreen />;
   }
 
   return (
-    <section className="bg-[conic-gradient(at_bottom_right,_var(--tw-gradient-stops))] from-blue-700 via-blue-800 to-gray-900">
+    <section className="bg-gradient-to-br from-green-800 via-green-900 to-slate-900">
       <OnboardingBanner />
       <div className="px-6 flex justify-center items-center h-screen">
         <div className="flex flex-col lg:flex-row md:w-4/6">
