@@ -1,9 +1,41 @@
 {
-  "icrc1_ledger_canister": {
-    "ic": "344ue-aaaaa-aaaag-ak6fq-cai"
+  "AIAgentSystem": {
+    "ic": "efkrt-zaaaa-aaaae-qctxq-cai"
   },
-
+  "DataAsset": {
+    "ic": "emj2p-piaaa-aaaae-qctwa-cai"
+  },
+  "Facility": {
+    "ic": "ezolc-oaaaa-aaaae-qctvq-cai"
+  },
+  "GamificationSystem": {
+    "ic": "eclxh-uyaaa-aaaae-qctxa-cai"
+  },
+  "Identity_Manager": {
+    "ic": "f2cce-2yaaa-aaaae-qctta-cai"
+  },
+  "Professional": {
+    "ic": "e6pnw-dyaaa-aaaae-qctva-cai"
+  },
+  "SiriluxHealthCare_frontend": {
+    "ic": "g7wzp-hqaaa-aaaae-qctyq-cai"
+  },
+  "Subscription_Manager": {
+    "ic": "eli43-cqaaa-aaaae-qctwq-cai"
+  },
+  "User": {
+    "ic": "exmgk-vqaaa-aaaae-qctuq-cai"
+  },
+  "WellnessAvatarNFT": {
+    "ic": "gyx73-kiaaa-aaaae-qctya-cai"
+  },
+  "icrc_index_canister": {
+    "ic": "fuapm-biaaa-aaaae-qctsa-cai"
+  },
+  "icrc_ledger_canister": {
+    "ic": "fbh6b-aaaaa-aaaae-qctrq-cai"
+  },
   "vetkd_system_api": {
-    "ic": "ck7s6-qyaaa-aaaag-ak43a-cai"
+    "ic": "ftbjy-mqaaa-aaaae-qctsq-cai"
   }
 }

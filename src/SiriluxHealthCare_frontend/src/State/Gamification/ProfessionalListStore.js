@@ -18,6 +18,7 @@ const useProfessionalListStore = create(
 
           set({ isLoading: true, error: null });
           const result = await gamificationSystem.getAllProfessionals();
+          console.log(result);
           set({ professionals: result, isLoading: false });
         } catch (error) {
           console.error("Error fetching professionals:", error);

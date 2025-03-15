@@ -22,7 +22,6 @@ import {
   Calendar,
   Clock,
   UserCheck,
-  Award,
   Mail,
   Globe,
   Users,
@@ -59,6 +58,7 @@ const ProfessionalList = () => {
 
   useEffect(() => {
     if (gamificationSystem) {
+      console.log("Fetching Professionals");
       fetchProfessionals();
     }
   }, [gamificationSystem]);

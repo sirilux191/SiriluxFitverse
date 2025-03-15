@@ -11,10 +11,11 @@ import {
 } from "lucide-react";
 
 import LoadingScreen from "@/LoadingScreen";
+import useWalletStore from "@/State/CryptoAssets/WalletStore";
 
 import useActorStore from "@/State/Actors/ActorStore";
-
-import { useUserProfileStore } from "../../State/User/UserProfile/UserProfileStore";
+import { Principal } from "@dfinity/principal";
+import { useUserProfileStore } from "@/State/User/UserProfile/UserProfileStore";
 import { jsPDF } from "jspdf";
 import { useToast } from "@/components/ui/use-toast";
 import AssetDetailsDialog from "./AssetDetailsDialog";
@@ -23,14 +24,21 @@ export default function YourRecords() {
   const [activeTab, setActiveTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [records, setRecords] = useState([]);
-  const { dataAsset, identityManager, createDataAssetShardActorExternal } =
-    useActorStore();
+  const {
+    dataAsset,
+    subscriptionManager,
+    identityManager,
+    createDataAssetShardActorExternal,
+  } = useActorStore();
   const userProfile = useUserProfileStore((state) => state.userProfile);
+  const approveSpender = useWalletStore((state) => state.approveSpender);
+
   const [loading, setLoading] = useState(true);
   const [expandedCard, setExpandedCard] = useState(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [aiSummary, setAiSummary] = useState("");
   const { toast } = useToast();
+  const [sortBy, setSortBy] = useState("newest");
 
   // Reset AI summary when changing the expanded card
   useEffect(() => {
@@ -186,10 +194,14 @@ export default function YourRecords() {
   const filteredRecords = useMemo(() => {
     let filtered = records;
 
+    // Filter by category
     if (activeTab !== "all") {
-      filtered = filtered.filter((record) => record.category === activeTab);
+      filtered = filtered.filter(
+        (record) => record.metadata.category === activeTab
+      );
     }
 
+    // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter(
         (record) =>
@@ -198,8 +210,19 @@ export default function YourRecords() {
       );
     }
 
+    // Sort records
+    if (sortBy === "newest") {
+      filtered = [...filtered].sort((a, b) => b.timestamp - a.timestamp);
+    } else if (sortBy === "oldest") {
+      filtered = [...filtered].sort((a, b) => a.timestamp - b.timestamp);
+    } else if (sortBy === "titleAsc") {
+      filtered = [...filtered].sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortBy === "titleDesc") {
+      filtered = [...filtered].sort((a, b) => b.title.localeCompare(a.title));
+    }
+
     return filtered;
-  }, [activeTab, searchTerm, records]);
+  }, [activeTab, searchTerm, records, sortBy]);
 
   // Add this helper function to get file from IndexedDB
   const getFileFromIndexedDB = async (recordId) => {
@@ -274,8 +297,24 @@ export default function YourRecords() {
         throw new Error("Unsupported file format for AI summary");
       }
 
+      const remainingRequests =
+        await subscriptionManager.getRemainingTokenRequest([]);
+      if (5 - Number(remainingRequests.ok) <= 0) {
+        // First approve the Data Asset canister as spender
+        const dataAssetPrincipal = Principal.fromText(
+          process.env.CANISTER_ID_SUBSCRIPTION_MANAGER
+        );
+
+        await approveSpender({
+          spender: { owner: dataAssetPrincipal, subaccount: [] },
+          amount: 1,
+          memo: "Generating AI Summary",
+        });
+      }
+
       // Get authentication token
-      const tokenResult = await identityManager.generateCloudFunctionToken();
+      const tokenResult =
+        await subscriptionManager.generateCloudFunctionToken();
       if (!tokenResult.ok) {
         throw new Error(
           "Failed to get authentication token: " + tokenResult.err
@@ -290,18 +329,21 @@ export default function YourRecords() {
       const base64Data = file.data;
 
       // Call the cloud function with file data and type
-      const response = await fetch(process.env.CLOUD_FUNCTION_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${tokenResult.ok}`,
-          "X-User-Principal": principalText,
-        },
-        body: JSON.stringify({
-          fileData: base64Data,
-          fileType: fileType,
-        }),
-      });
+      const response = await fetch(
+        "https://test-677477691026.asia-south1.run.app/generateAISummary",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${tokenResult.ok}`,
+            "X-User-Principal": principalText,
+          },
+          body: JSON.stringify({
+            fileData: base64Data,
+            fileType: fileType,
+          }),
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -342,7 +384,6 @@ export default function YourRecords() {
 
       // Parse and format the summary content
       const lines = aiSummary.split("\n");
-      let currentFont = "normal";
 
       for (let line of lines) {
         // Handle headings
@@ -520,17 +561,17 @@ export default function YourRecords() {
           <div className="mt-2 sm:mt-4 w-full">
             <div className="max-w-6xl mx-auto p-2 sm:p-6 lg:p-8">
               {/* Title Section */}
-              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1 sm:mb-2">
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-1 sm:mb-2">
                 Your Health Records
               </h1>
-              <p className="text-gray-400 mb-3 sm:mb-6">
-                Choose the documents below to share or sell the data.
+              <p className="text-muted-foreground mb-3 sm:mb-6">
+                Choose the documents below to share or analyze.
               </p>
 
               {/* Search Section */}
               <div className="relative mb-3 sm:mb-6">
                 <Search
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                   size={20}
                 />
                 <input
@@ -538,7 +579,7 @@ export default function YourRecords() {
                   placeholder="Search..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-4 py-3 rounded-full bg-background border border-input focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
@@ -547,8 +588,8 @@ export default function YourRecords() {
                 <button
                   className={`rounded-full px-4 py-2 text-sm flex items-center gap-2 transition-colors ${
                     activeTab === "all"
-                      ? "bg-blue-500 text-white"
-                      : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-accent"
                   }`}
                   onClick={() => setActiveTab("all")}
                 >
@@ -612,41 +653,64 @@ export default function YourRecords() {
                 </button>
               </div>
 
+              {/* Sorting Dropdown */}
+              <div className="flex justify-end mb-4">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="bg-muted text-muted-foreground border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="titleAsc">Title (A-Z)</option>
+                  <option value="titleDesc">Title (Z-A)</option>
+                </select>
+              </div>
+
               {/* Cards Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-6">
-                {filteredRecords.map((record) => (
-                  <Card
-                    key={record.assetID}
-                    className="relative bg-gray-900 border border-gray-800 rounded-lg overflow-hidden hover:border-gray-700 transition-colors"
-                  >
-                    <div className="p-3 sm:p-5 flex flex-col h-full">
-                      <div className="flex flex-col items-center flex-grow">
-                        <div className="text-blue-500 mb-3">
-                          {getIconByCategory(record.metadata.category)}
-                        </div>
-                        <h3 className="text-white font-medium mb-3 line-clamp-2 text-center break-all">
-                          {record.title}
-                        </h3>
-                        <div className="mt-auto w-full space-y-3">
-                          <div className="flex flex-wrap justify-center gap-2 text-xs">
-                            <span className="bg-gray-800 text-gray-300 px-2.5 py-1 rounded-full">
-                              {record.date}
-                            </span>
-                            <span className="bg-gray-800 text-blue-400 px-2.5 py-1 rounded-full">
-                              {record.metadata.format}
-                            </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
+                {filteredRecords.length === 0 ? (
+                  <div className="col-span-full text-center py-10">
+                    <p className="text-gray-400 mb-2">No records found</p>
+                    <p className="text-sm text-gray-500">
+                      Try adjusting your filters or search terms
+                    </p>
+                  </div>
+                ) : (
+                  filteredRecords.map((record) => (
+                    <Card
+                      key={record.assetID}
+                      className="overflow-hidden transition-all duration-200 border border-border bg-card hover:bg-accent/30 hover:shadow-lg hover:shadow-primary/20 hover:-translate-y-1"
+                    >
+                      <div className="p-4 sm:p-5 flex flex-col h-full">
+                        <div className="flex flex-col items-center flex-grow">
+                          <div className="mb-3 transform transition-transform hover:scale-110">
+                            {getIconByCategory(record.metadata.category)}
                           </div>
-                          <button
-                            onClick={() => handleCardClick(record.assetID)}
-                            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2.5 rounded-lg transition-colors text-sm font-medium"
-                          >
-                            More Details
-                          </button>
+                          <h3 className="text-card-foreground font-medium mb-3 line-clamp-2 text-center break-all hover:text-primary transition-colors">
+                            {record.title}
+                          </h3>
+                          <div className="mt-auto w-full space-y-3">
+                            <div className="flex flex-wrap justify-center gap-2 text-xs">
+                              <span className="bg-muted text-muted-foreground px-2.5 py-1 rounded-full">
+                                {record.date}
+                              </span>
+                              <span className="bg-muted text-primary px-2.5 py-1 rounded-full">
+                                {record.metadata.format}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => handleCardClick(record.assetID)}
+                              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2.5 rounded-lg transition-all duration-300 text-sm font-medium shadow-md hover:shadow-primary/30"
+                            >
+                              More Details
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  ))
+                )}
               </div>
 
               {/* Details Modal */}

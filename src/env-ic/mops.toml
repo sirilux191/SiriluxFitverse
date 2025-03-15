@@ -1,0 +1,7 @@
+[package]
+name = "env-ic"
+version = "0.1.0"
+description = "environment variables for motoko on icp network"
+keywords = [ "canister ids" ]
+license = "MIT"
+

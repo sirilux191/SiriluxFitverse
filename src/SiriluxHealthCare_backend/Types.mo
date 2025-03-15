@@ -2,7 +2,7 @@ import Blob "mo:base/Blob";
 import Nat "mo:base/Nat";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
-import env "mo:env";
+
 module Types {
 
     public type SharedType = {
@@ -97,6 +97,11 @@ module Types {
         lastUpdateTime : Time.Time;
     };
 
+    public type PremiumType = {
+        #Monthly;
+        #Yearly;
+    };
+
     public type TokenRequestAmounts = {
         currentRequestAmount : Nat;
         approvedTillNow : Nat;
@@ -118,14 +123,19 @@ module Types {
         }) -> async ({ encrypted_key : Blob });
     };
 
-    public let admin : Text = (env.admin);
-
     public type QuotaInfo = {
         maxStorage : Nat; // in bytes
         usedStorage : Nat;
         maxAssets : Nat;
         currentAssets : Nat;
         lastResetTime : Int;
+    };
+
+    public type canister_settings = {
+        controllers : ?[Principal];
+        compute_allocation : ?Nat;
+        memory_allocation : ?Nat;
+        freezing_threshold : ?Nat;
     };
 
 };

@@ -58,7 +58,7 @@ export default function ConnectPage() {
     return <LoadingScreen />;
   }
   return (
-    <section className="bg-[conic-gradient(at_bottom_right,_var(--tw-gradient-stops))] from-blue-700 via-blue-800 to-gray-900 h-screen flex justify-center items-center">
+    <section className="bg-gradient-to-br from-green-800 via-green-900 to-slate-900 h-screen flex justify-center items-center">
       <OnboardingBanner />
       <div className="px-6 flex justify-center items-center h-screen">
         <div className="flex flex-col md:flex-row w-full max-w-3xl">
@@ -76,7 +76,7 @@ export default function ConnectPage() {
           </div>
 
           <div className="flex-1 items-center bg-background rounded-lg p-8 py-12 shadow-lg relative">
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-400 to-blue-500 rounded-t-lg"></div>
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-400 to-green-500 rounded-t-lg"></div>
             <h2 className="text-xl md:text-2xl font-bold mb-4">
               Connect Your Wallet
             </h2>

@@ -99,7 +99,7 @@ const Gamification = () => {
                       key={facility.id}
                       className="hover:shadow-lg transition-shadow"
                     >
-                      <CardHeader className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-t-lg">
+                      <CardHeader className="bg-gradient-to-r from-emerald-600 to-teal-500 text-white rounded-t-lg shadow-md">
                         <CardTitle className="flex items-center gap-3">
                           <Building className="h-6 w-6" />
                           <div>

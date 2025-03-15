@@ -8,6 +8,7 @@ import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
+import Timer "mo:base/Timer";
 import BTree "mo:stableheapbtreemap/BTree";
 
 import SubscriptionManager "../Subscription/SubscriptionManager";
@@ -20,6 +21,7 @@ actor class DataStorageShard() {
         totalChunks : Nat;
     };
 
+    private stable let MAX_TOTAL_CHUNK = 25;
     private let subscriptionManager : SubscriptionManager.SubscriptionManager = actor (CanisterIDs.subscriptionManagerCanisterID);
 
     private stable var dataStoreAccess : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
@@ -31,6 +33,9 @@ actor class DataStorageShard() {
     private let chunksInProgress : BTree.BTree<Text, ChunkData> = BTree.init<Text, ChunkData>(null);
     //Permitted Principal List
     private stable var permittedPrincipals : [Principal] = [Principal.fromText(CanisterIDs.dataAssetCanisterID)];
+
+    // Define constant for one day in nanoseconds
+    private let ONE_DAY_NANOS : Nat = 86_400_000_000_000;
 
     public shared ({ caller }) func grantAccess(principal : Principal, id : Text) : async Result.Result<Text, Text> {
         if (not isPermitted(caller)) {
@@ -62,6 +67,10 @@ actor class DataStorageShard() {
             case (null) {
                 return #err("Not permitted");
             };
+        };
+
+        if (totalChunks > MAX_TOTAL_CHUNK) {
+            return #err("Total chunks exceed maximum limit");
         };
 
         switch (BTree.get(dataStore, Text.compare, id)) {
@@ -220,51 +229,49 @@ actor class DataStorageShard() {
         };
     };
 
-    // Delete stored data
-    public shared ({ caller }) func deleteData(id : Text) : async Result.Result<Text, Text> {
-        switch (BTree.get(dataStoreAccess, Text.compare, id)) {
-            case (?value) {
-                if (value != caller) {
-                    return #err("Not permitted");
-                };
-            };
-            case (null) {
-                return #err("Not permitted");
-            };
-        };
-        switch (BTree.get(dataStore, Text.compare, id)) {
-            case (?data) {
-                switch (await subscriptionManager.updateDataStorageUsedMap(caller, -data.size())) {
-                    case (#ok(_)) {
-                        ignore BTree.delete(dataStore, Text.compare, id);
-                        return #ok("Data deleted");
-                    };
-                    case (#err(err)) {
-                        return #err(err);
-                    };
-                };
-            };
-            case null {
-                return #ok("Data not found");
-            };
-        };
-    };
-
     public shared ({ caller }) func deleteDataByPermittedPrincipal(id : Text) : async Result.Result<Text, Text> {
         if (not isPermitted(caller)) {
             return #err("Not permitted");
         };
 
         switch (BTree.get(dataStore, Text.compare, id)) {
-            case (?_data) {
+            case (?data) {
 
-                // Delete the data from main storage
-                ignore BTree.delete(dataStore, Text.compare, id);
-                // Delete access permissions
-                ignore BTree.delete(dataStoreAccess, Text.compare, id);
-                // Delete read permissions
-                ignore BTree.delete(dataReadPermittedPrincipals, Text.compare, id);
-                return #ok("Data and associated permissions deleted");
+                let ownerResult = BTree.delete(dataStoreAccess, Text.compare, id);
+                switch (ownerResult) {
+                    case (?owner) {
+                        switch (await subscriptionManager.updateDataStorageUsedMap(owner, -data.size())) {
+                            case (#ok(_)) {
+
+                                // Delete the data from main storage
+                                ignore BTree.delete(dataStore, Text.compare, id);
+                                // Delete read permissions
+                                ignore BTree.delete(dataReadPermittedPrincipals, Text.compare, id);
+
+                                return #ok("Data and associated permissions deleted");
+                            };
+                            case (#err(err)) {
+                                return #err(err);
+                            };
+                        };
+                    };
+                    case (null) {
+                        switch (await subscriptionManager.updateDataStorageUsedMap(caller, -data.size())) {
+                            case (#ok(_)) {
+
+                                // Delete the data from main storage
+                                ignore BTree.delete(dataStore, Text.compare, id);
+                                // Delete read permissions
+                                ignore BTree.delete(dataReadPermittedPrincipals, Text.compare, id);
+
+                                return #ok("Data and associated permissions deleted");
+                            };
+                            case (#err(err)) {
+                                return #err(err);
+                            };
+                        };
+                    };
+                };
 
             };
             case null {
@@ -358,4 +365,24 @@ actor class DataStorageShard() {
         };
         return false;
     };
+
+    // Function to clear chunksInProgress at midnight
+    private func clearChunksInProgress() : async () {
+        BTree.clear(chunksInProgress);
+    };
+
+    // Calculate time until next midnight UTC
+    private func timeUntilNextMidnight() : Nat {
+        let currentTime = Int.abs(Time.now());
+        ONE_DAY_NANOS - (currentTime % ONE_DAY_NANOS);
+    };
+
+    // Set up the recurring timer for daily clearing
+    Timer.setTimer<system>(
+        #nanoseconds(timeUntilNextMidnight()),
+        func() : async () {
+            ignore Timer.recurringTimer<system>(#nanoseconds(ONE_DAY_NANOS), clearChunksInProgress);
+            await clearChunksInProgress();
+        },
+    );
 };

@@ -23,7 +23,7 @@ export const useUserProfileStore = create(
         try {
           setProgress(5, "Initializing profile fetch...");
           const result = await user.readUser();
-
+          console.log(result);
           if (!result.ok) throw new Error(result.err);
           setProgress(15, "User data retrieved...");
 

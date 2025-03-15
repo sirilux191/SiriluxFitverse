@@ -15,7 +15,7 @@ export default function NutritionOverview({
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <span className="text-lg font-semibold">Daily Calorie Intake</span>
-        <span className="text-2xl font-bold text-blue-600">
+        <span className="text-2xl font-bold text-green-600">
           {calories} kcal
         </span>
       </div>
@@ -42,7 +42,7 @@ export default function NutritionOverview({
         <Progress
           value={carbPercentage}
           className="h-2 bg-gray-200"
-          indicatorclassname="bg-blue-500"
+          indicatorclassname="bg-green-500"
         />
       </div>
       <div className="space-y-2">

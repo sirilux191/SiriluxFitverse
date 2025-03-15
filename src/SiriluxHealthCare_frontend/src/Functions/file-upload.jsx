@@ -226,6 +226,13 @@ const FileUpload = () => {
       const fileData = new Uint8Array(arrayBuffer);
       const totalChunks = Math.ceil(fileData.length / CHUNK_SIZE);
 
+      // Check if the file exceeds maximum chunks limit
+      if (totalChunks > 25) {
+        throw new Error(
+          `File is too large. Maximum file size is approximately ${((25 * CHUNK_SIZE) / (1024 * 1024)).toFixed(2)} MB.`
+        );
+      }
+
       // Create storage shard actor using the principal
       const storageShard = createStorageShardActorExternal(
         storageShardPrincipal

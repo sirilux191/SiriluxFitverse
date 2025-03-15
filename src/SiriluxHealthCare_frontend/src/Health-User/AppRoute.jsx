@@ -36,8 +36,8 @@ export default function AppRoute1() {
         <Navbar toggleSidebar={toggleSidebar} />
         <AppBanner />
         <div className="relative flex-1">
-          <div className="circlePosition w-11/12 h-11/12 bg-[#367ed142] rounded-full absolute -z-10 blur-[100px] flex justify-center items-center">
-            <div className="circle w-[17rem] h-[17rem] bg-[#5743ee42] rounded-full" />
+          <div className="circlePosition w-11/12 h-11/12 bg-gradient-radial from-green-400/10 to-transparent rounded-full absolute -z-10 blur-[100px] flex justify-center items-center">
+            <div className="circle w-[17rem] h-[17rem] bg-gradient-radial from-emerald-300/15 to-green-800/10 rounded-full" />
           </div>
           <Routes>
             <Route

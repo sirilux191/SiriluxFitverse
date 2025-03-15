@@ -11,19 +11,18 @@ import CanisterIDs "../Types/CanisterIDs";
 
 actor class IdentityManager() = this {
 
-    private let icrcLedger : ICRC2.Service = actor (CanisterIDs.icrc_ledger_canister_id);
+    private stable let icrcLedger : ICRC2.Service = actor (CanisterIDs.icrc_ledger_canister_id);
+    private stable var admin : Text = (CanisterIDs.admin);
 
-    private let COST_PER_PRINCIPAL_REGISTRATION_PERMIT : Nat = 100_000;
-    private let ICRC_DECIMALS : Nat = 100_000_000; // 8 decimals
+    private stable let COST_PER_PRINCIPAL_REGISTRATION_PERMIT : Nat = 100_000;
+    private stable let ICRC_DECIMALS : Nat = 100_000_000; // 8 decimals
 
-    private let MIN_INSTITUTE_NAME_LENGTH : Nat = 3;
-    private let MAX_INSTITUTE_NAME_LENGTH : Nat = 15;
-    private let MIN_ID_LENGTH : Nat = 5;
-    private let MAX_ID_LENGTH : Nat = 30;
-    private let MIN_USER_TYPE_LENGTH : Nat = 3;
-    private let MAX_USER_TYPE_LENGTH : Nat = 15;
-
-    private stable var admin : Text = ("4fqyk-tdzzr-ghfve-73a6v-cqo6l-qya74-5ualz-xdzzz-ousm3-vt3yo-bae");
+    private stable let MIN_INSTITUTE_NAME_LENGTH : Nat = 3;
+    private stable let MAX_INSTITUTE_NAME_LENGTH : Nat = 15;
+    private stable let MIN_ID_LENGTH : Nat = 5;
+    private stable let MAX_ID_LENGTH : Nat = 30;
+    private stable let MIN_USER_TYPE_LENGTH : Nat = 3;
+    private stable let MAX_USER_TYPE_LENGTH : Nat = 15;
 
     private stable var identityMap : BTree.BTree<Principal, (Text, Text)> = BTree.init<Principal, (Text, Text)>(null);
     private stable var reverseIdentityMap : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null);
@@ -101,14 +100,15 @@ actor class IdentityManager() = this {
 
         // Check if principal already has an identity
         switch (BTree.get(identityMap, Principal.compare, principal)) {
-            case (?_) {
-                return #err("Principal already has an identity registered");
+            case (?identity) {
+                return #err("Principal already has an identity registered" # identity.0);
             };
             case null {};
         };
 
         switch (BTree.has(reverseIdentityMap, Text.compare, idToRegister)) {
             case (true) {
+
                 return #err(
                     "This ID is Already Registered Please Choose Different One"
                 );

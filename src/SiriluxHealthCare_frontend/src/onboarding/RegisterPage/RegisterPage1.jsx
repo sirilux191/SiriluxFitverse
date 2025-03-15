@@ -43,6 +43,7 @@ const formSchema = z.object({
     .string()
     .min(1, { message: "Pincode is required" })
     .regex(/^\d+$/, { message: "Pincode must be a number" }),
+  registrationCode: z.string().min(1, "Registration code is required"),
 });
 
 export default function RegisterPage1Content() {
@@ -60,6 +61,7 @@ export default function RegisterPage1Content() {
     state: "",
     heartRate: "",
     pincode: "",
+    registrationCode: "",
   });
 
   const [loading, setLoading] = useState(false);
@@ -89,7 +91,8 @@ export default function RegisterPage1Content() {
       setErrors({});
 
       setLoading(true);
-      const { name, dob, gender, country, state, pincode } = formData;
+      const { name, dob, gender, country, state, pincode, registrationCode } =
+        formData;
       const { bloodType, height, heartRate, weight } = formData;
 
       const demoInfo = { name, dob, gender, country, state, pincode };
@@ -152,12 +155,15 @@ export default function RegisterPage1Content() {
         basicHealthParaArray,
         aesGCMKey
       );
-      const result = await user.createUser({
-        DemographicInformation: Object.values(encryptedDataDemo),
-        BasicHealthParameters: Object.values(encryptedDataBasicHealth),
-        BiometricData: [],
-        FamilyInformation: [],
-      });
+      const result = await user.createUser(
+        {
+          DemographicInformation: Object.values(encryptedDataDemo),
+          BasicHealthParameters: Object.values(encryptedDataBasicHealth),
+          BiometricData: [],
+          FamilyInformation: [],
+        },
+        registrationCode
+      );
 
       Object.keys(result).forEach((key) => {
         if (key == "err") {
@@ -223,7 +229,7 @@ export default function RegisterPage1Content() {
   }
 
   return (
-    <section className="bg-[conic-gradient(at_bottom_right,_var(--tw-gradient-stops))] from-blue-700 via-blue-800 to-gray-900">
+    <section className="bg-gradient-to-br from-green-800 via-green-900 to-slate-900">
       <OnboardingBanner />
       <div className="p-6 flex justify-center items-center h-screen">
         <div className="flex flex-col lg:flex-row md:w-4/6">
@@ -471,6 +477,29 @@ export default function RegisterPage1Content() {
                   {errors.pincode && (
                     <p className="text-red-500 text-xs mt-1">
                       {errors.pincode}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="col-span-2">
+                <label
+                  className="block text-sm font-medium leading-5 text-foreground"
+                  htmlFor="registrationCode"
+                >
+                  Registration Code *
+                </label>
+                <div className="mt-1">
+                  <Input
+                    id="registrationCode"
+                    placeholder="Enter your registration code"
+                    value={formData.registrationCode}
+                    onChange={handleInputChange}
+                    required
+                  />
+                  {errors.registrationCode && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {errors.registrationCode}
                     </p>
                   )}
                 </div>

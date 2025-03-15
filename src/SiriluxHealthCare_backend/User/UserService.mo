@@ -15,12 +15,13 @@ import Source "mo:uuid/async/SourceV4";
 import UUID "mo:uuid/UUID";
 
 import Types "../Types";
+import CanisterIDs "../Types/CanisterIDs";
 import CanisterTypes "../Types/CanisterTypes";
 import Hex "../utility/Hex";
 import Interface "../utility/ic-management-interface";
 import UserShard "UserShard";
 
-actor class UserService() {
+actor class UserService() = this {
 
     type HealthIDUser = Types.HealthIDUser;
 
@@ -29,7 +30,7 @@ actor class UserService() {
 
     private stable var totalUserCount : Nat = 0;
     private stable var shardCount : Nat = 0;
-    private stable let USERS_PER_SHARD : Nat = 20_000;
+    private stable let USERS_PER_SHARD : Nat = 2_000;
     private stable let STARTING_USER_ID : Nat = 10_000_000_000_000; // Starting User ID
 
     private stable var shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null); //Shard Number <--> Shard Canister ID
@@ -44,18 +45,25 @@ actor class UserService() {
     private let IC = "aaaaa-aa";
     private let ic : Interface.Self = actor (IC);
 
-    //USER CRUD SECTION Via Shard Canisters
+    // Registration code storage - we'll only store unused codes
+    private stable var registrationCodes : BTree.BTree<Text, Bool> = BTree.init<Text, Bool>(null); // Code -> placeholder (always true)
 
     // Function to create a new user
-    public shared ({ caller }) func createUser(userData : Types.HealthIDUserData) : async Result.Result<Text, Text> {
+    public shared ({ caller }) func createUser(userData : Types.HealthIDUserData, registrationCode : Text) : async Result.Result<Text, Text> {
+        // First verify the registration code
+        if (not verifyRegistrationCode(registrationCode)) {
+            return #err("Invalid registration code");
+        };
+
         let userIDResult = generateUserID(); // Generate User ID
         let uuidResult = await generateUUID(); // Generate UUID
 
         switch (userIDResult, uuidResult) {
             case (#ok(userID), #ok(uuid)) {
+
                 let tempID : HealthIDUser = {
 
-                    IDNum = userID # "@siriluxuser";
+                    IDNum = userID # "@sirilux";
                     UUID = uuid;
                     MetaData = {
                         // User Metadata
@@ -65,7 +73,9 @@ actor class UserService() {
                         FamilyInformation = userData.FamilyInformation;
                     };
                 };
+
                 let registerResult = registerUser(caller, userID);
+
                 switch (registerResult) {
                     case (#ok(())) {
                         let identityResult = await identityManager.registerIdentity(caller, userID, "User");
@@ -77,22 +87,39 @@ actor class UserService() {
                                     case (#ok(shard)) {
                                         switch (await shard.insertUser(userID, tempID)) {
                                             case (#ok(insertedUserID)) {
+                                                // Delete the registration code after successful registration
+                                                deleteRegistrationCode(registrationCode);
                                                 #ok("User Created Successfully with ID: " # insertedUserID);
                                             };
                                             case (#err(e)) {
                                                 //To Do Remove for Identity Manager
-                                                //To Do Remove from Register User
-                                                #err("Failed to insert user: " # e);
+                                                switch (await removeUser(caller)) {
+                                                    case (#ok(_)) {
+                                                        #err("Failed to register identity and user: " # e);
+                                                    };
+                                                    case (#err(e)) {
+                                                        //Add Timer to remove user
+                                                        #err("Failed to register identity and user: " # e);
+                                                    };
+                                                };
                                             };
                                         };
                                     };
                                     case (#err(e)) {
-                                        //To Do Remove for Identity Manager
-                                        //To Do Remove from Register User
-                                        #err("Failed to get shard: " # e);
+                                        //To Do Remove from Identity Manager
+                                        switch (await removeUser(caller)) {
+                                            case (#ok(_)) {
+                                                #err("Failed to register identity and user: " # e);
+                                            };
+                                            case (#err(e)) {
+                                                //Add Timer to remove user
+                                                #err("Failed to register identity and user: " # e);
+                                            };
+                                        };
                                     };
                                 };
                             };
+
                             case (#err(e)) {
                                 switch (await removeUser(caller)) {
                                     case (#ok(_)) {
@@ -225,9 +252,9 @@ actor class UserService() {
 
     // Updated share function using getIdentityByID
     public shared ({ caller }) func shareIdentityAccess(targetUserID : Text, durationSeconds : Nat) : async Result.Result<Text, Text> {
-        let ownerIDResult = await getUserID(?caller);
-        let targetPrincipalAndIdentityResult = await identityManager.getPrincipalAndIdentityTypeByID(targetUserID);
-        switch (ownerIDResult, targetPrincipalAndIdentityResult) {
+        let ownerIDResult = getUserID(?caller);
+        let targetPrincipalAndIdentityResult = identityManager.getPrincipalAndIdentityTypeByID(targetUserID);
+        switch (await ownerIDResult, await targetPrincipalAndIdentityResult) {
             case (#ok(ownerID), #ok(targetPrincipalAndIdentity)) {
                 let (targetPrincipal, userType) = targetPrincipalAndIdentity;
                 let now = Time.now();
@@ -363,11 +390,15 @@ actor class UserService() {
 
     // Updated encryption with combined identity check
     public shared ({ caller }) func encrypt_symmetric_key_for_shared_identity(targetUserID : Text, encryption_public_key : Blob) : async Result.Result<Text, Text> {
+
         let targetPrincipalAndIdentityResult = await identityManager.getPrincipalAndIdentityTypeByID(targetUserID);
 
         switch (targetPrincipalAndIdentityResult) {
+
             case (#ok(targetPrincipalAndIdentity)) {
+
                 let (targetPrincipal, userType) = targetPrincipalAndIdentity;
+
                 switch (BTree.get(userIdentitySharedMap, Principal.compare, targetPrincipal)) {
                     case (?sharedMap) {
                         switch (BTree.get(sharedMap, Principal.compare, caller)) {
@@ -520,11 +551,16 @@ actor class UserService() {
         if (Array.size(userShardWasmModule) == 0) {
             return #err("Wasm module not set. Please update the Wasm module first.");
         };
-
+        let settings : Types.canister_settings = {
+            controllers = ?[Principal.fromText(CanisterIDs.canisterControllersAdmin), Principal.fromActor(this)];
+            compute_allocation = null;
+            memory_allocation = null;
+            freezing_threshold = null;
+        };
         try {
-            let cycles = 10 ** 12;
+            let cycles = 15 * 10 ** 11;
             Cycles.add<system>(cycles);
-            let newCanister = await ic.create_canister({ settings = null });
+            let newCanister = await ic.create_canister({ settings = ?settings });
             let canisterPrincipal = newCanister.canister_id;
 
             let installResult = await installCodeOnShard(canisterPrincipal);
@@ -533,7 +569,7 @@ actor class UserService() {
                     #ok(canisterPrincipal);
                 };
                 case (#err(e)) {
-                    #err(e);
+                    return #err(e);
                 };
             };
         } catch (e) {
@@ -689,6 +725,76 @@ actor class UserService() {
 
         // Optionally, you can process the results in the buffer here if needed
         return #ok("Removed Principal from all shards successfully");
+    };
+
+    // Function to generate a random registration code
+    private func generateRandomCode() : async Text {
+
+        let g = Source.Source();
+        let uuid = await g.new();
+
+        // Use UUID to derive random indices for characters
+        let uuidText = UUID.toText(uuid);
+
+        return uuidText;
+    };
+
+    // Admin function to generate batches of 100 registration codes
+    public shared ({ caller }) func generateRegistrationCodes() : async Result.Result<[Text], Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("Only admin can generate registration codes");
+        };
+
+        let codesBatch = Buffer.Buffer<Text>(100);
+        var i = 0;
+
+        while (i < 100) {
+            let code = await generateRandomCode();
+            // Make sure code is unique
+            if (BTree.get(registrationCodes, Text.compare, code) == null) {
+                ignore BTree.insert(registrationCodes, Text.compare, code, true); // true is just a placeholder
+                codesBatch.add(code);
+                i += 1;
+            };
+        };
+
+        #ok(Buffer.toArray(codesBatch));
+    };
+
+    // Admin function to retrieve all available registration codes
+    public shared ({ caller }) func getAvailableRegistrationCodes() : async Result.Result<[Text], Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("Only admin can view registration codes");
+        };
+
+        let codes = Buffer.Buffer<Text>(100);
+        for ((code, _) in BTree.entries(registrationCodes)) {
+            codes.add(code);
+        };
+
+        #ok(Buffer.toArray(codes));
+    };
+
+    // Admin function to get the count of available registration codes
+    public shared ({ caller }) func getRegistrationCodeCount() : async Result.Result<Nat, Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("Only admin can access this information");
+        };
+
+        var count = 0;
+        count := BTree.size(registrationCodes);
+
+        #ok(count);
+    };
+
+    // Verify if registration code exists and is valid
+    private func verifyRegistrationCode(code : Text) : Bool {
+        BTree.get(registrationCodes, Text.compare, code) != null;
+    };
+
+    // Delete a registration code after use
+    private func deleteRegistrationCode(code : Text) : () {
+        ignore BTree.delete(registrationCodes, Text.compare, code);
     };
 
 };

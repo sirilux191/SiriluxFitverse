@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import AIConsultCard from "./AIConsultCard";
 import { Input } from "@/components/ui/input";
-import { Bot, Search, Filter } from "lucide-react";
+import { Bot, Search, Filter, Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -9,39 +9,53 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-// Sample data - replace with actual data from your backend
-const aiAgents = [
-  {
-    id: 1,
-    name: "Dr. AI Smith",
-    avatar: "https://example.com/ai-avatar-1.jpg",
-    rating: 4.8,
-    reviewCount: 245,
-    specialties: ["General Medicine", "Preventive Care", "Health Analysis"],
-    description:
-      "Advanced AI medical assistant specialized in general healthcare consultation and preventive medicine. Available 24/7 for your health concerns.",
-    consultationFee: 29.99,
-  },
-  {
-    id: 2,
-    name: "AI Health Assistant Pro",
-    avatar: "https://example.com/ai-avatar-2.jpg",
-    rating: 4.9,
-    reviewCount: 189,
-    specialties: ["Symptom Analysis", "Medical Advice", "Emergency Triage"],
-    description:
-      "Expert AI system trained on extensive medical data to provide accurate symptom analysis and preliminary medical advice.",
-    consultationFee: 34.99,
-  },
-  // Add more AI agents as needed
-];
+import useActorStore from "@/State/Actors/ActorStore";
 
 const ListAI = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [specialty, setSpecialty] = useState("all");
+  const [aiAgents, setAiAgents] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Add this filtering function
+  const { aiAgentSystem } = useActorStore();
+
+  useEffect(() => {
+    const fetchAIAgents = async () => {
+      try {
+        if (!aiAgentSystem) {
+          setError("AI Agent system not initialized");
+          setIsLoading(false);
+          return;
+        }
+
+        const agents = await aiAgentSystem.getAllAIAgents();
+
+        const formattedAgents = agents.map((agent) => ({
+          id: agent.id,
+          name: agent.name,
+          assistantId: agent.assistantId,
+          avatar: "https://example.com/ai-avatar-1.jpg", // Default avatar
+          rating: 4.8, // Default rating
+          reviewCount: 145, // Default review count
+          specialties: agent.specialization,
+          description: agent.description,
+          consultationFee: Number(agent.visitCost),
+        }));
+
+        setAiAgents(formattedAgents);
+        setIsLoading(false);
+      } catch (error) {
+        console.error("Error fetching AI agents:", error);
+        setError("Failed to load AI agents");
+        setIsLoading(false);
+      }
+    };
+
+    fetchAIAgents();
+  }, [aiAgentSystem]);
+
+  // Filtering function
   const filteredAgents = aiAgents.filter((agent) => {
     const matchesSearch =
       agent.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -57,6 +71,11 @@ const ListAI = () => {
 
     return matchesSearch && matchesSpecialty;
   });
+
+  // Get all unique specialties for filter dropdown
+  const allSpecialties = aiAgents
+    .flatMap((agent) => agent.specialties)
+    .filter((value, index, self) => self.indexOf(value) === index);
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -99,24 +118,48 @@ const ListAI = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Specialties</SelectItem>
-              <SelectItem value="general">General Medicine</SelectItem>
-              <SelectItem value="emergency">Emergency Care</SelectItem>
-              <SelectItem value="preventive">Preventive Care</SelectItem>
-              <SelectItem value="analysis">Health Analysis</SelectItem>
+              {allSpecialties.map((specialty, index) => (
+                <SelectItem
+                  key={index}
+                  value={specialty.toLowerCase()}
+                >
+                  {specialty}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {/* AI Consultants Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {filteredAgents.map((agent) => (
-          <AIConsultCard
-            key={agent.id}
-            agent={agent}
-          />
-        ))}
-      </div>
+      {/* Loading, Error or AI Consultants Grid */}
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+          <p className="text-muted-foreground">Loading AI consultants...</p>
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center py-12 text-red-500">
+          <p>{error}</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            Please try again later
+          </p>
+        </div>
+      ) : filteredAgents.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12">
+          <p className="text-muted-foreground">
+            No AI consultants found matching your criteria
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {filteredAgents.map((agent) => (
+            <AIConsultCard
+              key={agent.id}
+              agent={agent}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };

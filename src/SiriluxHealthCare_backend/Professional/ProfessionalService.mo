@@ -14,11 +14,12 @@ import Source "mo:uuid/async/SourceV4";
 import UUID "mo:uuid/UUID";
 
 import Types "../Types";
+import CanisterIDs "../Types/CanisterIDs";
 import CanisterTypes "../Types/CanisterTypes";
 import Interface "../utility/ic-management-interface";
 import ProfessionalShard "ProfessionalShard";
 
-actor ProfessionalService {
+actor class ProfessionalService() = this {
 
     type HealthIDProfessional = Types.HealthIDProfessional;
     let identityManager = CanisterTypes.identityManager;
@@ -28,7 +29,7 @@ actor ProfessionalService {
 
     private stable var totalProfessionalCount : Nat = 0;
     private stable var shardCount : Nat = 0;
-    private let PROFESSIONALS_PER_SHARD : Nat = 20_480;
+    private let PROFESSIONALS_PER_SHARD : Nat = 2000;
     private let STARTING_PROFESSIONAL_ID : Nat = 100_000_000_000;
 
     private stable var shards : BTree.BTree<Text, Principal> = BTree.init<Text, Principal>(null); // Map of Shard ID to Shard Principal
@@ -285,6 +286,7 @@ actor ProfessionalService {
     //Shard Management Section
 
     public func generateProfessionalID() : async Result.Result<Text, Text> {
+        totalProfessionalCount += 1;
         #ok(Nat.toText(STARTING_PROFESSIONAL_ID + totalProfessionalCount));
     };
 
@@ -293,7 +295,7 @@ actor ProfessionalService {
         (UUID.toText(await g.new()));
     };
 
-    public query ({ caller }) func getProfessionalID(callerPrincipal : ?Principal) : async Result.Result<Text, Text> {
+    public shared query ({ caller }) func getProfessionalID(callerPrincipal : ?Principal) : async Result.Result<Text, Text> {
         switch (callerPrincipal) {
             case (?callerPrincipal) {
                 switch (BTree.get(professionalPrincipalIDMap, Principal.compare, callerPrincipal)) {
@@ -318,7 +320,7 @@ actor ProfessionalService {
         };
     };
 
-    public func getProfessionalPrincipalByID(professionalID : Text) : async Result.Result<Principal, Text> {
+    public shared query func getProfessionalPrincipalByID(professionalID : Text) : async Result.Result<Principal, Text> {
         switch (BTree.get(reverseProfessionalPrincipalIDMap, Text.compare, professionalID)) {
             case (?principal) {
                 #ok(principal);
@@ -409,10 +411,17 @@ actor ProfessionalService {
             return #err("Wasm module not set. Please update the Wasm module first.");
         };
 
+        let settings : Types.canister_settings = {
+            controllers = ?[Principal.fromText(CanisterIDs.canisterControllersAdmin), Principal.fromActor(this)];
+            compute_allocation = null;
+            memory_allocation = null;
+            freezing_threshold = null;
+        };
+
         try {
-            let cycles = 10 ** 12;
+            let cycles = 15 * 10 ** 11;
             Cycles.add<system>(cycles);
-            let newCanister = await ic.create_canister({ settings = null });
+            let newCanister = await ic.create_canister({ settings = ?settings });
             let canisterPrincipal = newCanister.canister_id;
 
             let installResult = await installCodeOnShard(canisterPrincipal);

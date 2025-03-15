@@ -13,6 +13,8 @@ import { createActor as createIcrcIndexActor } from "../../../../declarations/ic
 import { createActor as createStorageShardActor } from "../../../../declarations/DataStorageShard";
 import { createActor as createSharedActivityShardActor } from "../../../../declarations/SharedActivityShard";
 import { createActor as createDataAssetShardActor } from "../../../../declarations/DataAssetShard";
+import { createActor as createSubscriptionManagerActor } from "../../../../declarations/Subscription_Manager";
+import { createActor as createAIAgentSystemActor } from "../../../../declarations/AIAgentSystem";
 
 const useActorStore = create(
   persist(
@@ -28,7 +30,8 @@ const useActorStore = create(
       storageShard: null,
       sharedActivity: null,
       dataAssetShard: null,
-
+      subscriptionManager: null,
+      aiAgentSystem: null,
       isAuthenticated: false,
       authClient: null,
       initializationStatus: "uninitialized",
@@ -79,6 +82,14 @@ const useActorStore = create(
               process.env.CANISTER_ID_ICRC_INDEX_CANISTER,
               { agent }
             ),
+            subscriptionManager: createSubscriptionManagerActor(
+              process.env.CANISTER_ID_SUBSCRIPTION_MANAGER,
+              { agent }
+            ),
+            aiAgentSystem: createAIAgentSystemActor(
+              process.env.CANISTER_ID_AIAGENTSYSTEM,
+              { agent }
+            ),
           });
         } catch (error) {
           console.error("Error initializing actors:", error);
@@ -86,17 +97,20 @@ const useActorStore = create(
       },
 
       login: async () => {
-        const { authClient } = get();
-        if (authClient) {
-          await new Promise((resolve) => {
-            authClient.login({
-              identityProvider: process.env.II_URL,
-              onSuccess: resolve,
-            });
-          });
-          set({ isAuthenticated: true });
-          await get().initializeActors(authClient);
+        let { authClient } = get();
+        if (!authClient) {
+          authClient = await AuthClient.create();
+          set({ authClient });
         }
+
+        await new Promise((resolve) => {
+          authClient.login({
+            identityProvider: process.env.II_URL,
+            onSuccess: resolve,
+          });
+        });
+        set({ isAuthenticated: true });
+        await get().initializeActors(authClient);
       },
 
       logout: async () => {
@@ -113,7 +127,8 @@ const useActorStore = create(
           storageShard: null,
           sharedActivityShard: null,
           dataAssetShard: null,
-
+          subscriptionManager: null,
+          aiAgentSystem: null,
           isAuthenticated: false,
           authClient: null,
           initializationStatus: "uninitialized",
