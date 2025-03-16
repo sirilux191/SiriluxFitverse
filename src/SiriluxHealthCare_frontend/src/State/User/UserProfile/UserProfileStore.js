@@ -15,6 +15,10 @@ export const useUserProfileStore = create(
       loading: false,
       error: null,
 
+      resetStore: () => {
+        set({ userProfile: null, loading: false, error: null });
+      },
+
       fetchUserProfile: async (user, identityManager, forceRefresh = false) => {
         if (!forceRefresh && get().userProfile) return;
         set({ loading: true, error: null });

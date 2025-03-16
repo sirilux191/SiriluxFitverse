@@ -71,7 +71,7 @@ export default function ConnectPage() {
               />
             </div>
             <p className="text-xl md:text-2xl">
-              Digitally Linking your health.
+              Access, Analyze, Amplify Your Health.
             </p>
           </div>
 
