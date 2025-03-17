@@ -75,10 +75,10 @@ const useNFTStore = create(
                   id: Number(tokenId),
                   name,
                   image: imageEntry?.[1]?.Text ?? null,
-                  energy: getAttributeValue("energy") ?? 0,
-                  focus: getAttributeValue("focus") ?? 0,
-                  vitality: getAttributeValue("vitality") ?? 0,
-                  resilience: getAttributeValue("resilience") ?? 0,
+                  energy: getAttributeValue("energy"),
+                  focus: getAttributeValue("focus"),
+                  vitality: getAttributeValue("vitality"),
+                  resilience: getAttributeValue("resilience"),
                   quality:
                     (getAttributeValue("quality") || "Common")
                       .charAt(0)
@@ -86,10 +86,10 @@ const useNFTStore = create(
                     (getAttributeValue("quality") || "Common")
                       .slice(1)
                       .toLowerCase(),
-                  avatarType: getAttributeValue("avatarType") ?? "Unknown",
-                  level: getAttributeValue("level") ?? 1,
-                  HP: getAttributeValue("HP") ?? 100,
-                  visitCount: getAttributeValue("visitCount") ?? 0,
+                  avatarType: getAttributeValue("avatarType"),
+                  level: getAttributeValue("level"),
+                  HP: getAttributeValue("HP"),
+                  visitCount: getAttributeValue("visitCount"),
                 });
               } else if (
                 attributesMap.some((attr) => attr[0] === "experience")
@@ -99,15 +99,14 @@ const useNFTStore = create(
                   type: "professional",
                   id: Number(tokenId),
                   name,
-                  image: imageEntry?.[1]?.Text ?? null,
-                  experience: getAttributeValue("experience") ?? 0,
-                  reputation: getAttributeValue("reputation") ?? 0,
-                  specialization:
-                    getAttributeValue("specialization") ?? "Unknown",
-                  quality: getAttributeValue("quality") ?? "Common",
-                  HP: getAttributeValue("HP") ?? 100,
-                  visitCount: getAttributeValue("visitCount") ?? 0,
-                  level: getAttributeValue("level") ?? 1,
+                  image: imageEntry?.[1]?.Text,
+                  experience: getAttributeValue("experience"),
+                  reputation: getAttributeValue("reputation"),
+                  specialization: getAttributeValue("specialization"),
+                  quality: getAttributeValue("quality"),
+                  HP: getAttributeValue("HP"),
+                  visitCount: getAttributeValue("visitCount"),
+                  level: getAttributeValue("level"),
                 });
               } else if (
                 attributesMap.some((attr) => attr[0] === "technologyLevel")
@@ -117,21 +116,20 @@ const useNFTStore = create(
                   type: "facility",
                   id: Number(tokenId),
                   name,
-                  image: imageEntry?.[1]?.Text ?? null,
-                  technologyLevel: getAttributeValue("technologyLevel") ?? 0,
-                  reputation: getAttributeValue("reputation") ?? 0,
-                  services: getAttributeValue("services") ?? "Unknown",
-                  quality: getAttributeValue("quality") ?? "Common",
-                  HP: getAttributeValue("HP") ?? 100,
-                  visitCount: getAttributeValue("visitCount") ?? 0,
-                  level: getAttributeValue("level") ?? 1,
+                  image: imageEntry?.[1]?.Text,
+                  technologyLevel: getAttributeValue("technologyLevel"),
+                  reputation: getAttributeValue("reputation"),
+                  services: getAttributeValue("services"),
+                  quality: getAttributeValue("quality"),
+                  HP: getAttributeValue("HP"),
+                  visitCount: getAttributeValue("visitCount"),
+                  level: getAttributeValue("level"),
                 });
               }
             } catch (error) {
               console.error(`Error processing token ${tokenId}:`, error);
             }
           }
-
           set({
             nfts: formattedAvatars,
             loading: false,

@@ -43,6 +43,9 @@ function WasmModuleUploader({ shardType }) {
   const [principalActionStatus, setPrincipalActionStatus] = useState({});
   const [isPrincipalActionInProgress, setIsPrincipalActionInProgress] =
     useState(false);
+  const [shardsList, setShardsList] = useState([]);
+  const [isLoadingShards, setIsLoadingShards] = useState(false);
+  const [shardsLoadError, setShardsLoadError] = useState("");
 
   const readFile = (file) => {
     return new Promise((resolve, reject) => {
@@ -245,6 +248,46 @@ function WasmModuleUploader({ shardType }) {
       });
     } finally {
       setIsPrincipalActionInProgress(false);
+    }
+  };
+
+  const handleFetchShards = async () => {
+    setIsLoadingShards(true);
+    setShardsLoadError("");
+    setShardsList([]);
+
+    try {
+      let result;
+      const shardTypeEnum =
+        shardType === "dataAsset" ? { [moduleType]: null } : null;
+
+      switch (shardType) {
+        case "user":
+          result = await user.getAllShardIdsWithPrincipal();
+          break;
+        case "professional":
+          result = await professional.getAllShardIdsWithPrincipal();
+          break;
+        case "facility":
+          result = await facility.getAllShardIdsWithPrincipal();
+          break;
+        case "dataAsset":
+          result = await dataAsset.getAllShardIdsWithPrincipal(shardTypeEnum);
+          break;
+        default:
+          setShardsLoadError("Unknown shard type");
+          return;
+      }
+
+      if (result.ok) {
+        setShardsList(result.ok);
+      } else {
+        setShardsLoadError(`Error fetching shards: ${result.err}`);
+      }
+    } catch (error) {
+      setShardsLoadError(`Error: ${error.message}`);
+    } finally {
+      setIsLoadingShards(false);
     }
   };
 
@@ -459,6 +502,85 @@ function WasmModuleUploader({ shardType }) {
             )}
           </div>
         )}
+
+        <div className="mt-8 border-t pt-6">
+          <h3 className="text-lg font-medium mb-2">
+            List of {shardType.charAt(0).toUpperCase() + shardType.slice(1)}{" "}
+            Shards
+          </h3>
+          <p className="text-sm text-gray-500 mb-4">
+            View all shards created for this service.
+          </p>
+
+          <Button
+            onClick={handleFetchShards}
+            disabled={isLoadingShards}
+            className="mb-4"
+          >
+            {isLoadingShards ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Loading...
+              </>
+            ) : (
+              <>Fetch Shards</>
+            )}
+          </Button>
+
+          {shardsLoadError && (
+            <Alert
+              variant="destructive"
+              className="mb-4"
+            >
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{shardsLoadError}</AlertDescription>
+            </Alert>
+          )}
+
+          {shardsList.length > 0 && (
+            <div className="border rounded-md overflow-hidden">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Shard ID
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Principal
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {shardsList.map(([id, principal], index) => (
+                    <tr
+                      key={index}
+                      className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {id}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 break-all">
+                        {principal.toString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {shardsList.length === 0 && !isLoadingShards && !shardsLoadError && (
+            <div className="text-center p-6 text-gray-500">
+              No shards found. Click "Fetch Shards" to load the list.
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
