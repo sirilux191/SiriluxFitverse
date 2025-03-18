@@ -872,4 +872,23 @@ actor class DataAssetService() = this {
         };
     };
 
+    public shared ({ caller }) func getAllShardIdsWithPrincipal(shardType : ShardType) : async Result.Result<[(Text, Principal)], Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("Only admin can access this information");
+        };
+
+        let shardMap = switch (shardType) {
+            case (#Asset) { assetShards };
+            case (#Storage) { dataStorageShards };
+            case (#SharedActivity) { sharedActivityShards };
+        };
+
+        let ids = Buffer.Buffer<(Text, Principal)>(0);
+        for ((id, principal) in BTree.entries(shardMap)) {
+            ids.add((id, principal));
+        };
+
+        #ok(Buffer.toArray(ids));
+    };
+
 };

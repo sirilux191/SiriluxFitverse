@@ -66,9 +66,9 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   return (
     <aside
-      className={`bg-background z-50 h-full transition-transform duration-300 ease-in-out
+      className={`bg-sidebar z-50 h-full transition-transform duration-300 ease-in-out
         ${isExpanded ? "w-64" : "w-20"} 
-        ${isOpen ? "fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 border-r" : "lg:relative"}
+        ${isOpen ? "fixed inset-y-0 left-0 z-50 border-r border-sidebar-border" : "lg:relative"}
         ${isOpen || !isExpanded ? "" : "hidden lg:block"}`}
     >
       <div className="h-full flex flex-col items-center px-3 py-4 overflow-y-auto transition-all duration-300 ease-in-out">
@@ -82,19 +82,19 @@ const Sidebar = ({ isOpen, onClose }) => {
           )}
           <button
             onClick={toggleSidebar}
-            className={`text-gray-900 dark:text-white focus:outline-none transition-transform duration-300 ease-in-out ${
+            className={`text-sidebar-foreground focus:outline-none transition-transform duration-300 ease-in-out ${
               isExpanded ? "ml-auto" : ""
             }`}
           >
             {isExpanded ? (
               <ChevronLeft
                 size="32"
-                className="border p-1 rounded-lg"
+                className="border border-sidebar-border p-1 rounded-lg"
               />
             ) : (
               <ChevronRight
                 size="32"
-                className="border p-1 rounded-lg"
+                className="border border-sidebar-border p-1 rounded-lg"
               />
             )}
           </button>
@@ -110,7 +110,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                   {isExpanded ? (
                     <button
                       onClick={toggleRecords}
-                      className="flex items-center justify-start w-full p-2 text-gray-900 rounded-lg dark:text-white transition-all duration-300 ease-in-out hover:bg-blue-100 dark:hover:bg-blue-900"
+                      className="flex items-center justify-start w-full p-2 text-sidebar-foreground rounded-lg transition-all duration-300 ease-in-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     >
                       <span>{link.icon}</span>
                       <span className="ml-3">{link.text}</span>
@@ -124,7 +124,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                     </button>
                   ) : (
                     <div className="py-2">
-                      <div className="border-t border-gray-300 dark:border-gray-700 mb-2"></div>
+                      <div className="border-t border-sidebar-border mb-2"></div>
                     </div>
                   )}
                   {(isRecordsOpen || !isExpanded) && (
@@ -137,8 +137,10 @@ const Sidebar = ({ isOpen, onClose }) => {
                             className={({ isActive }) =>
                               `flex items-center ${
                                 isExpanded ? "justify-start" : "justify-center"
-                              } p-2 text-gray-900 rounded-lg dark:text-white transition-all duration-300 ease-in-out hover:bg-blue-100 dark:hover:bg-blue-900 ${
-                                isActive ? "bg-blue-400 dark:bg-blue-700" : ""
+                              } p-2 text-sidebar-foreground rounded-lg transition-all duration-300 ease-in-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                                isActive
+                                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                                  : ""
                               }`
                             }
                           >
@@ -153,7 +155,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                   )}
                   {!isExpanded && (
                     <div className="py-2">
-                      <div className="border-t border-gray-300 dark:border-gray-700 mt-2"></div>
+                      <div className="border-t border-sidebar-border mt-2"></div>
                     </div>
                   )}
                 </div>
@@ -164,8 +166,10 @@ const Sidebar = ({ isOpen, onClose }) => {
                   className={({ isActive }) =>
                     `flex items-center ${
                       isExpanded ? "justify-start" : "justify-center"
-                    } p-2 text-gray-900 rounded-lg dark:text-white transition-all duration-300 ease-in-out hover:bg-blue-100 dark:hover:bg-blue-900 ${
-                      isActive ? "bg-blue-400 dark:bg-blue-700" : ""
+                    } p-2 text-sidebar-foreground rounded-lg transition-all duration-300 ease-in-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                      isActive
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                        : ""
                     }`
                   }
                 >

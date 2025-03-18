@@ -534,4 +534,16 @@ actor class FacilityService() = this {
         // Optionally, you can process the results in the buffer here if needed
         return #ok("Removed Principal from all shards successfully");
     };
+
+    // Function to get all shard IDs with their corresponding principals
+    public shared ({ caller }) func getAllShardIdsWithPrincipal() : async Result.Result<[(Text, Principal)], Text> {
+        if (not (await isAdmin(caller))) {
+            return #err("Only admin can access this information");
+        };
+        let shardIds = Buffer.Buffer<(Text, Principal)>(0);
+        for ((shardId, principal) in BTree.entries(shards)) {
+            shardIds.add((shardId, principal));
+        };
+        #ok(Buffer.toArray(shardIds));
+    };
 };

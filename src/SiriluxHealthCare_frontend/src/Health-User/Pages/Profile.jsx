@@ -1,4 +1,6 @@
+import { useState, useEffect } from "react";
 import { AvatarImage, AvatarFallback, Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   SelectValue,
@@ -7,20 +9,17 @@ import {
   SelectContent,
   Select,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import useActorStore from "../../State/Actors/ActorStore";
-import { useState, useEffect } from "react";
 import LoadingScreen from "../../LoadingScreen";
-import { toast } from "@/components/ui/use-toast";
+import useActorStore from "../../State/Actors/ActorStore";
+import { toast } from "../../utils/toast-utils";
 import { useUserProfileStore } from "../../State/User/UserProfile/UserProfileStore";
-import { Progress } from "@/components/ui/progress";
 import { useToastProgressStore } from "../../State/ProgressStore/ToastProgressStore";
 
 export default function ProfileContent() {
   const { user, identityManager } = useActorStore();
   const { userProfile, loading, fetchUserProfile, updateUserProfile } =
     useUserProfileStore();
-  const { progress, setProgress } = useToastProgressStore();
+  const { progress } = useToastProgressStore();
 
   const [name, setName] = useState("");
   const [dob, setDob] = useState("");
@@ -41,27 +40,18 @@ export default function ProfileContent() {
     const toastId = "profile-loading-toast";
 
     if (loading) {
-      toast({
-        id: toastId,
-        title: "Loading Profile",
-        description: (
-          <div className="w-full space-y-2">
-            <Progress
-              value={progress.value}
-              className="w-full"
-            />
-            <p className="text-sm text-gray-500">{progress.message}</p>
-          </div>
-        ),
-        duration: Infinity,
-      });
+      toast.progress(
+        toastId,
+        "Loading Profile",
+        progress.value,
+        progress.message
+      );
     } else if (progress.value === 100) {
-      toast({
-        id: toastId,
-        title: "Profile Loaded",
-        description: "Profile data loaded successfully!",
-        duration: 2000,
-      });
+      toast.success(
+        "Profile Loaded",
+        "Profile data loaded successfully!",
+        2000
+      );
     }
   }, [progress, loading]);
 
@@ -85,20 +75,12 @@ export default function ProfileContent() {
     const toastId = "profile-update-toast";
 
     try {
-      toast({
-        id: toastId,
-        title: "Updating Profile",
-        description: (
-          <div className="w-full space-y-2">
-            <Progress
-              value={progress.value}
-              className="w-full"
-            />
-            <p className="text-sm text-gray-500">{progress.message}</p>
-          </div>
-        ),
-        duration: Infinity,
-      });
+      toast.progress(
+        toastId,
+        "Updating Profile",
+        progress.value,
+        progress.message
+      );
 
       const demoInfo = {
         name,
@@ -123,21 +105,13 @@ export default function ProfileContent() {
         basicHealthPara
       );
 
-      toast({
-        id: toastId,
-        title: result.success ? "Success" : "Error",
-        description: result.message,
-        variant: result.success ? "success" : "destructive",
-        duration: 3000,
-      });
+      if (result.success) {
+        toast.success("Success", result.message, 3000);
+      } else {
+        toast.error("Error", result.message, 3000);
+      }
     } catch (error) {
-      toast({
-        id: toastId,
-        title: "Error",
-        description: "Failed to update profile",
-        variant: "destructive",
-        duration: 3000,
-      });
+      toast.error("Error", "Failed to update profile", 3000);
     }
   };
 

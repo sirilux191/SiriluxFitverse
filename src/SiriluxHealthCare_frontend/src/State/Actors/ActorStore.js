@@ -15,6 +15,7 @@ import { createActor as createSharedActivityShardActor } from "../../../../decla
 import { createActor as createDataAssetShardActor } from "../../../../declarations/DataAssetShard";
 import { createActor as createSubscriptionManagerActor } from "../../../../declarations/Subscription_Manager";
 import { createActor as createAIAgentSystemActor } from "../../../../declarations/AIAgentSystem";
+import { useUserProfileStore } from "../User/UserProfile/UserProfileStore";
 
 const useActorStore = create(
   persist(
@@ -133,6 +134,9 @@ const useActorStore = create(
           authClient: null,
           initializationStatus: "uninitialized",
         });
+
+        useUserProfileStore.getState().resetStore();
+
         console.log("logout");
         window.localStorage.clear();
         if (authClient) {

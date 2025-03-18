@@ -433,7 +433,7 @@ export default function UploadContent() {
         <motion.h1
           initial={{ y: -20 }}
           animate={{ y: 0 }}
-          className="mt-4 text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"
+          className="mt-4 text-4xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent"
         >
           Upload your Health Data
         </motion.h1>

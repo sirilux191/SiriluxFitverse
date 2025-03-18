@@ -20,23 +20,35 @@ import {
 const AvatarStatus = ({ avatar }) => {
   const { levelUpNFT, restoreHP } = useNFTStore();
   const { toast } = useToast();
+  const [isLevelingUp, setIsLevelingUp] = React.useState(false);
+  const [isRestoringHP, setIsRestoringHP] = React.useState(false);
 
   const handleLevelUp = async () => {
-    const result = await levelUpNFT(avatar.id, avatar.quality);
-    toast({
-      title: result.success ? "Success" : "Error",
-      description: result.message,
-      variant: result.success ? "default" : "destructive",
-    });
+    try {
+      setIsLevelingUp(true);
+      const result = await levelUpNFT(avatar.id, avatar.quality);
+      toast({
+        title: result.success ? "Success" : "Error",
+        description: result.message,
+        variant: result.success ? "default" : "destructive",
+      });
+    } finally {
+      setIsLevelingUp(false);
+    }
   };
 
   const handleRestoreHP = async (amount) => {
-    const result = await restoreHP(avatar.id, amount);
-    toast({
-      title: result.success ? "Success" : "Error",
-      description: result.message,
-      variant: result.success ? "default" : "destructive",
-    });
+    try {
+      setIsRestoringHP(true);
+      const result = await restoreHP(avatar.id, amount);
+      toast({
+        title: result.success ? "Success" : "Error",
+        description: result.message,
+        variant: result.success ? "default" : "destructive",
+      });
+    } finally {
+      setIsRestoringHP(false);
+    }
   };
 
   // Configure stats based on NFT type
@@ -237,16 +249,19 @@ const AvatarStatus = ({ avatar }) => {
         <div className="flex flex-col sm:flex-row gap-2">
           <Button
             onClick={() => handleRestoreHP(10)}
-            disabled={avatar.HP >= maxHP}
+            disabled={avatar.HP >= maxHP || isRestoringHP}
             className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
           >
-            Restore 10 HP (10 Tokens)
+            {isRestoringHP ? "Restoring HP..." : "Restore 10 HP (10 Tokens)"}
           </Button>
           <Button
             onClick={handleLevelUp}
+            disabled={isLevelingUp}
             className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
           >
-            Level Up ({getUpgradeCost(avatar.quality)} Tokens)
+            {isLevelingUp
+              ? "Leveling Up..."
+              : `Level Up (${getUpgradeCost(avatar.quality)} Tokens)`}
           </Button>
         </div>
       </div>

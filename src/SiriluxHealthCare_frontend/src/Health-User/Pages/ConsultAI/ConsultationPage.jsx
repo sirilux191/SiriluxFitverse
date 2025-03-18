@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, AlertCircle } from "lucide-react";
+import { ArrowLeft, AlertCircle, Download, Check } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import Vapi from "@vapi-ai/web";
 import useActorStore from "@/State/Actors/ActorStore";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const ConsultationPage = () => {
   const navigate = useNavigate();
@@ -20,8 +21,8 @@ const ConsultationPage = () => {
 
   const [isCallActive, setIsCallActive] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
-  const [documentText, setDocumentText] = useState("");
-  const [file, setFile] = useState(null);
+  const [documents, setDocuments] = useState([]); // Array of processed documents
+  const [files, setFiles] = useState([]); // Array of files
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [isStartingCall, setIsStartingCall] = useState(false);
@@ -30,6 +31,9 @@ const ConsultationPage = () => {
   const [callTimer, setCallTimer] = useState(0);
   const [timerInterval, setTimerInterval] = useState(null);
   const [transcript, setTranscript] = useState([]);
+  const [downloadedFiles, setDownloadedFiles] = useState([]);
+  const [selectedDownloadedFiles, setSelectedDownloadedFiles] = useState([]);
+  const [isLoadingDownloaded, setIsLoadingDownloaded] = useState(false);
 
   const MAX_CALL_DURATION = 10 * 60; // 10 minutes in seconds
 
@@ -52,6 +56,9 @@ const ConsultationPage = () => {
       );
     }
 
+    // Load downloaded files from IndexedDB
+    fetchDownloadedFiles();
+
     // Set up event handlers for cleanup
     return () => {
       if (vapiRef.current) {
@@ -63,26 +70,139 @@ const ConsultationPage = () => {
     };
   }, [token, assistantId]);
 
-  const handleFileChange = (event) => {
-    const selectedFile = event.target.files[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      setUploadStatus("Document selected: " + selectedFile.name);
-      setDocumentText(""); // Clear previous document text
+  const initDB = () => {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open("downloadedFiles", 1);
 
-      // Convert file to base64 for processing
-      const reader = new FileReader();
-      reader.readAsDataURL(selectedFile);
-      reader.onload = () => {
-        processDocument(reader.result);
+      request.onerror = () => reject(request.error);
+
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains("files")) {
+          db.createObjectStore("files", { keyPath: "id" });
+        }
       };
-      reader.onerror = (error) => {
-        setUploadStatus("Error reading file: " + error);
-      };
+
+      request.onsuccess = () => resolve(request.result);
+    });
+  };
+
+  const fetchDownloadedFiles = async () => {
+    setIsLoadingDownloaded(true);
+    try {
+      const db = await initDB();
+      const transaction = db.transaction(["files"], "readonly");
+      const store = transaction.objectStore("files");
+
+      const files = await new Promise((resolve, reject) => {
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+
+      // Filter for only image and PDF files
+      const filteredFiles = files.filter((file) => {
+        const dataType = file.data.split(";")[0].split(":")[1];
+        return dataType.startsWith("image/") || dataType === "application/pdf";
+      });
+
+      setDownloadedFiles(filteredFiles);
+      db.close();
+    } catch (error) {
+      console.error("Error fetching downloaded files:", error);
+    } finally {
+      setIsLoadingDownloaded(false);
     }
   };
 
-  const processDocument = async (imageData) => {
+  const toggleFileSelection = async (file) => {
+    // Check if file is already selected
+    const isSelected = selectedDownloadedFiles.some((f) => f.id === file.id);
+
+    if (isSelected) {
+      // Remove from selection
+      setSelectedDownloadedFiles((prev) =>
+        prev.filter((f) => f.id !== file.id)
+      );
+      // Also remove from documents if it exists there
+      setDocuments((prev) => prev.filter((d) => d.id !== file.id));
+    } else {
+      // Add to selection
+      setSelectedDownloadedFiles((prev) => [...prev, file]);
+
+      try {
+        // Set processing status to show progress indicators
+        setIsProcessing(true);
+        setUploadStatus(`Processing ${file.name}...`);
+        setProcessingProgress(0);
+
+        // Start progress simulation
+        const progressInterval = setInterval(() => {
+          setProcessingProgress((prev) => {
+            const newProgress = prev + Math.random() * 5;
+            return newProgress >= 100 ? 99 : newProgress;
+          });
+        }, 150);
+
+        // Convert file data to appropriate format for document processing
+        const response = await fetch(file.data);
+        const blob = await response.blob();
+
+        // For images, process them directly
+        if (file.data.startsWith("data:image/")) {
+          await processDocument(file.data, file.name, file.id);
+        }
+        // For PDFs, need to extract text differently - here we'd use a PDF parser
+        else if (file.data.startsWith("data:application/pdf")) {
+          // This is a placeholder - you would need to implement PDF text extraction
+          // For now, we'll just add it with empty text
+          setDocuments((prev) => [
+            ...prev,
+            {
+              id: file.id,
+              name: file.name,
+              text: "PDF content (text extraction pending)",
+              image:
+                "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABGdBTUEAAK/INwWK6QAAABl0RVh0U29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAHhSURBVDjLjZPLSxtRFIfVZRdWi0oFBf+BrhRx5dKVYKG4tLhRqlgXPmIVJQvfqNRX0jw0j8bYPGpirGYSX0lUdECbJibP0bwmOBPt8R4YMhDahTnwcTjA+X7n3AOIAGD0E1vLfZKsHW9E7fhSQNZOBWSt9yuiqMflsk5F4QjOL9KIb65BfFuH8CSAy1QaF9IZiCcziBPSWuQK7v5+Q2WxgvtthRC3C3hbXAJIFvH3JNwFK41Ti6IaJIvX0jpaRKSKqPgOqpsVTIgCJtYXMV7M4yEm4W5zBZXYIq5XpNvQowho/wDa5W10ikU8E/iI4R+xPCeNQiSMeLgMSQwgHPWJQcuCwJyBCcGZCjycn8KowGA5bRJ8QWAOGnMMoUAXyYjBjYfkQNxX5yQwJaCxgMnxAYyYQfxrwL3CymcMnlIBgyw7ll+Y44aRyfEyfBfchnUmxXdNGjeo1uxTkfFltjzrOVOaOXBHuO9esYNdrMvVvqMdW/x8XNWNHtY1VzrluiipN157K6pa8AKdnJQfqkdT+heK9t7MiqiV6AAAAABJRU5ErkJggg==",
+            },
+          ]);
+
+          setProcessingProgress(100);
+          setUploadStatus("PDF document added successfully!");
+        }
+
+        // Clear the progress simulation interval
+        clearInterval(progressInterval);
+      } catch (error) {
+        console.error("Error processing downloaded file:", error);
+        setUploadStatus("Error processing document: " + error.message);
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
+  const handleFileChange = (event) => {
+    const selectedFiles = Array.from(event.target.files);
+    if (selectedFiles.length > 0) {
+      setFiles((prevFiles) => [...prevFiles, ...selectedFiles]);
+      setUploadStatus(`${selectedFiles.length} document(s) selected`);
+
+      // Process each selected file
+      selectedFiles.forEach((file) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => {
+          processDocument(reader.result, file.name);
+        };
+        reader.onerror = (error) => {
+          setUploadStatus("Error reading file: " + error);
+        };
+      });
+    }
+  };
+
+  const processDocument = async (imageData, fileName, fileId = null) => {
     setIsProcessing(true);
     setProcessingProgress(0);
 
@@ -114,7 +234,18 @@ const ConsultationPage = () => {
       }
 
       const data = await response.json();
-      setDocumentText(data.text);
+
+      // Add processed document to documents array
+      setDocuments((prevDocs) => [
+        ...prevDocs,
+        {
+          id: fileId || Date.now().toString(), // Use provided ID or generate one
+          name: fileName,
+          text: data.text,
+          image: imageData,
+        },
+      ]);
+
       console.log(data.text);
       setUploadStatus("Document processed successfully!");
       setProcessingProgress(100);
@@ -127,12 +258,20 @@ const ConsultationPage = () => {
     }
   };
 
-  const startDiscussion = async () => {
-    if (!documentText) {
-      setCallError("Please process a document first");
-      return;
-    }
+  const removeDocument = (index) => {
+    const docToRemove = documents[index];
+    setDocuments((prevDocs) => prevDocs.filter((_, i) => i !== index));
+    setFiles((prevFiles) => prevFiles.filter((_, i) => i !== index));
 
+    // Also remove from selectedDownloadedFiles if it's a downloaded file
+    if (docToRemove.id) {
+      setSelectedDownloadedFiles((prev) =>
+        prev.filter((file) => file.id !== docToRemove.id)
+      );
+    }
+  };
+
+  const startDiscussion = async () => {
     if (!token || !assistantId) {
       setCallError("Missing token or assistant ID. Please try booking again.");
       return;
@@ -179,14 +318,20 @@ const ConsultationPage = () => {
 
       // Send the document text to the assistant once the call starts
       vapiRef.current.on("call-start", () => {
-        // Send document text to the assistant
-        vapiRef.current.send({
-          type: "add-message",
-          message: {
-            role: "system",
-            content: `The following is a medical document that has been uploaded by the user. Please analyze it and provide insights: ${documentText}`,
-          },
-        });
+        // Send documents to the assistant if any
+        if (documents.length > 0) {
+          const docsText = documents
+            .map((doc) => `Document: ${doc.name}\nContent: ${doc.text}`)
+            .join("\n\n");
+
+          vapiRef.current.send({
+            type: "add-message",
+            message: {
+              role: "system",
+              content: `The following medical document(s) have been uploaded by the user. Please analyze them and provide insights: \n\n${docsText}`,
+            },
+          });
+        }
       });
     } catch (error) {
       console.error("Error starting discussion:", error);
@@ -335,64 +480,25 @@ const ConsultationPage = () => {
             <h2 className="text-xl font-semibold mb-2">
               {isCallActive
                 ? "Speak with our AI Medical Assistant"
-                : "Upload a Medical Document"}
+                : "Upload Medical Documents (Optional)"}
             </h2>
             <p className="text-gray-600">
               {isCallActive
-                ? "Discuss your uploaded document with our AI assistant"
-                : "Upload a medical document to get started with your consultation"}
+                ? "Discuss your uploaded documents with our AI assistant"
+                : "Upload medical documents to enhance your consultation or start without documents"}
             </p>
           </div>
 
-          <div
-            className={`border-2 border-dashed rounded-lg p-6 ${isCallActive ? "opacity-50" : ""}`}
-          >
-            <div className="text-center">
-              <label
-                htmlFor="file-upload"
-                className="cursor-pointer"
-              >
-                <div className="mx-auto h-24 w-24 text-gray-400 mb-4">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-full w-full"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                    />
-                  </svg>
-                </div>
-                <div className="space-y-1 text-center">
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium text-blue-600 hover:underline">
-                      Upload a file
-                    </span>{" "}
-                    or drag and drop
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Medical image documents only
-                  </p>
-                </div>
-                <input
-                  id="file-upload"
-                  type="file"
-                  className="hidden"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  disabled={isProcessing || isCallActive || tokenError}
-                />
-              </label>
-            </div>
+          {/* Document Preview Section */}
+          {documents.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-md font-semibold mb-2">
+                Selected Documents:
+              </h3>
 
-            {file && (
-              <div className="mt-4">
-                {isProcessing ? (
+              {/* Processing indicator for both tabs */}
+              {isProcessing && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg">
                   <div className="space-y-2">
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
                       <div
@@ -410,28 +516,219 @@ const ConsultationPage = () => {
                         ]
                       }
                     </p>
+                    {uploadStatus && (
+                      <p
+                        className={`text-sm text-center ${
+                          uploadStatus.includes("Error")
+                            ? "text-red-500"
+                            : "text-green-500"
+                        }`}
+                      >
+                        {uploadStatus}
+                      </p>
+                    )}
                   </div>
-                ) : (
-                  <p
-                    className={`text-sm text-center ${
-                      uploadStatus.includes("Error")
-                        ? "text-red-400"
-                        : "text-green-400"
-                    }`}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {documents.map((doc, index) => (
+                  <div
+                    key={index}
+                    className="relative border rounded-lg p-2"
                   >
-                    {uploadStatus}
-                  </p>
-                )}
+                    <div className="absolute top-2 right-2 z-10">
+                      <button
+                        onClick={() => removeDocument(index)}
+                        className="bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        disabled={isCallActive && !doc.addedDuringCall}
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="h-24 overflow-hidden mb-2">
+                      <img
+                        src={doc.image}
+                        alt={doc.name}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <p className="text-xs truncate">{doc.name}</p>
+                  </div>
+                ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {!isCallActive && (
+            <Tabs
+              defaultValue="upload"
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="upload">Upload New Documents</TabsTrigger>
+                <TabsTrigger value="downloaded">
+                  My Downloaded Files
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="upload">
+                <div className="border-2 border-dashed rounded-lg p-6">
+                  <div className="text-center">
+                    <label
+                      htmlFor="file-upload"
+                      className="cursor-pointer"
+                    >
+                      <div className="mx-auto h-24 w-24 text-gray-400 mb-4">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-full w-full"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                          />
+                        </svg>
+                      </div>
+                      <div className="space-y-1 text-center">
+                        <p className="text-sm text-gray-600">
+                          <span className="font-medium text-blue-600 hover:underline">
+                            Upload files
+                          </span>{" "}
+                          or drag and drop
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Medical image documents only
+                        </p>
+                      </div>
+                      <input
+                        id="file-upload"
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        disabled={isProcessing || isCallActive || tokenError}
+                        multiple
+                      />
+                    </label>
+                  </div>
+
+                  {/* Remove the processing indicators from here */}
+                  {uploadStatus && !isProcessing && (
+                    <p
+                      className={`text-sm text-center mt-2 ${
+                        uploadStatus.includes("Error")
+                          ? "text-red-400"
+                          : "text-green-400"
+                      }`}
+                    >
+                      {uploadStatus}
+                    </p>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="downloaded">
+                <div className="border rounded-lg p-4">
+                  <h3 className="text-lg font-medium mb-3">
+                    Previously Downloaded Medical Files
+                  </h3>
+
+                  {isLoadingDownloaded ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                      <p className="mt-2 text-gray-600">
+                        Loading your files...
+                      </p>
+                    </div>
+                  ) : downloadedFiles.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Download className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                      <p className="text-gray-600">No downloaded files found</p>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Files you download will appear here
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {downloadedFiles.map((file) => {
+                        const isSelected = selectedDownloadedFiles.some(
+                          (f) => f.id === file.id
+                        );
+                        return (
+                          <div
+                            key={file.id}
+                            className={`relative border rounded-lg p-3 cursor-pointer transition-all duration-200 ${
+                              isSelected
+                                ? "border-blue-500 bg-blue-50"
+                                : "hover:border-gray-400"
+                            }`}
+                            onClick={() => toggleFileSelection(file)}
+                          >
+                            {isSelected && (
+                              <div className="absolute top-2 right-2 z-10 bg-blue-500 rounded-full p-1 text-white">
+                                <Check className="h-3 w-3" />
+                              </div>
+                            )}
+                            <div className="h-24 overflow-hidden mb-2">
+                              {file.data.startsWith("data:image/") ? (
+                                <img
+                                  src={file.data}
+                                  alt={file.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex items-center justify-center h-full bg-gray-100">
+                                  <svg
+                                    className="h-12 w-12 text-gray-400"
+                                    fill="currentColor"
+                                    viewBox="0 0 20 20"
+                                  >
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-xs truncate">{file.name}</p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {new Date(file.timestamp).toLocaleDateString()}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
 
           <div className="flex justify-center">
             <Button
               onClick={isCallActive ? endConsultation : startDiscussion}
-              disabled={
-                !documentText || isProcessing || isStartingCall || tokenError
-              }
+              disabled={isProcessing || isStartingCall || tokenError}
               className={`px-6 py-3 text-lg font-semibold rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
                 isCallActive
                   ? "bg-red-600 hover:bg-red-700"

@@ -433,11 +433,11 @@ export default function UploadContent() {
         <motion.h1
           initial={{ y: -20 }}
           animate={{ y: 0 }}
-          className="mt-4 text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"
+          className="mt-4 text-4xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent"
         >
           Upload your Health Data
         </motion.h1>
-        <p className="mt-2 text-lg text-gray-600">
+        <p className="mt-2 text-lg text-muted-foreground">
           Choose a suitable format to upload your data.
         </p>
         <div className="mt-6 w-full max-w-4xl mx-auto">
@@ -461,11 +461,12 @@ export default function UploadContent() {
             </TabsContent>
 
             <TabsContent value="Form">
-              <Card className="p-4 sm:p-6 shadow-lg border-t-4 border-blue-500">
-                <CardContent>
+              <Card className="border-border">
+                <CardContent className="pt-6">
+                  {loading && <LoadingScreen />}
                   <form
-                    className="space-y-8"
                     onSubmit={handleSubmit}
+                    className="space-y-8"
                   >
                     <motion.div
                       initial={{ x: -20 }}
@@ -478,18 +479,18 @@ export default function UploadContent() {
                       </h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="flex flex-col space-y-2 transition-all duration-200 hover:transform hover:scale-[1.02]">
-                          <label className="font-medium text-gray-700 dark:text-gray-200">
+                          <label className="font-medium text-foreground">
                             Date of Checkup
                           </label>
                           <DatePicker
-                            id="date-of-checkup"
-                            value={formData.dateOfCheckup}
-                            onChange={handleChange}
-                            className="rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500"
+                            date={formData.dateOfCheckup}
+                            setDate={(date) =>
+                              handleSelectChange("dateOfCheckup", date)
+                            }
                           />
                         </div>
                         <div className="flex flex-col space-y-2 transition-all duration-200 hover:transform hover:scale-[1.02]">
-                          <label className="font-medium text-gray-700 dark:text-gray-200">
+                          <label className="font-medium text-foreground">
                             Type of Checkup
                           </label>
                           <Select
@@ -499,7 +500,7 @@ export default function UploadContent() {
                               handleSelectChange("typeOfCheckup", value)
                             }
                           >
-                            <SelectTrigger className="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500">
+                            <SelectTrigger className="w-full">
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                             <SelectContent position="popper">
@@ -520,7 +521,7 @@ export default function UploadContent() {
                           </Select>
                         </div>
                         <div className="flex flex-col space-y-2 transition-all duration-200 hover:transform hover:scale-[1.02]">
-                          <label className="font-medium text-gray-700 dark:text-gray-200">
+                          <label className="font-medium text-foreground">
                             Healthcare Provider/Facility Name
                           </label>
                           <Input
@@ -528,11 +529,10 @@ export default function UploadContent() {
                             placeholder="Enter name"
                             value={formData.healthcareProvider}
                             onChange={handleChange}
-                            className="rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
                         <div className="flex flex-col space-y-2 transition-all duration-200 hover:transform hover:scale-[1.02]">
-                          <label className="font-medium text-gray-700 dark:text-gray-200">
+                          <label className="font-medium text-foreground">
                             Reason for Checkup
                           </label>
                           <Select
@@ -542,7 +542,7 @@ export default function UploadContent() {
                               handleSelectChange("reasonForCheckup", value)
                             }
                           >
-                            <SelectTrigger className="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500">
+                            <SelectTrigger className="w-full">
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                             <SelectContent position="popper">
@@ -571,7 +571,7 @@ export default function UploadContent() {
                       </h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="flex flex-col space-y-2 transition-all duration-200 hover:transform hover:scale-[1.02]">
-                          <label className="font-medium text-gray-700 dark:text-gray-200">
+                          <label className="font-medium text-foreground">
                             Medication Name(s)
                           </label>
                           <Input
@@ -579,11 +579,10 @@ export default function UploadContent() {
                             placeholder="Enter medication name"
                             value={formData.medicationName}
                             onChange={handleChange}
-                            className="rounded-lg border-gray-300 focus:ring-2 focus:ring-purple-500"
                           />
                         </div>
                         <div className="flex flex-col space-y-2 transition-all duration-200 hover:transform hover:scale-[1.02]">
-                          <label className="font-medium text-gray-700 dark:text-gray-200">
+                          <label className="font-medium text-foreground">
                             Dosage
                           </label>
                           <Input
@@ -591,11 +590,10 @@ export default function UploadContent() {
                             placeholder="Enter dosage"
                             value={formData.dosage}
                             onChange={handleChange}
-                            className="rounded-lg border-gray-300 focus:ring-2 focus:ring-purple-500"
                           />
                         </div>
                         <div className="flex flex-col space-y-2 transition-all duration-200 hover:transform hover:scale-[1.02]">
-                          <label className="font-medium text-gray-700 dark:text-gray-200">
+                          <label className="font-medium text-foreground">
                             Frequency
                           </label>
                           <Input
@@ -603,11 +601,10 @@ export default function UploadContent() {
                             placeholder="Enter frequency"
                             value={formData.frequency}
                             onChange={handleChange}
-                            className="rounded-lg border-gray-300 focus:ring-2 focus:ring-purple-500"
                           />
                         </div>
                         <div className="flex flex-col space-y-2 transition-all duration-200 hover:transform hover:scale-[1.02]">
-                          <label className="font-medium text-gray-700 dark:text-gray-200">
+                          <label className="font-medium text-foreground">
                             Prescribing Doctor
                           </label>
                           <Input
@@ -615,7 +612,6 @@ export default function UploadContent() {
                             placeholder="Enter doctor's name"
                             value={formData.prescribingDoctor}
                             onChange={handleChange}
-                            className="rounded-lg border-gray-300 focus:ring-2 focus:ring-purple-500"
                           />
                         </div>
                       </div>
@@ -625,38 +621,34 @@ export default function UploadContent() {
                       initial={{ x: -20 }}
                       animate={{ x: 0 }}
                       transition={{ delay: 0.6 }}
-                      className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6"
+                      className="bg-muted rounded-lg p-6"
                     >
                       <div className="hidden md:block overflow-x-auto">
                         <Table>
                           <TableHeader>
-                            <TableRow className="dark:border-gray-700">
-                              <TableHead className="w-[150px] dark:text-gray-200">
-                                Title
-                              </TableHead>
-                              <TableHead className="w-[400px] dark:text-gray-200">
+                            <TableRow>
+                              <TableHead className="w-[150px]">Title</TableHead>
+                              <TableHead className="w-[400px]">
                                 Description
                               </TableHead>
-                              <TableHead className="w-[200px] dark:text-gray-200">
+                              <TableHead className="w-[200px]">
                                 Keywords
                               </TableHead>
-                              <TableHead className="w-[200px] dark:text-gray-200">
+                              <TableHead className="w-[200px]">
                                 Category
                               </TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            <TableRow className="dark:border-gray-700">
-                              <TableCell className="dark:text-gray-300">
-                                {"Report Generated"}
-                              </TableCell>
+                            <TableRow>
+                              <TableCell>{"Report Generated"}</TableCell>
                               <TableCell>
                                 <Input
                                   value={description}
                                   onChange={(e) =>
                                     setDescription(e.target.value)
                                   }
-                                  className="w-full bg-transparent dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
+                                  className="w-full bg-transparent"
                                   placeholder="Enter description"
                                 />
                               </TableCell>
@@ -664,7 +656,7 @@ export default function UploadContent() {
                                 <Input
                                   value={keywords}
                                   onChange={(e) => setKeywords(e.target.value)}
-                                  className="w-full bg-transparent dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
+                                  className="w-full bg-transparent"
                                   placeholder="Enter keywords"
                                 />
                               </TableCell>
@@ -673,44 +665,24 @@ export default function UploadContent() {
                                   value={category}
                                   onValueChange={setCategory}
                                 >
-                                  <SelectTrigger className="w-full dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700">
+                                  <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select category" />
                                   </SelectTrigger>
-                                  <SelectContent className="dark:bg-gray-800">
-                                    <SelectItem
-                                      value="Bills"
-                                      className="dark:text-gray-200 dark:hover:bg-gray-700"
-                                    >
-                                      Bills
-                                    </SelectItem>
-                                    <SelectItem
-                                      value="GeneticData"
-                                      className="dark:text-gray-200 dark:hover:bg-gray-700"
-                                    >
+                                  <SelectContent>
+                                    <SelectItem value="Bills">Bills</SelectItem>
+                                    <SelectItem value="GeneticData">
                                       Genetic Data
                                     </SelectItem>
-                                    <SelectItem
-                                      value="MedicalImageData"
-                                      className="dark:text-gray-200 dark:hover:bg-gray-700"
-                                    >
+                                    <SelectItem value="MedicalImageData">
                                       Medical Image Data
                                     </SelectItem>
-                                    <SelectItem
-                                      value="MedicalStatData"
-                                      className="dark:text-gray-200 dark:hover:bg-gray-700"
-                                    >
+                                    <SelectItem value="MedicalStatData">
                                       Medical Statistics Data
                                     </SelectItem>
-                                    <SelectItem
-                                      value="Reports"
-                                      className="dark:text-gray-200 dark:hover:bg-gray-700"
-                                    >
+                                    <SelectItem value="Reports">
                                       Reports
                                     </SelectItem>
-                                    <SelectItem
-                                      value="TrainingModels"
-                                      className="dark:text-gray-200 dark:hover:bg-gray-700"
-                                    >
+                                    <SelectItem value="TrainingModels">
                                       Training Models
                                     </SelectItem>
                                   </SelectContent>
@@ -723,84 +695,62 @@ export default function UploadContent() {
 
                       <div className="md:hidden space-y-4">
                         <div className="space-y-2">
-                          <label className="text-sm font-medium dark:text-gray-200">
+                          <label className="text-sm font-medium text-foreground">
                             Title
                           </label>
-                          <div className="dark:text-gray-300">
+                          <div className="text-foreground">
                             {"Report Generated"}
                           </div>
                         </div>
 
                         <div className="space-y-2">
-                          <label className="text-sm font-medium dark:text-gray-200">
+                          <label className="text-sm font-medium text-foreground">
                             Description
                           </label>
                           <Input
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            className="w-full bg-transparent dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
+                            className="w-full bg-transparent"
                             placeholder="Enter description"
                           />
                         </div>
 
                         <div className="space-y-2">
-                          <label className="text-sm font-medium dark:text-gray-200">
+                          <label className="text-sm font-medium text-foreground">
                             Keywords
                           </label>
                           <Input
                             value={keywords}
                             onChange={(e) => setKeywords(e.target.value)}
-                            className="w-full bg-transparent dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
+                            className="w-full bg-transparent"
                             placeholder="Enter keywords"
                           />
                         </div>
 
                         <div className="space-y-2">
-                          <label className="text-sm font-medium dark:text-gray-200">
+                          <label className="text-sm font-medium text-foreground">
                             Category
                           </label>
                           <Select
                             value={category}
                             onValueChange={setCategory}
                           >
-                            <SelectTrigger className="w-full dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700">
+                            <SelectTrigger className="w-full">
                               <SelectValue placeholder="Select category" />
                             </SelectTrigger>
-                            <SelectContent className="dark:bg-gray-800">
-                              <SelectItem
-                                value="Bills"
-                                className="dark:text-gray-200 dark:hover:bg-gray-700"
-                              >
-                                Bills
-                              </SelectItem>
-                              <SelectItem
-                                value="GeneticData"
-                                className="dark:text-gray-200 dark:hover:bg-gray-700"
-                              >
+                            <SelectContent>
+                              <SelectItem value="Bills">Bills</SelectItem>
+                              <SelectItem value="GeneticData">
                                 Genetic Data
                               </SelectItem>
-                              <SelectItem
-                                value="MedicalImageData"
-                                className="dark:text-gray-200 dark:hover:bg-gray-700"
-                              >
+                              <SelectItem value="MedicalImageData">
                                 Medical Image Data
                               </SelectItem>
-                              <SelectItem
-                                value="MedicalStatData"
-                                className="dark:text-gray-200 dark:hover:bg-gray-700"
-                              >
+                              <SelectItem value="MedicalStatData">
                                 Medical Statistics Data
                               </SelectItem>
-                              <SelectItem
-                                value="Reports"
-                                className="dark:text-gray-200 dark:hover:bg-gray-700"
-                              >
-                                Reports
-                              </SelectItem>
-                              <SelectItem
-                                value="TrainingModels"
-                                className="dark:text-gray-200 dark:hover:bg-gray-700"
-                              >
+                              <SelectItem value="Reports">Reports</SelectItem>
+                              <SelectItem value="TrainingModels">
                                 Training Models
                               </SelectItem>
                             </SelectContent>
