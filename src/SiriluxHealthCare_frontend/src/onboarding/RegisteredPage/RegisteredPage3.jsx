@@ -13,7 +13,7 @@ export default function RegisteredContent3() {
   }, [navigate]);
 
   return (
-    <section className="px-6 flex justify-center items-center h-screen bg-[conic-gradient(at_bottom_right,_var(--tw-gradient-stops))] from-blue-700 via-blue-800 to-gray-900">
+    <section className="px-6 flex justify-center items-center h-screen bg-gradient-to-br from-green-800 via-green-900 to-slate-900">
       <div className="flex flex-col lg:flex-row h-1/2 md:w-1/2">
         <div className="flex-1 flex flex-col justify-center text-white p-4">
           <div className="flex items-center mb-4">
