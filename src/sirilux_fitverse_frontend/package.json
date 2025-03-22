@@ -1,10 +1,10 @@
 {
-  "name": "SiriluxHealthCare_frontend",
+  "name": "sirilux_fitverse_frontend",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "setup": "npm i && dfx canister create SiriluxHealthCare_backend && dfx generate SiriluxHealthCare_backend && dfx deploy",
+    "setup": "npm i && dfx canister create sirilux_fitverse_backend && dfx generate sirilux_fitverse_backend && dfx deploy",
     "start": "vite --port 3000",
     "prebuild": "dfx generate",
     "build": "vite build",

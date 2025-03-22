@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
-export default function RegisteredContent1() {
+export default function RegisteredContent2() {
   const navigate = useNavigate();
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      navigate("/Health-User/Home"); //For Demo only
+      navigate("/Health-Professional/Home"); //For Demo only
     }, 5000); // 5000 milliseconds = 5 seconds
 
     return () => clearTimeout(timeout);
@@ -23,7 +23,9 @@ export default function RegisteredContent1() {
               src="/assets/SiriluxHealthCare.png"
             />
           </div>
-          <p className="text-xl md:text-2xl">Digitally Linking your health.</p>
+          <p className="text-xl md:text-2xl">
+            Access, Analyze, and Amplify your fitness journey.
+          </p>
         </div>
 
         <div className="flex-1 items-center max-w-md bg-background rounded-lg p-8">

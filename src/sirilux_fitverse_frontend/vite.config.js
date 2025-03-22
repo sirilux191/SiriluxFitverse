@@ -24,9 +24,9 @@ export default defineConfig({
       injectRegister: "auto",
       includeAssets: ["favicon.ico", "apple-touch-icon.png", "masked-icon.svg"],
       manifest: {
-        name: "SiriluxHealthCare",
-        short_name: "Sirilux",
-        description: "Digitally Linking your health",
+        name: "Sirilux Fitverse",
+        short_name: "Sirilux Fitverse",
+        description: "Access, Analyze, and Amplify your fitness journey",
         theme_color: "#367ed1",
         background_color: "#ffffff",
         display: "standalone",

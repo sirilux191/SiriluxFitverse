@@ -46,7 +46,7 @@ export default function InstallPrompt() {
       >
         <X className="w-4 h-4" />
       </button>
-      <h3 className="font-medium mb-2">Install SiriluxHealthCare</h3>
+      <h3 className="font-medium mb-2">Install Sirilux Fitverse</h3>
       <p className="text-muted-foreground text-sm mb-3">
         Install our app for a better experience with offline access.
       </p>

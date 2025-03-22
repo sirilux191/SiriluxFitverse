@@ -201,7 +201,7 @@ export default function RegisterPage2Content() {
               />
             </div>
             <p className="text-xl md:text-2xl">
-              Digitally Linking your health.
+              Access, Analyze, and Amplify your fitness journey.
             </p>
           </div>
 

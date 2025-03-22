@@ -23,7 +23,9 @@ export default function RegisteredContent3() {
               src="/assets/SiriluxHealthCare.png"
             />
           </div>
-          <p className="text-xl md:text-2xl">Digitally Linking your health.</p>
+          <p className="text-xl md:text-2xl">
+            Access, Analyze, and Amplify your fitness journey.
+          </p>
         </div>
 
         <div className="flex-1 items-center max-w-md bg-background rounded-lg p-8">
