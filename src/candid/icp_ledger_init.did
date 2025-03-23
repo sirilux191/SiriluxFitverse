@@ -1,7 +1,7 @@
 (variant {
   Init = record {
     token_symbol = "SIRI";
-    token_name = "SIRILUX Healthcare";
+    token_name = "SIRILUX Fitverse";
     minting_account = record {
       owner = principal "r6y3g-stm5t-mqzbn-mlhhh-pbf4b-m6jk6-4okhj-ajw55-lvkfj-w5w2v-sae"
     };

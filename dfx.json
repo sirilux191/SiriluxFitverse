@@ -17,75 +17,75 @@
       "wasm": "vetkd_system_api.wasm"
     },
     "Identity_Manager": {
-      "main": "src/SiriluxHealthCare_backend/IdentityManager/IdentityManager.mo",
+      "main": "src/sirilux_fitverse_backend/IdentityManager/IdentityManager.mo",
       "type": "motoko"
     },
 
     "User": {
-      "main": "src/SiriluxHealthCare_backend/User/UserService.mo",
+      "main": "src/sirilux_fitverse_backend/User/UserService.mo",
       "type": "motoko"
     },
 
     "UserShard": {
-      "main": "src/SiriluxHealthCare_backend/User/UserShard.mo",
+      "main": "src/sirilux_fitverse_backend/User/UserShard.mo",
       "type": "motoko"
     },
 
     "Professional": {
-      "main": "src/SiriluxHealthCare_backend/Professional/ProfessionalService.mo",
+      "main": "src/sirilux_fitverse_backend/Professional/ProfessionalService.mo",
       "type": "motoko"
     },
     "ProfessionalShard": {
-      "main": "src/SiriluxHealthCare_backend/Professional/ProfessionalShard.mo",
+      "main": "src/sirilux_fitverse_backend/Professional/ProfessionalShard.mo",
       "type": "motoko"
     },
     "Facility": {
-      "main": "src/SiriluxHealthCare_backend/Facility/FacilityService.mo",
+      "main": "src/sirilux_fitverse_backend/Facility/FacilityService.mo",
       "type": "motoko"
     },
 
     "FacilityShard": {
-      "main": "src/SiriluxHealthCare_backend/Facility/FacilityShard.mo",
+      "main": "src/sirilux_fitverse_backend/Facility/FacilityShard.mo",
       "type": "motoko"
     },
     "DataAsset": {
-      "main": "src/SiriluxHealthCare_backend/DataAsset/DataAssetService.mo",
+      "main": "src/sirilux_fitverse_backend/DataAsset/DataAssetService.mo",
       "type": "motoko"
     },
     "DataAssetShard": {
-      "main": "src/SiriluxHealthCare_backend/DataAsset/DataAssetShard.mo",
+      "main": "src/sirilux_fitverse_backend/DataAsset/DataAssetShard.mo",
       "type": "motoko"
     },
     "DataStorageShard": {
-      "main": "src/SiriluxHealthCare_backend/DataAsset/DataStorageShard.mo",
+      "main": "src/sirilux_fitverse_backend/DataAsset/DataStorageShard.mo",
       "type": "motoko"
     },
 
     "SharedActivityShard": {
-      "main": "src/SiriluxHealthCare_backend/SharedActivitySystem/SharedActivityShard.mo",
+      "main": "src/sirilux_fitverse_backend/SharedActivitySystem/SharedActivityShard.mo",
       "type": "motoko"
     },
     "Subscription_Manager": {
-      "main": "src/SiriluxHealthCare_backend/Subscription/SubscriptionManager.mo",
+      "main": "src/sirilux_fitverse_backend/Subscription/SubscriptionManager.mo",
       "type": "motoko"
     },
     "WellnessAvatarNFT": {
-      "main": "src/SiriluxHealthCare_backend/Gamification/WellnessAvatarNFT.mo",
+      "main": "src/sirilux_fitverse_backend/Gamification/WellnessAvatarNFT.mo",
       "type": "motoko"
     },
     "GamificationSystem": {
-      "main": "src/SiriluxHealthCare_backend/Gamification/GamificationSystem.mo",
+      "main": "src/sirilux_fitverse_backend/Gamification/GamificationSystem.mo",
       "type": "motoko"
     },
     "AIAgentSystem": {
-      "main": "src/SiriluxHealthCare_backend/AIAgents/AIAgentSystem.mo",
+      "main": "src/sirilux_fitverse_backend/AIAgents/AIAgentSystem.mo",
       "type": "motoko"
     },
-    "SiriluxHealthCare_frontend": {
+    "sirilux_fitverse_frontend": {
       "dependencies": [],
-      "source": ["src/SiriluxHealthCare_frontend/dist"],
+      "source": ["src/sirilux_fitverse_frontend/dist"],
       "type": "assets",
-      "workspace": "SiriluxHealthCare_frontend"
+      "workspace": "sirilux_fitverse_frontend"
     }
   },
   "defaults": {

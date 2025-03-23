@@ -3,7 +3,7 @@
     "node": ">=16.0.0",
     "npm": ">=7.0.0"
   },
-  "name": "SiriluxHealthCare",
+  "name": "sirilux_fitverse",
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "prebuild": "npm run prebuild --workspaces --if-present",
@@ -14,7 +14,7 @@
   },
   "type": "module",
   "workspaces": [
-    "src/SiriluxHealthCare_frontend"
+    "src/sirilux_fitverse_frontend"
   ],
   "devDependencies": {
     "prettier": "^3.3.3"
