@@ -66,8 +66,8 @@ export default function ConnectPage() {
             <div className="flex items-center mb-4">
               <img
                 alt="Logo"
-                className="h-10 w-auto object-contain"
-                src="assets/SiriluxHealthCare.png"
+                className="h-10 w-auto object-contain dark:brightness-0 invert"
+                src="/assets/logo.svg"
               />
             </div>
             <p className="text-xl md:text-2xl">

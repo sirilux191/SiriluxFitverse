@@ -18,7 +18,7 @@ export default function DashboardContent() {
         {/* Header Section with Notification and Add Tokens Buttons */}
         <div className="mb-6 sm:mb-12 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-green-500 via-emerald-400 to-teal-400 bg-clip-text text-transparent">
+            <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-green-400  to-amber-400 bg-clip-text text-transparent">
               Health Dashboard
             </h1>
           </div>

@@ -76,8 +76,8 @@ const Sidebar = ({ isOpen, onClose }) => {
           {isExpanded && (
             <img
               alt="Logo"
-              className="h-8 transition-opacity duration-300 ease-in-out"
-              src="/assets/SiriluxHealthCare.png"
+              className="h-8 transition-opacity duration-300 ease-in-out dark:brightness-0 dark:invert"
+              src="/assets/logo.svg"
             />
           )}
           <button

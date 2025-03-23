@@ -170,8 +170,8 @@ export default function RegisterPage3Content() {
             <div className="flex items-center mb-4">
               <img
                 alt="Logo"
-                className="h-10 w-48"
-                src="/assets/SiriluxHealthCare.png"
+                className="h-10 w-48 dark:brightness-0 invert"
+                src="/assets/logo.svg"
               />
             </div>
             <p className="text-xl md:text-2xl">

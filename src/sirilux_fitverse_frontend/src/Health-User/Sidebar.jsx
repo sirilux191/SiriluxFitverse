@@ -8,13 +8,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Upload,
-  Gamepad2,
   FileText,
   Share2,
   ChevronDown,
   ChevronUp,
   Wallet2Icon,
   MessageCircleQuestionIcon,
+  VideoIcon,
 } from "lucide-react";
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -32,6 +32,22 @@ const Sidebar = ({ isOpen, onClose }) => {
   const links = [
     { to: "/Health-User/Home", icon: <LayoutDashboard />, text: "Dashboard" },
     {
+      to: "/Health-User/Assets",
+      icon: <Wallet2Icon />,
+      text: "Assets",
+    },
+    {
+      to: "/Health-User/ConsultAI",
+      icon: <MessageCircleQuestionIcon />,
+      text: "Consult AI",
+    },
+    { to: "/Health-User/Analytics", icon: <Heart />, text: "Analytics" },
+    {
+      to: "/Health-User/Gamification",
+      icon: <VideoIcon />,
+      text: "Telemedicine",
+    },
+    {
       to: "/Health-User/Records",
       icon: <BookText />,
       text: "Records",
@@ -46,24 +62,8 @@ const Sidebar = ({ isOpen, onClose }) => {
           icon: <Share2 />,
           text: "Shared with You",
         },
+        { to: "/Health-User/Upload", icon: <Upload />, text: "Upload" },
       ],
-    },
-    { to: "/Health-User/Upload", icon: <Upload />, text: "Upload" },
-    { to: "/Health-User/Analytics", icon: <Heart />, text: "Analytics" },
-    {
-      to: "/Health-User/Assets",
-      icon: <Wallet2Icon />,
-      text: "Assets",
-    },
-    {
-      to: "/Health-User/ConsultAI",
-      icon: <MessageCircleQuestionIcon />,
-      text: "Consult AI",
-    },
-    {
-      to: "/Health-User/Gamification",
-      icon: <Gamepad2 />,
-      text: "Gamification",
     },
 
     { to: "/Health-User/Profile", icon: <User />, text: "Profile" },
@@ -81,8 +81,8 @@ const Sidebar = ({ isOpen, onClose }) => {
           {isExpanded && (
             <img
               alt="Logo"
-              className="h-8 transition-opacity duration-300 ease-in-out"
-              src="/assets/SiriluxHealthCare.png"
+              className="h-8 transition-opacity duration-300 ease-in-out dark:brightness-0 dark:invert"
+              src="/assets/logo.svg"
             />
           )}
           <button

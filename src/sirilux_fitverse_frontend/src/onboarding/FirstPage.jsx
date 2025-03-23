@@ -34,7 +34,7 @@ export default function FirstPageContent() {
   };
 
   return (
-    <section className="bg-[conic-gradient(at_bottom_right,_var(--tw-gradient-stops))] from-blue-700 via-blue-800 to-gray-900">
+    <section className="bg-gradient-to-br from-green-800 via-green-900 to-slate-900">
       <OnboardingBanner />
       <div className="px-6 flex justify-center items-center h-screen">
         <div className="flex flex-col md:flex-row md:w-1/2">
@@ -42,8 +42,8 @@ export default function FirstPageContent() {
             <div className="flex items-center mb-4">
               <img
                 alt="Logo"
-                className="h-10 w-48"
-                src="assets/SiriluxHealthCare.png"
+                className="h-10 w-48 dark:brightness-0 invert"
+                src="/assets/logo.svg"
               />
             </div>
             <p className="text-xl md:text-2xl">
@@ -51,9 +51,9 @@ export default function FirstPageContent() {
             </p>
           </div>
 
-          <div className="flex-1 items-center max-w-md bg-white rounded-lg p-8">
+          <div className="flex-1 items-center max-w-md bg-background rounded-lg p-8">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl md:text-2xl font-bold text-black">
+              <h2 className="text-xl md:text-2xl font-bold text-foreground">
                 Get Started
               </h2>
               {isAuthenticated && (
@@ -67,10 +67,10 @@ export default function FirstPageContent() {
                 </Button>
               )}
             </div>
-            <p className="text-sm text-gray-500 mb-4">Register As</p>
+            <p className="text-sm text-muted-foreground mb-4">Register As</p>
             <div>
               <Button
-                className="flex justify-between items-center w-full border border-gray-300 p-3 rounded-md mb-2"
+                className="flex justify-between items-center w-full border border-input p-3 rounded-md mb-2"
                 variant="secondary"
                 onClick={() => checkRegistration("Health-User")}
               >
@@ -81,8 +81,8 @@ export default function FirstPageContent() {
                 <ChevronRight />
               </Button>
 
-              <Button
-                className="flex justify-between items-center w-full border border-gray-300 p-3 rounded-md mb-2"
+              {/* <Button
+                className="flex justify-between items-center w-full border border-input p-3 rounded-md mb-2"
                 variant="secondary"
                 onClick={() => checkRegistration("Health-Professional")}
               >
@@ -94,7 +94,7 @@ export default function FirstPageContent() {
               </Button>
 
               <Button
-                className="flex justify-between items-center w-full border border-gray-300 p-3 rounded-md mb-2"
+                className="flex justify-between items-center w-full border border-input p-3 rounded-md mb-2"
                 variant="secondary"
                 onClick={() => checkRegistration("Health-Service")}
               >
@@ -103,7 +103,7 @@ export default function FirstPageContent() {
                   <span className="ml-2 font-bold">Health Service</span>
                 </div>
                 <ChevronRight />
-              </Button>
+              </Button> */}
             </div>
           </div>
         </div>
